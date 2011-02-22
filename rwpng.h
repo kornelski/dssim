@@ -40,12 +40,6 @@
 #  define MIN(a,b)  ((a) < (b)? (a) : (b))
 #endif
 
-#ifdef DEBUG
-#  define Trace(x)  {fprintf x ; fflush(stderr); fflush(stdout);}
-#else
-#  define Trace(x)  ;
-#endif
-
 typedef enum {
     SUCCESS = 0,
     READ_ERROR = 2,
@@ -64,7 +58,6 @@ typedef enum {
 } pngquant_error;
 
 typedef struct {
-    jmp_buf jmpbuf;
     png_uint_32 width;
     png_uint_32 height;
     png_uint_32 rowbytes;
@@ -75,7 +68,6 @@ typedef struct {
 } read_info;
 
 typedef struct {
-    jmp_buf jmpbuf;
     void *png_ptr;
     void *info_ptr;
     png_uint_32 width;
@@ -89,12 +81,6 @@ typedef struct {
     unsigned char *indexed_data;
     unsigned char **row_pointers;
 } write_info;
-
-typedef union {
-    jmp_buf jmpbuf;
-    read_info read;
-    write_info write;
-} read_or_write_info;
 
 /* prototypes for public functions in rwpng.c */
 

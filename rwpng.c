@@ -77,7 +77,7 @@ int rwpng_read_image(FILE *infile, read_info *mainprog_ptr)
 
 
     png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, mainprog_ptr,
-      rwpng_error_handler, NULL);
+      NULL, NULL);
     if (!png_ptr) {
         return PNG_OUT_OF_MEMORY_ERROR;   /* out of memory */
     }
@@ -98,7 +98,8 @@ int rwpng_read_image(FILE *infile, read_info *mainprog_ptr)
     /* setjmp() must be called in every function that calls a non-trivial
      * libpng function */
 
-    if (setjmp(mainprog_ptr->jmpbuf)) {
+    jmp_buf jmpbuf;
+    if (setjmp(jmpbuf)) {
         png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
         return LIBPNG_FATAL_ERROR;   /* fatal libpng error (via longjmp()) */
     }
@@ -183,9 +184,6 @@ int rwpng_read_image(FILE *infile, read_info *mainprog_ptr)
         return PNG_OUT_OF_MEMORY_ERROR;
     }
 
-    Trace((stderr, "readpng_get_image:  channels = %d, rowbytes = %ld, height = %ld\n", mainprog_ptr->channels, rowbytes, mainprog_ptr->height));
-
-
     /* set the individual row_pointers to point at the correct offsets */
 
     for (i = 0;  i < mainprog_ptr->height;  ++i)
@@ -227,7 +225,7 @@ int rwpng_write_image_init(FILE *outfile, write_info *mainprog_ptr)
     /* could also replace libpng warning-handler (final NULL), but no need: */
 
     png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, mainprog_ptr,
-      rwpng_error_handler, NULL);
+      NULL, NULL);
     if (!png_ptr) {
         return INIT_OUT_OF_MEMORY_ERROR;   /* out of memory */
     }
@@ -245,7 +243,8 @@ int rwpng_write_image_init(FILE *outfile, write_info *mainprog_ptr)
      * but compatible error handlers must either use longjmp() themselves
      * (as in this program) or exit immediately, so here we go: */
 
-    if (setjmp(mainprog_ptr->jmpbuf)) {
+    jmp_buf jmpbuf;
+    if (setjmp(jmpbuf)) {
         png_destroy_write_struct(&png_ptr, &info_ptr);
         return LIBPNG_INIT_ERROR;   /* libpng error (via longjmp()) */
     }
@@ -407,7 +406,8 @@ int rwpng_write_image_whole(write_info *mainprog_ptr)
     /* as always, setjmp() must be called in every function that calls a
      * PNG-writing libpng function */
 
-    if (setjmp(mainprog_ptr->jmpbuf)) {
+    jmp_buf jmpbuf;
+    if (setjmp(jmpbuf)) {
         png_destroy_write_struct(&png_ptr, &info_ptr);
         mainprog_ptr->png_ptr = NULL;
         mainprog_ptr->info_ptr = NULL;
@@ -450,7 +450,8 @@ int rwpng_write_image_row(write_info *mainprog_ptr)
     /* as always, setjmp() must be called in every function that calls a
      * PNG-writing libpng function */
 
-    if (setjmp(mainprog_ptr->jmpbuf)) {
+    jmp_buf jmpbuf;
+    if (setjmp(jmpbuf)) {
         png_destroy_write_struct(&png_ptr, &info_ptr);
         mainprog_ptr->png_ptr = NULL;
         mainprog_ptr->info_ptr = NULL;
@@ -481,7 +482,8 @@ int rwpng_write_image_finish(write_info *mainprog_ptr)
     /* as always, setjmp() must be called in every function that calls a
      * PNG-writing libpng function */
 
-    if (setjmp(mainprog_ptr->jmpbuf)) {
+    jmp_buf jmpbuf;
+    if (setjmp(jmpbuf)) {
         png_destroy_write_struct(&png_ptr, &info_ptr);
         mainprog_ptr->png_ptr = NULL;
         mainprog_ptr->info_ptr = NULL;
@@ -498,31 +500,4 @@ int rwpng_write_image_finish(write_info *mainprog_ptr)
     mainprog_ptr->info_ptr = NULL;
 
     return SUCCESS;
-}
-
-static void rwpng_error_handler(png_structp png_ptr, png_const_charp msg)
-{
-    read_or_write_info  *mainprog_ptr;
-
-    /* This function, aside from the extra step of retrieving the "error
-     * pointer" (below) and the fact that it exists within the application
-     * rather than within libpng, is essentially identical to libpng's
-     * default error handler.  The second point is critical:  since both
-     * setjmp() and longjmp() are called from the same code, they are
-     * guaranteed to have compatible notions of how big a jmp_buf is,
-     * regardless of whether _BSD_SOURCE or anything else has (or has not)
-     * been defined. */
-
-    fprintf(stderr, "rwpng libpng error: %s\n", msg);
-    fflush(stderr);
-
-    mainprog_ptr = png_get_error_ptr(png_ptr);
-    if (mainprog_ptr == NULL) {         /* we are completely hosed now */
-        fprintf(stderr,
-          "rwpng severe error:  jmpbuf not recoverable; terminating.\n");
-        fflush(stderr);
-        exit(99);
-    }
-
-    longjmp(mainprog_ptr->jmpbuf, 1);
 }
