@@ -421,7 +421,7 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
     rgba8 *ssimmap = (rgba8*)mu2; // result can overwrite source. it's safe because sizeof(rgb) <= sizeof(fpixel)
 
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
-    double avgminssim = 0;
+    laba avgssim = {0, 0, 0, 0};
 
 #define SSIM(r) ((2.0*(mu1[offset].r*mu2[offset].r) + c1) \
                  * (2.0 * \
@@ -438,8 +438,7 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
             SSIM(l), SSIM(A), SSIM(b), SSIM(a)
         };
 
-        double minssim = MIN(MIN(ssim.l, ssim.A), MIN(ssim.b, ssim.a));
-        avgminssim += minssim;
+        LABA_OP1(avgssim, +=, ssim);
 
         if (ssimfilename) {
             float max = 1.0 - MIN(MIN(ssim.l, ssim.A), ssim.b);
@@ -459,7 +458,9 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
     free(inf->sigma2_sq);
     inf->sigma2_sq = NULL;
 
-    avgminssim /= (double)width * height;
+    LABA_OPC(avgssim, avgssim, /, ((double)width * height));
+
+    double minavgssim = MIN(MIN(avgssim.l, avgssim.A), MIN(avgssim.b, avgssim.a));
 
     if (ssimfilename) {
         write_image(ssimfilename, ssimmap, width, height, 1.0 / 2.2);
@@ -470,5 +471,5 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
     inf->mu2 = NULL;
 
 
-    return 1.0 / (avgminssim) - 1.0;
+    return 1.0 / (minavgssim) - 1.0;
 }
