@@ -39,32 +39,59 @@ static int read_image(const char *filename, png24_image *image)
     return retval;
 }
 
+static void usage(const char *argv0)
+{
+    fprintf(stderr, "Usage: %s original.png modified.png [modified.png...]\n\n" \
+            "Compares first image against subsequent images,\n" \
+            "outputs SSIM difference for each of them in order.\n" \
+            "Images must have identical size. May have different gamma & depth.\n" \
+            "\nVersion 0.2 http://pornel.net/dssim\n" \
+            , argv0);
+}
+
 int main(int argc, const char *argv[])
 {
     if (argc < 3) {
-        fprintf(stderr, "Usage: %s file1 file2 [output]\n", argv[0]);
-        return 1;
+        usage(argv[0]);
+        exit(1);
     }
 
     const char *file1 = argv[1];
-    const char *file2 = argv[2];
-    const char *outfile = argc > 3 ? argv[3] : NULL;
-
-    png24_image image1;
+    png24_image image1 = {};
     int retval = read_image(file1, &image1);
     if (retval) {
         fprintf(stderr, "Can't read %s\n", file1);
         return retval;
     }
 
-    png24_image image2;
-    retval = read_image(file2, &image2);
-    if (retval) {
-        fprintf(stderr, "Can't read %s\n", file2);
-        return retval;
+    dssim_info *dinf = dssim_init();
+    dssim_set_original(dinf, &image1);
+    free(image1.row_pointers);
+    free(image1.rgba_data);
+
+    for (int arg = 2; arg < argc; arg++) {
+        const char *file2 = argv[arg];
+
+        png24_image image2 = {};
+        retval = read_image(file2, &image2);
+        if (retval) {
+            fprintf(stderr, "Can't read %s\n", file2);
+            break;
+        }
+
+        retval = dssim_set_modified(dinf, &image2);
+        free(image2.row_pointers);
+        free(image2.rgba_data);
+
+        if (retval) {
+            fprintf(stderr, "Image %s has different size than %s\n", file2, file1);
+            break;
+        }
+
+        double dssim = dssim_compare(dinf, NULL);
+        printf("%.6f\t%s\n", dssim, file2);
     }
 
-    double dssim = dssim_image(&image1, &image2, outfile);
-    printf("%.4f\n", dssim);
-    return 0;
+    dssim_dealloc(dinf);
+    return retval;
 }

@@ -317,21 +317,6 @@ inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
 }
 
 /*
- Algorithm based on Rabah Mehdi's C++ implementation
-
- saves dissimilarity visualisation as ssimfilename (pass NULL if not needed)
- */
-double dssim_image(png24_image *image1,
-                   png24_image *image2,
-                   const char *ssimfilename)
-{
-    dssim_info *inf = dssim_init();
-    dssim_set_original(inf, image1);
-    dssim_set_modified(inf, image2);
-    return dssim_compare(inf, ssimfilename);
-}
-
-/*
  Can be called only once. Copies image1.
  */
 void dssim_set_original(dssim_info *inf, png24_image *image1)
@@ -415,6 +400,8 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
 }
 
 /*
+ Algorithm based on Rabah Mehdi's C++ implementation
+
  Returns dssim.
  Saves dissimilarity visualisation as ssimfilename (pass NULL if not needed)
 
