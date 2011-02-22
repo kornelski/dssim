@@ -210,6 +210,25 @@ static void write_image(const char *filename, const rgba8 *pixels, int width, in
     png_destroy_write_struct(&png_ptr, &info_ptr);
 }
 
+inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
+{
+    laba f1 = rgba_to_laba(gamma,px);
+
+    // Compose image on coloured background to better judge dissimilarity with various backgrounds
+    int n=i^j;
+    if (n&4) {
+        f1.l += 1.0-f1.a; // using premultiplied alpha
+    }
+    if (n&8) {
+        f1.A += 1.0-f1.a;
+    }
+    if (n&16) {
+        f1.b += 1.0-f1.a;
+    }
+
+    return f1;
+}
+
 /*
  Algorithm based on Rabah Mehdi's C++ implementation
 
@@ -232,32 +251,15 @@ double dssim_image(read_info *image1, read_info *image2, const char *ssimfilenam
         rgba8 *restrict px1 = (rgba8 *)image1->row_pointers[j];
         rgba8 *restrict px2 = (rgba8 *)image2->row_pointers[j];
         for(int i=0; i < width; i++, offset++) {
-
-            laba f1 = rgba_to_laba(gamma1,px1[i]);
-            laba f2 = rgba_to_laba(gamma2,px2[i]);
-
-    // Compose image on coloured background to better judge dissimilarity with various backgrounds
-    int n=i^j;
-    if (n&4) {
-        f1.l += 1.0-f1.a; // using premultiplied alpha
-                f2.l += 1.0-f2.a;
-    }
-    if (n&8) {
-        f1.A += 1.0-f1.a;
-                f2.A += 1.0-f2.a;
-    }
-
-    if (n&16) {
-        f1.b += 1.0-f1.a;
-                f2.b += 1.0-f2.a;
-    }
+            laba f1 = convert_pixel(px1[i],gamma1,i,j);
+            laba f2 = convert_pixel(px2[i],gamma2,i,j);
 
             img1[offset] = f1;
             img2[offset] = f2;
 
             // part of computation
             LABA_OP(img1_img2[offset],f1,*,f2);
-}
+        }
     }
 
     // freeing memory as early as possible
