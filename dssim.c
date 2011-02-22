@@ -22,6 +22,7 @@
  */
 #include <stdlib.h>
 #include <math.h>
+#include <assert.h>
 #include "dssim.h"
 
 #ifndef MIN
@@ -39,6 +40,37 @@ typedef struct {
 typedef struct {
     float l, A, b, a;
 } laba;
+
+struct dssim_info {
+    int width, height;
+    laba *img1, *mu1, *sigma1_sq;
+    laba *mu2, *sigma2_sq, *sigma12;
+};
+
+dssim_info *dssim_init()
+{
+    return calloc(1, sizeof(dssim_info));
+}
+
+void dssim_dealloc(dssim_info *inf)
+{
+    if (inf->mu2) {
+        free(inf->mu2);
+        inf->mu2 = NULL;
+    }
+    if (inf->sigma2_sq) {
+        free(inf->sigma2_sq);
+        inf->sigma2_sq = NULL;
+    }
+    if (inf->sigma12) {
+        free(inf->sigma12);
+        inf->sigma12 = NULL;
+    }
+    free(inf->img1);
+    free(inf->mu1);
+    free(inf->sigma1_sq);
+    free(inf);
+}
 
 /* Converts 0..255 pixel to internal 0..1 with premultiplied alpha */
 /*
@@ -257,6 +289,7 @@ static void write_image(const char *filename,
 inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
 {
     laba f1 = rgba_to_laba(gamma, px);
+    assert(f1.l >= 0.0f && f1.A >= 0.0f && f1.b >= 0.0f && f1.a <= 1.0);
 
     // Compose image on coloured background to better judge dissimilarity with various backgrounds
     int n = i ^ j;
@@ -284,67 +317,121 @@ inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
 }
 
 /*
- * Algorithm based on Rabah Mehdi's C++ implementation
- *
- * frees memory in png24_image structs.
- * saves dissimilarity visualisation as ssimfilename (pass NULL if not needed)
+ Algorithm based on Rabah Mehdi's C++ implementation
+
+ saves dissimilarity visualisation as ssimfilename (pass NULL if not needed)
  */
 double dssim_image(png24_image *image1,
                    png24_image *image2,
                    const char *ssimfilename)
 {
-    float gamma1 = image1->gamma,
-          gamma2 = image2->gamma;
-    int width    = MIN(image1->width, image2->width),
-        height   = MIN(image1->height, image2->height);
+    dssim_info *inf = dssim_init();
+    dssim_set_original(inf, image1);
+    dssim_set_modified(inf, image2);
+    return dssim_compare(inf, ssimfilename);
+}
 
-    laba *restrict img1      = malloc(width * height * sizeof(laba));
+/*
+ Can be called only once. Copies image1.
+ */
+void dssim_set_original(dssim_info *inf, png24_image *image1)
+{
+    int width = inf->width = image1->width;
+    int height = inf->height = image1->height;
+    float gamma = image1->gamma;
+
+    laba *restrict img1 = inf->img1 = malloc(width * height * sizeof(laba));
+    laba *restrict sigma1_tmp = malloc(width * height * sizeof(laba));
+
+    int offset = 0;
+    for (int j = 0; j < height; j++) {
+        rgba8 *px1 = (rgba8 *)image1->row_pointers[j];
+        for (int i = 0; i < width; i++, offset++) {
+            laba f1 = convert_pixel(px1[i], gamma, i, j);
+
+            img1[offset] = f1;
+            LABA_OP(sigma1_tmp[offset], f1, *, f1);
+        }
+    }
+
+    laba *tmp = malloc(width * height * sizeof(laba));
+    inf->mu1 = malloc(width * height * sizeof(laba));
+    blur(img1, tmp, inf->mu1, width, height, NULL);
+
+    inf->sigma1_sq = malloc(width * height * sizeof(laba));
+    blur(sigma1_tmp, tmp, inf->sigma1_sq, width, height, NULL);
+
+    free(tmp);
+    free(sigma1_tmp);
+}
+
+/*
+    Returns 1 if image has wrong size.
+
+    Can be called multiple times.
+*/
+int dssim_set_modified(dssim_info *inf, png24_image *image2)
+{
+    int width = inf->width;
+    int height = inf->height;
+
+    if (image2->width != width || image2->height != height) {
+        return 1;
+    }
+
+    float gamma2 = image2->gamma;
+
+    laba *restrict img1 = inf->img1;
     laba *restrict img2 = malloc(width * height * sizeof(laba));
     laba *restrict img1_img2 = malloc(width * height * sizeof(laba));
 
     int offset = 0;
     for (int j = 0; j < height; j++) {
-        rgba8 *restrict px1 = (rgba8 *)image1->row_pointers[j];
-        rgba8 *restrict px2 = (rgba8 *)image2->row_pointers[j];
+        rgba8 *px2 = (rgba8 *)image2->row_pointers[j];
         for (int i = 0; i < width; i++, offset++) {
-            laba f1 = convert_pixel(px1[i], gamma1, i, j);
             laba f2 = convert_pixel(px2[i], gamma2, i, j);
 
-            img1[offset] = f1;
             img2[offset] = f2;
-
-            // part of computation
-            LABA_OP(img1_img2[offset], f1, *, f2);
+            LABA_OP(img1_img2[offset], img1[offset], *, f2);
         }
     }
 
-    // freeing memory as early as possible
-    free(image1->row_pointers);
-    image1->row_pointers = NULL;
-    free(image1->rgba_data);
-    image1->rgba_data = NULL;
-    free(image2->row_pointers);
-    image2->row_pointers = NULL;
-    free(image2->rgba_data);
-    image2->rgba_data = NULL;
-
     laba *tmp = malloc(width * height * sizeof(laba));
-    laba *restrict sigma12 = malloc(width * height * sizeof(laba));
-    blur(img1_img2, tmp, sigma12, width, height, NULL);
 
-    laba *restrict mu1 = img1_img2; //free(img1_img2); malloc(width*height*sizeof(f_pixel));
-    blur(img1, tmp, mu1, width, height, NULL);
-    laba *restrict sigma1_sq = malloc(width * height * sizeof(laba));
-    blur(img1, tmp, sigma1_sq, width, height, square_row);
+    inf->sigma12 = malloc(width * height * sizeof(laba));
+    blur(img1_img2, tmp, inf->sigma12, width, height, NULL);
+    free(img1_img2);
 
-    laba *restrict mu2 = img1; //free(img1); malloc(width*height*sizeof(f_pixel));
-    blur(img2, tmp, mu2, width, height, NULL);
-    laba *restrict sigma2_sq = malloc(width * height * sizeof(laba));
-    blur(img2, tmp, sigma2_sq, width, height, square_row);
+    inf->mu2 = malloc(width * height * sizeof(laba));
+    blur(img2, tmp, inf->mu2, width, height, NULL);
+
+    inf->sigma2_sq = malloc(width * height * sizeof(laba));
+    blur(img2, tmp, inf->sigma2_sq, width, height, square_row);
+
     free(img2);
     free(tmp);
 
-    rgba8 *ssimmap = (rgba8 *)mu1; // result can overwrite source. it's safe because sizeof(rgb) <= sizeof(fpixel)
+    return 0;
+}
+
+/*
+ Returns dssim.
+ Saves dissimilarity visualisation as ssimfilename (pass NULL if not needed)
+
+ You must call dssim_set_original and dssim_set_modified first.
+ */
+double dssim_compare(dssim_info *inf, const char *ssimfilename)
+{
+    int width = inf->width;
+    int height = inf->height;
+
+    laba *restrict mu1 = inf->mu1;
+    laba *restrict mu2 = inf->mu2;
+    laba *restrict sigma1_sq = inf->sigma1_sq;
+    laba *restrict sigma2_sq = inf->sigma2_sq;
+    laba *restrict sigma12 = inf->sigma12;
+
+    rgba8 *ssimmap = (rgba8*)mu2; // result can overwrite source. it's safe because sizeof(rgb) <= sizeof(fpixel)
 
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
     double avgminssim = 0;
@@ -359,7 +446,7 @@ double dssim_image(png24_image *image1,
           mu1[offset].r)) + \
         (sigma2_sq[offset].r - (mu2[offset].r * mu2[offset].r)) + c2))
 
-    for (offset = 0; offset < width * height; offset++) {
+    for (int offset = 0; offset < width * height; offset++) {
         laba ssim = (laba) {
             SSIM(l), SSIM(A), SSIM(b), SSIM(a)
         };
@@ -379,18 +466,22 @@ double dssim_image(png24_image *image1,
         }
     }
 
-    // mu1 is reused for ssimmap
-    free(mu2);
-    free(sigma12);
-    free(sigma1_sq);
-    free(sigma2_sq);
+    // mu2 is reused for ssimmap
+    free(inf->sigma12);
+    inf->sigma12 = NULL;
+    free(inf->sigma2_sq);
+    inf->sigma2_sq = NULL;
 
     avgminssim /= (double)width * height;
 
     if (ssimfilename) {
         write_image(ssimfilename, ssimmap, width, height, 1.0 / 2.2);
     }
-    free(ssimmap);
+
+    // mu2 is reused for ssimmap
+    free(inf->mu2);
+    inf->mu2 = NULL;
+
 
     return 1.0 / (avgminssim) - 1.0;
 }
