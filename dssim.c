@@ -57,7 +57,7 @@ typedef struct {
 inline static rgba8 rgbaf_to_8(const float gamma, rgbaf px)
 {
     if (px.a < 1.0 / 256.0f) {
-        return (rgba8) {0, 0, 0, 0 };
+        return (rgba8) {0, 0, 0, 0};
     }
 
     float r, g, b, a;
@@ -69,10 +69,10 @@ inline static rgba8 rgbaf_to_8(const float gamma, rgbaf px)
     a = px.a * 256.0f;
 
     return (rgba8) {
-               r >= 255 ? 255 : (r <= 0 ? 0 : r),
-               g >= 255 ? 255 : (g <= 0 ? 0 : g),
-               b >= 255 ? 255 : (b <= 0 ? 0 : b),
-               a >= 255 ? 255 : a,
+        r >= 255 ? 255 : (r <= 0 ? 0 : r),
+        g >= 255 ? 255 : (g <= 0 ? 0 : g),
+        b >= 255 ? 255 : (b <= 0 ? 0 : b),
+        a >= 255 ? 255 : a,
     };
 }
 
@@ -85,9 +85,9 @@ inline static laba rgba_to_laba(const float gamma, const rgba8 px)
           b = powf(px.b / 255.0f, 1.0f / gamma),
           a = px.a / 255.0f;
 
-    float fx            = (r * 0.4124f + g * 0.3576f + b * 0.1805f) / D65x;
-    float fy            = (r * 0.2126f + g * 0.7152f + b * 0.0722f) / D65y;
-    float fz            = (r * 0.0193f + g * 0.1192f + b * 0.9505f) / D65z;
+    float fx = (r * 0.4124f + g * 0.3576f + b * 0.1805f) / D65x;
+    float fy = (r * 0.2126f + g * 0.7152f + b * 0.0722f) / D65y;
+    float fz = (r * 0.0193f + g * 0.1192f + b * 0.9505f) / D65z;
     const float epsilon = 216.0 / 24389.0;
     fx =
         ((fx > epsilon) ? powf(fx,
@@ -99,10 +99,10 @@ inline static laba rgba_to_laba(const float gamma, const rgba8 px)
         ((fz > epsilon) ? powf(fz,
                                (1.0f / 3.0f)) : (7.787f * fz + 16.0f / 116.0f));
     return (laba) {
-               (116.0f * fy - 16.0f) / 100.0 * a,
-               (86.2f + 500.0f * (fx - fy)) / 220.0 * a, /* 86 is a fudge to make the value positive */
-               (107.9f + 200.0f * (fy - fz)) / 220.0 * a, /* 107 is a fudge to make the value positive */
-               a
+        (116.0f * fy - 16.0f) / 100.0 * a,
+        (86.2f + 500.0f * (fx - fy)) / 220.0 * a, /* 86 is a fudge to make the value positive */
+        (107.9f + 200.0f * (fy - fz)) / 220.0 * a, /* 107 is a fudge to make the value positive */
+        a
     };
 }
 
@@ -127,12 +127,13 @@ inline static laba rgba_to_laba(const float gamma, const rgba8 px)
         dst.a op(Y).a } \
 
 
-typedef void rowcallback (laba *, int width);
+typedef void rowcallback(laba *, int width);
 
 static void square_row(laba *row, int width)
 {
-    for (int i = 0; i < width; i++)
+    for (int i = 0; i < width; i++) {
         LABA_OP(row[i], row[i], *, row[i]);
+    }
 }
 
 /*
@@ -153,19 +154,21 @@ static void transposing_1d_blur(laba *restrict src,
         laba *restrict row = src + j * width;
 
         // preprocess line
-        if (callback)
+        if (callback) {
             callback(row, width);
+        }
 
         // accumulate sum for pixels outside line
         laba sum;
         LABA_OPC(sum, row[0], *, sizef);
-        for (int i = 0; i < size; i++)
+        for (int i = 0; i < size; i++) {
             LABA_OP1(sum, +=, row[i]);
+        }
 
         // blur with left side outside line
         for (int i = 0; i < size; i++) {
             LABA_OP1(sum, -=, row[0]);
-            if((i + size) < width){
+            if ((i + size) < width) {
                 LABA_OP1(sum, +=, row[i + size]);
             }
 
@@ -181,7 +184,7 @@ static void transposing_1d_blur(laba *restrict src,
 
         // blur with right side outside line
         for (int i = width - size; i < width; i++) {
-            if(i-size >= 0){
+            if (i - size >= 0) {
                 LABA_OP1(sum, -=, row[i - size]);
             }
             LABA_OP1(sum, +=, row[width - 1]);
@@ -199,14 +202,18 @@ static void blur(laba *restrict src, laba *restrict tmp, laba *restrict dst,
                  int width, int height, rowcallback *const callback)
 {
     int small = 1, big = 1;
-    if (MIN(height, width) > 100)
+    if (MIN(height, width) > 100) {
         big++;
-    if (MIN(height, width) > 200)
+    }
+    if (MIN(height, width) > 200) {
         big++;
-    if (MIN(height, width) > 500)
+    }
+    if (MIN(height, width) > 500) {
         small++;
-    if (MIN(height, width) > 800)
+    }
+    if (MIN(height, width) > 800) {
         big++;
+    }
 
     transposing_1d_blur(src, tmp, width, height, 1, callback);
     transposing_1d_blur(tmp, dst, height, width, 1, NULL);
@@ -223,20 +230,22 @@ static void write_image(const char *filename,
                         float gamma)
 {
     FILE *outfile = fopen(filename, "wb");
-    if (!outfile)
+    if (!outfile) {
         return;
+    }
 
     png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING,
-                                                  NULL, NULL, NULL);
-    png_infop info_ptr  = png_create_info_struct(png_ptr);
+                          NULL, NULL, NULL);
+    png_infop info_ptr = png_create_info_struct(png_ptr);
     png_init_io(png_ptr, outfile);
     png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGBA,
                  0, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
     png_set_gAMA(png_ptr, info_ptr, gamma);
     png_write_info(png_ptr, info_ptr);
 
-    for (int i = 0; i < height; i++)
+    for (int i = 0; i < height; i++) {
         png_write_row(png_ptr, (png_bytep)(pixels + i * width));
+    }
 
     png_write_end(png_ptr, info_ptr);
     png_destroy_write_struct(&png_ptr, &info_ptr);
@@ -290,7 +299,7 @@ double dssim_image(png24_image *image1,
         height   = MIN(image1->height, image2->height);
 
     laba *restrict img1      = malloc(width * height * sizeof(laba));
-    laba *restrict img2      = malloc(width * height * sizeof(laba));
+    laba *restrict img2 = malloc(width * height * sizeof(laba));
     laba *restrict img1_img2 = malloc(width * height * sizeof(laba));
 
     int offset = 0;
@@ -319,7 +328,7 @@ double dssim_image(png24_image *image1,
     free(image2->rgba_data);
     image2->rgba_data = NULL;
 
-    laba *tmp              = malloc(width * height * sizeof(laba));
+    laba *tmp = malloc(width * height * sizeof(laba));
     laba *restrict sigma12 = malloc(width * height * sizeof(laba));
     blur(img1_img2, tmp, sigma12, width, height, NULL);
 
@@ -337,31 +346,36 @@ double dssim_image(png24_image *image1,
 
     rgba8 *ssimmap = (rgba8 *)mu1; // result can overwrite source. it's safe because sizeof(rgb) <= sizeof(fpixel)
 
-    const double c1   = 0.01 * 0.01, c2 = 0.03 * 0.03;
+    const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
     double avgminssim = 0;
 
-#define SSIM(r) ((2.0 * (mu1[offset].r * mu2[offset].r) + c1) \
+#define SSIM(r) ((2.0*(mu1[offset].r*mu2[offset].r) + c1) \
                  * (2.0 * \
                     (sigma12[offset].r - (mu1[offset].r * mu2[offset].r)) + c2)) \
-    / \
-    (((mu1[offset].r * mu1[offset].r) + (mu2[offset].r * mu2[offset].r) + c1) \
+/ \
+(((mu1[offset].r*mu1[offset].r) + (mu2[offset].r*mu2[offset].r) + c1) \
      * ((sigma1_sq[offset].r - \
          (mu1[offset].r * \
           mu1[offset].r)) + \
         (sigma2_sq[offset].r - (mu2[offset].r * mu2[offset].r)) + c2))
 
     for (offset = 0; offset < width * height; offset++) {
-        laba ssim = (laba) {SSIM(l), SSIM(A), SSIM(b), SSIM(a)};
+        laba ssim = (laba) {
+            SSIM(l), SSIM(A), SSIM(b), SSIM(a)
+        };
 
         double minssim = MIN(MIN(ssim.l, ssim.A), MIN(ssim.b, ssim.a));
         avgminssim += minssim;
 
         if (ssimfilename) {
-            float max   = 1.0 - MIN(MIN(ssim.l, ssim.A), ssim.b);
+            float max = 1.0 - MIN(MIN(ssim.l, ssim.A), ssim.b);
             float maxsq = max * max;
-            ssimmap[offset] = rgbaf_to_8(1.0 / 2.2,
-                (rgbaf) {(1.0 - ssim.a) + maxsq, max + maxsq,
-                          max * 0.5f + (1.0 - ssim.a) * 0.5f + maxsq, 1});
+            ssimmap[offset] = rgbaf_to_8(1.0 / 2.2, (rgbaf) {
+                (1.0 - ssim.a) + maxsq,
+                max + maxsq,
+                max * 0.5f + (1.0 - ssim.a) * 0.5f + maxsq,
+                1
+            });
         }
     }
 

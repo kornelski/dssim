@@ -29,7 +29,9 @@
 static int read_image(const char *filename, png24_image *image)
 {
     FILE *fp = fopen(filename, "rb");
-    if (!fp) return 1;
+    if (!fp) {
+        return 1;
+    }
 
     int retval = rwpng_read_image24(fp, image);
 
@@ -40,7 +42,7 @@ static int read_image(const char *filename, png24_image *image)
 int main(int argc, const char *argv[])
 {
     if (argc < 3) {
-        fprintf(stderr, "Usage: %s file1 file2 [output]\n",argv[0]);
+        fprintf(stderr, "Usage: %s file1 file2 [output]\n", argv[0]);
         return 1;
     }
 
@@ -51,18 +53,18 @@ int main(int argc, const char *argv[])
     png24_image image1;
     int retval = read_image(file1, &image1);
     if (retval) {
-        fprintf(stderr, "Can't read %s\n",file1);
+        fprintf(stderr, "Can't read %s\n", file1);
         return retval;
     }
 
     png24_image image2;
     retval = read_image(file2, &image2);
     if (retval) {
-        fprintf(stderr, "Can't read %s\n",file2);
+        fprintf(stderr, "Can't read %s\n", file2);
         return retval;
     }
 
     double dssim = dssim_image(&image1, &image2, outfile);
-    printf("%.4f\n",dssim);
+    printf("%.4f\n", dssim);
     return 0;
 }
