@@ -210,6 +210,9 @@ static void write_image(const char *filename, const rgba8 *pixels, int width, in
     png_destroy_write_struct(&png_ptr, &info_ptr);
 }
 
+/*
+  Conversion is not reversible
+*/
 inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
 {
     laba f1 = rgba_to_laba(gamma,px);
@@ -225,6 +228,16 @@ inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
     if (n&16) {
         f1.b += 1.0-f1.a;
     }
+
+    // Since alpha is already blended with other channels,
+    // lower amplitude of alpha to lower score for alpha difference
+    f1.a *= 0.75;
+
+    // SSIM is supposed to be applied only to luma,
+    // lower amplitude of chroma to lower score for chroma difference
+    // (chroma is not ignored completely, because IMHO it also matters)
+    f1.A *= 0.75;
+    f1.b *= 0.75;
 
     return f1;
 }
