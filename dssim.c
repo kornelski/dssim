@@ -236,28 +236,28 @@ double dssim_image(read_info *image1, read_info *image2, const char *ssimfilenam
             laba f1 = rgba_to_laba(gamma1,px1[i]);
             laba f2 = rgba_to_laba(gamma2,px2[i]);
 
-            // Compose image on coloured background to better judge dissimilarity with various backgrounds
-            int n=i^j;
-            if (n&4) {
-                f1.l += 1.0-f1.a; // using premultiplied alpha
+    // Compose image on coloured background to better judge dissimilarity with various backgrounds
+    int n=i^j;
+    if (n&4) {
+        f1.l += 1.0-f1.a; // using premultiplied alpha
                 f2.l += 1.0-f2.a;
-            }
-            if (n&8) {
-                f1.A += 1.0-f1.a;
+    }
+    if (n&8) {
+        f1.A += 1.0-f1.a;
                 f2.A += 1.0-f2.a;
-            }
+    }
 
-            if (n&16) {
-                f1.b += 1.0-f1.a;
+    if (n&16) {
+        f1.b += 1.0-f1.a;
                 f2.b += 1.0-f2.a;
-            }
+    }
 
             img1[offset] = f1;
             img2[offset] = f2;
 
             // part of computation
             LABA_OP(img1_img2[offset],f1,*,f2);
-        }
+}
     }
 
     // freeing memory as early as possible
@@ -287,7 +287,7 @@ double dssim_image(read_info *image1, read_info *image2, const char *ssimfilenam
     const double c1 = 0.01*0.01, c2 = 0.03*0.03;
     laba avgssim = {0,0,0,0};
 
-#define SSIM(r) 1.0-((2.0*(mu1[offset].r*mu2[offset].r) + c1) \
+#define SSIM(r) ((2.0*(mu1[offset].r*mu2[offset].r) + c1) \
 *(2.0*(sigma12[offset].r-(mu1[offset].r*mu2[offset].r)) + c2)) \
 / \
 (((mu1[offset].r*mu1[offset].r) + (mu2[offset].r*mu2[offset].r) + c1) \
@@ -304,12 +304,12 @@ double dssim_image(read_info *image1, read_info *image2, const char *ssimfilenam
         LABA_OP1(avgssim,+=,ssim);
 
         if (ssimfilename) {
-            float max = MAX(MAX(ssim.l,ssim.A),ssim.b);
+            float max = 1.0 - MIN(MIN(ssim.l,ssim.A),ssim.b);
             float maxsq = max*max;
-            ssimmap[offset] = rgbaf_to_8(gamma2, (rgbaf){
-                ssim.a + maxsq,
+            ssimmap[offset] = rgbaf_to_8(1.0/2.2, (rgbaf){
+                (1.0-ssim.a) + maxsq,
                 max + maxsq,
-                max*0.5f + ssim.a*0.5f + maxsq,
+                max*0.5f +(1.0-ssim.a)*0.5f + maxsq,
                 1
             });
         }
@@ -323,14 +323,13 @@ double dssim_image(read_info *image1, read_info *image2, const char *ssimfilenam
 
     LABA_OPC(avgssim,avgssim,/,((double)width*height));
 
-    // I'm arbitrarily lowering score for alpha dissimilarity
-    // (in premultiplied alpha colorspace it's going to affect colors anyway)
-    double minavgssim = MAX(MAX(avgssim.l,avgssim.A),MAX(avgssim.b,avgssim.a*0.75));
+    double minavgssim = MIN(MIN(avgssim.l,avgssim.A),MIN(avgssim.b,avgssim.a));
 
     if (ssimfilename) {
         write_image(ssimfilename,ssimmap,width,height,1.0/2.2);
     }
     free(ssimmap);
 
-    return minavgssim;
+
+    return 1.0 / (minavgssim) - 1.0;
 }
