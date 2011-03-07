@@ -77,7 +77,7 @@ inline static rgba8 rgbaf_to_8(const float gamma, rgbaf px)
 
 static const float D65x = 0.9505f, D65y = 1.0f, D65z = 1.089f;
 
-inline static laba rgba_to_laba(const double gamma, const rgba8 px)
+inline static laba rgba_to_laba(const float gamma, const rgba8 px)
 {
     float r = powf(px.r/255.0f, 1.0f/gamma),
           g = powf(px.g/255.0f, 1.0f/gamma),
@@ -134,7 +134,7 @@ static void square_row(laba *row, int width)
  */
 static void transposing_1d_blur(laba *restrict src, laba *restrict dst, int width, int height, const int size, rowcallback *const callback)
 {
-    const double sizef = size;
+    const float sizef = size;
 
     for(int j=0; j < height; j++) {
         laba *restrict row = src + j*width;
@@ -154,14 +154,14 @@ static void transposing_1d_blur(laba *restrict src, laba *restrict dst, int widt
             LABA_OP1(sum,-=,row[0]);
             LABA_OP1(sum,+=,row[i+size]);
 
-            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0);
+            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0f);
         }
 
         for(int i=size; i < width-size; i++) {
             LABA_OP1(sum,-=,row[i-size]);
             LABA_OP1(sum,+=,row[i+size]);
 
-            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0);
+            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0f);
         }
 
         // blur with right side outside line
@@ -169,7 +169,7 @@ static void transposing_1d_blur(laba *restrict src, laba *restrict dst, int widt
             LABA_OP1(sum,-=,row[i-size]);
             LABA_OP1(sum,+=,row[width-1]);
 
-            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0);
+            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0f);
         }
     }
 }
