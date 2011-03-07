@@ -39,15 +39,17 @@ typedef struct {
 } laba;
 
 /* Converts 0..255 pixel to internal 0..1 with premultiplied alpha */
+/*
 inline static rgbaf rgba8_to_f(const float gamma, rgba8 px)
 {
-    float r = powf((px.r)/255.0f, 1.0f/gamma),
-    g = powf((px.g)/255.0f, 1.0f/gamma),
-    b = powf((px.b)/256.0f, 1.0f/gamma),
-    a = (px.a)/255.0f;
+    float r = powf(px.r/255.0f, 1.0f/gamma),
+          g = powf(px.g/255.0f, 1.0f/gamma),
+          b = powf(px.b/255.0f, 1.0f/gamma),
+          a = px.a/255.0f;
 
     return (rgbaf){r*a,g*a,b*a,a};
 }
+*/
 
 /* Converts premultiplied alpha 0..1 to 0..255 */
 inline static rgba8 rgbaf_to_8(const float gamma, rgbaf px)
@@ -57,7 +59,9 @@ inline static rgba8 rgbaf_to_8(const float gamma, rgbaf px)
     }
 
     float r,g,b,a;
-    r = powf(px.r/px.a, gamma)*256.0f; // *256, because it's rounded down
+
+    // 256, because numbers are in range 0..255.9999… rounded down
+    r = powf(px.r/px.a, gamma)*256.0f;
     g = powf(px.g/px.a, gamma)*256.0f;
     b = powf(px.b/px.a, gamma)*256.0f;
     a = px.a*256.0f;
@@ -76,9 +80,9 @@ static const float D65x = 0.9505f, D65y = 1.0f, D65z = 1.089f;
 inline static laba rgba_to_laba(const double gamma, const rgba8 px)
 {
     float r = powf(px.r/255.0f, 1.0f/gamma),
-    g = powf(px.g/255.0f, 1.0f/gamma),
-    b = powf(px.b/255.0f, 1.0f/gamma),
-    a = px.a/255.0f;
+          g = powf(px.g/255.0f, 1.0f/gamma),
+          b = powf(px.b/255.0f, 1.0f/gamma),
+          a = px.a/255.0f;
 
     float fx = (r*0.4124f + g*0.3576f + b*0.1805f)/D65x;
     float fy = (r*0.2126f + g*0.7152f + b*0.0722f)/D65y;
@@ -247,7 +251,7 @@ inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
 
  frees memory in read_info structs.
  saves dissimilarity visualisation as ssimfilename (pass NULL if not needed)
- */
+*/
 double dssim_image(read_info *image1, read_info *image2, const char *ssimfilename)
 {
     float gamma1 = image1->gamma,
