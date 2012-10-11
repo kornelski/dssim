@@ -28,6 +28,7 @@
             published by O'Reilly and Associates.
 
   ---------------------------------------------------------------------------*/
+#include "zlib.h"
 #include "png.h"
 
 #ifndef TRUE
