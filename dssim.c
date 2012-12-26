@@ -161,7 +161,9 @@ static void transposing_1d_blur(LABA *restrict src,
         // blur with left side outside line
         for (int i = 0; i < size; i++) {
             LABA_OP1(sum, -=, row[0]);
-            LABA_OP1(sum, +=, row[i + size]);
+            if((i + size) < width){
+                LABA_OP1(sum, +=, row[i + size]);
+            }
 
             LABA_OPC(dst[i * height + j], sum, /, sizef * 2.0f);
         }
@@ -175,7 +177,9 @@ static void transposing_1d_blur(LABA *restrict src,
 
         // blur with right side outside line
         for (int i = width - size; i < width; i++) {
-            LABA_OP1(sum, -=, row[i - size]);
+            if(i-size >= 0){
+                LABA_OP1(sum, -=, row[i - size]);
+            }
             LABA_OP1(sum, +=, row[width - 1]);
 
             LABA_OPC(dst[i * height + j], sum, /, sizef * 2.0f);

@@ -12,4 +12,4 @@ CFLAGS += -std=c99 `pkg-config libpng --cflags`
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 dssim: $(SOURCES) main.c
-	$(CC) -o $@ $^ $(CFLAGS) $(LIBS)
+	$(CC) -o $@ $^ $(CFLAGS) $(LIBS) -lm -lz
