@@ -26,34 +26,34 @@
 
 typedef struct {
     unsigned char r, g, b, a;
-} RGBA8;
+} rgba8;
 
 typedef struct {
     float r, g, b, a;
-} RGBAF;
+} rgbaf;
 
 typedef struct {
     float l, A, b, a;
-} LABA;
+} laba;
 
 /* Converts 0..255 pixel to internal 0..1 with premultiplied alpha */
 /*
- * inline static RGBAF rgba8_to_f(const float gamma, RGBA8 px)
+ * inline static rgbaf rgba8_to_f(const float gamma, rgba8 px)
  * {
  *  float r = powf(px.r/255.0f, 1.0f/gamma),
  *        g = powf(px.g/255.0f, 1.0f/gamma),
  *        b = powf(px.b/255.0f, 1.0f/gamma),
  *        a = px.a/255.0f;
  *
- *  return (RGBAF){r*a,g*a,b*a,a};
+ *  return (rgbaf){r*a,g*a,b*a,a};
  * }
  */
 
 /* Converts premultiplied alpha 0..1 to 0..255 */
-inline static RGBA8 rgbaf_to_8(const float gamma, RGBAF px)
+inline static rgba8 rgbaf_to_8(const float gamma, rgbaf px)
 {
     if (px.a < 1.0 / 256.0f) {
-        return (RGBA8) {0, 0, 0, 0 };
+        return (rgba8) {0, 0, 0, 0 };
     }
 
     float r, g, b, a;
@@ -64,7 +64,7 @@ inline static RGBA8 rgbaf_to_8(const float gamma, RGBAF px)
     b = powf(px.b / px.a, gamma) * 256.0f;
     a = px.a * 256.0f;
 
-    return (RGBA8) {
+    return (rgba8) {
                r >= 255 ? 255 : (r <= 0 ? 0 : r),
                g >= 255 ? 255 : (g <= 0 ? 0 : g),
                b >= 255 ? 255 : (b <= 0 ? 0 : b),
@@ -74,7 +74,7 @@ inline static RGBA8 rgbaf_to_8(const float gamma, RGBAF px)
 
 static const float D65x = 0.9505f, D65y = 1.0f, D65z = 1.089f;
 
-inline static LABA rgba_to_laba(const float gamma, const RGBA8 px)
+inline static laba rgba_to_laba(const float gamma, const rgba8 px)
 {
     float r = powf(px.r / 255.0f, 1.0f / gamma),
           g = powf(px.g / 255.0f, 1.0f / gamma),
@@ -94,7 +94,7 @@ inline static LABA rgba_to_laba(const float gamma, const RGBA8 px)
     fz =
         ((fz > epsilon) ? powf(fz,
                                (1.0f / 3.0f)) : (7.787f * fz + 16.0f / 116.0f));
-    return (LABA) {
+    return (laba) {
                (116.0f * fy - 16.0f) / 100.0 * a,
                (86.2f + 500.0f * (fx - fy)) / 220.0 * a, /* 86 is a fudge to make the value positive */
                (107.9f + 200.0f * (fy - fz)) / 220.0 * a, /* 107 is a fudge to make the value positive */
@@ -104,28 +104,28 @@ inline static LABA rgba_to_laba(const float gamma, const RGBA8 px)
 
 /* Macros to avoid repeating every line 4 times */
 
-#define LABA_OP(dst, X, op, Y) dst = (LABA) { \
+#define LABA_OP(dst, X, op, Y) dst = (laba) { \
         (X).l op(Y).l, \
         (X).A op(Y).A, \
         (X).b op(Y).b, \
         (X).a op(Y).a } \
 
-#define LABA_OPC(dst, X, op, Y) dst = (LABA) { \
+#define LABA_OPC(dst, X, op, Y) dst = (laba) { \
         (X).l op(Y), \
         (X).A op(Y), \
         (X).b op(Y), \
         (X).a op(Y) } \
 
-#define LABA_OP1(dst, op, Y) dst = (LABA) { \
+#define LABA_OP1(dst, op, Y) dst = (laba) { \
         dst.l op(Y).l, \
         dst.A op(Y).A, \
         dst.b op(Y).b, \
         dst.a op(Y).a } \
 
 
-typedef void rowcallback (LABA *, int width);
+typedef void rowcallback (laba *, int width);
 
-static void square_row(LABA *row, int width)
+static void square_row(laba *row, int width)
 {
     for (int i = 0; i < width; i++)
         LABA_OP(row[i], row[i], *, row[i]);
@@ -136,8 +136,8 @@ static void square_row(LABA *row, int width)
  * (called twice gives 2d blur)
  * Callback is executed on every row before blurring
  */
-static void transposing_1d_blur(LABA *restrict src,
-                                LABA *restrict dst,
+static void transposing_1d_blur(laba *restrict src,
+                                laba *restrict dst,
                                 int width,
                                 int height,
                                 const int size,
@@ -146,14 +146,14 @@ static void transposing_1d_blur(LABA *restrict src,
     const float sizef = size;
 
     for (int j = 0; j < height; j++) {
-        LABA *restrict row = src + j * width;
+        laba *restrict row = src + j * width;
 
         // preprocess line
         if (callback)
             callback(row, width);
 
         // accumulate sum for pixels outside line
-        LABA sum;
+        laba sum;
         LABA_OPC(sum, row[0], *, sizef);
         for (int i = 0; i < size; i++)
             LABA_OP1(sum, +=, row[i]);
@@ -191,7 +191,7 @@ static void transposing_1d_blur(LABA *restrict src,
  * Filters image with callback and blurs (lousy approximate of gaussian)
  * it proportionally to
  */
-static void blur(LABA *restrict src, LABA *restrict tmp, LABA *restrict dst,
+static void blur(laba *restrict src, laba *restrict tmp, laba *restrict dst,
                  int width, int height, rowcallback *const callback)
 {
     int small = 1, big = 1;
@@ -213,7 +213,7 @@ static void blur(LABA *restrict src, LABA *restrict tmp, LABA *restrict dst,
 }
 
 static void write_image(const char *filename,
-                        const RGBA8 *pixels,
+                        const rgba8 *pixels,
                         int width,
                         int height,
                         float gamma)
@@ -242,9 +242,9 @@ static void write_image(const char *filename,
 /*
  * Conversion is not reversible
  */
-inline static LABA convert_pixel(RGBA8 px, float gamma, int i, int j)
+inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
 {
-    LABA f1 = rgba_to_laba(gamma, px);
+    laba f1 = rgba_to_laba(gamma, px);
 
     // Compose image on coloured background to better judge dissimilarity with various backgrounds
     int n = i ^ j;
@@ -286,17 +286,17 @@ double dssim_image(read_info *image1,
     int width    = MIN(image1->width, image2->width),
         height   = MIN(image1->height, image2->height);
 
-    LABA *restrict img1      = malloc(width * height * sizeof(LABA));
-    LABA *restrict img2      = malloc(width * height * sizeof(LABA));
-    LABA *restrict img1_img2 = malloc(width * height * sizeof(LABA));
+    laba *restrict img1      = malloc(width * height * sizeof(laba));
+    laba *restrict img2      = malloc(width * height * sizeof(laba));
+    laba *restrict img1_img2 = malloc(width * height * sizeof(laba));
 
     int offset = 0;
     for (int j = 0; j < height; j++) {
-        RGBA8 *restrict px1 = (RGBA8 *)image1->row_pointers[j];
-        RGBA8 *restrict px2 = (RGBA8 *)image2->row_pointers[j];
+        rgba8 *restrict px1 = (rgba8 *)image1->row_pointers[j];
+        rgba8 *restrict px2 = (rgba8 *)image2->row_pointers[j];
         for (int i = 0; i < width; i++, offset++) {
-            LABA f1 = convert_pixel(px1[i], gamma1, i, j);
-            LABA f2 = convert_pixel(px2[i], gamma2, i, j);
+            laba f1 = convert_pixel(px1[i], gamma1, i, j);
+            laba f2 = convert_pixel(px2[i], gamma2, i, j);
 
             img1[offset] = f1;
             img2[offset] = f2;
@@ -316,23 +316,23 @@ double dssim_image(read_info *image1,
     free(image2->rgba_data);
     image2->rgba_data = NULL;
 
-    LABA *tmp              = malloc(width * height * sizeof(LABA));
-    LABA *restrict sigma12 = malloc(width * height * sizeof(LABA));
+    laba *tmp              = malloc(width * height * sizeof(laba));
+    laba *restrict sigma12 = malloc(width * height * sizeof(laba));
     blur(img1_img2, tmp, sigma12, width, height, NULL);
 
-    LABA *restrict mu1 = img1_img2; //free(img1_img2); malloc(width*height*sizeof(f_pixel));
+    laba *restrict mu1 = img1_img2; //free(img1_img2); malloc(width*height*sizeof(f_pixel));
     blur(img1, tmp, mu1, width, height, NULL);
-    LABA *restrict sigma1_sq = malloc(width * height * sizeof(LABA));
+    laba *restrict sigma1_sq = malloc(width * height * sizeof(laba));
     blur(img1, tmp, sigma1_sq, width, height, square_row);
 
-    LABA *restrict mu2 = img1; //free(img1); malloc(width*height*sizeof(f_pixel));
+    laba *restrict mu2 = img1; //free(img1); malloc(width*height*sizeof(f_pixel));
     blur(img2, tmp, mu2, width, height, NULL);
-    LABA *restrict sigma2_sq = malloc(width * height * sizeof(LABA));
+    laba *restrict sigma2_sq = malloc(width * height * sizeof(laba));
     blur(img2, tmp, sigma2_sq, width, height, square_row);
     free(img2);
     free(tmp);
 
-    RGBA8 *ssimmap = (RGBA8 *)mu1; // result can overwrite source. it's safe because sizeof(rgb) <= sizeof(fpixel)
+    rgba8 *ssimmap = (rgba8 *)mu1; // result can overwrite source. it's safe because sizeof(rgb) <= sizeof(fpixel)
 
     const double c1   = 0.01 * 0.01, c2 = 0.03 * 0.03;
     double avgminssim = 0;
@@ -348,7 +348,7 @@ double dssim_image(read_info *image1,
         (sigma2_sq[offset].r - (mu2[offset].r * mu2[offset].r)) + c2))
 
     for (offset = 0; offset < width * height; offset++) {
-        LABA ssim = (LABA) {SSIM(l), SSIM(A), SSIM(b), SSIM(a)};
+        laba ssim = (laba) {SSIM(l), SSIM(A), SSIM(b), SSIM(a)};
 
         double minssim = MIN(MIN(ssim.l, ssim.A), MIN(ssim.b, ssim.a));
         avgminssim += minssim;
@@ -357,7 +357,7 @@ double dssim_image(read_info *image1,
             float max   = 1.0 - MIN(MIN(ssim.l, ssim.A), ssim.b);
             float maxsq = max * max;
             ssimmap[offset] = rgbaf_to_8(1.0 / 2.2,
-                (RGBAF) {(1.0 - ssim.a) + maxsq, max + maxsq,
+                (rgbaf) {(1.0 - ssim.a) + maxsq, max + maxsq,
                           max * 0.5f + (1.0 - ssim.a) * 0.5f + maxsq, 1});
         }
     }
