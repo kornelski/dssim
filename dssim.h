@@ -8,5 +8,5 @@
 
 #include "rwpng.h"
 
-double dssim_image(read_info *image1, read_info *image2,
+double dssim_image(png24_image *image1, png24_image *image2,
                    const char *ssimfilename);

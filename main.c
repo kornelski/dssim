@@ -24,14 +24,14 @@
 #include "dssim.h"
 
 /*
- Reads image into read_info struct. Returns non-zero on error
+ Reads image into png24_image struct. Returns non-zero on error
  */
-static int read_image(const char *filename, read_info *image)
+static int read_image(const char *filename, png24_image *image)
 {
     FILE *fp = fopen(filename, "rb");
     if (!fp) return 1;
 
-    int retval = rwpng_read_image(fp, image);
+    int retval = rwpng_read_image24(fp, image);
 
     fclose(fp);
     return retval;
@@ -48,14 +48,14 @@ int main(int argc, const char *argv[])
     const char *file2 = argv[2];
     const char *outfile = argc > 3 ? argv[3] : NULL;
 
-    read_info image1;
+    png24_image image1;
     int retval = read_image(file1, &image1);
     if (retval) {
         fprintf(stderr, "Can't read %s\n",file1);
         return retval;
     }
 
-    read_info image2;
+    png24_image image2;
     retval = read_image(file2, &image2);
     if (retval) {
         fprintf(stderr, "Can't read %s\n",file2);

@@ -32,20 +32,55 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "png.h"        /* libpng header; includes zlib.h */
-#include "rwpng.h"      /* typedefs, common macros, public prototypes */
+#include "png.h"
+#include "rwpng.h"
+
+#ifndef Z_BEST_COMPRESSION
+#define Z_BEST_COMPRESSION 9
+#endif
+#ifndef Z_BEST_SPEED
+#define Z_BEST_SPEED 1
+#endif
 
 static void rwpng_error_handler(png_structp png_ptr, png_const_charp msg);
+int rwpng_read_image24_cocoa(FILE *infile, png24_image *mainprog_ptr);
 
 
-void rwpng_version_info(void)
+void rwpng_version_info(FILE *fp)
 {
-    fprintf(stderr, "   Compiled with libpng %s; using libpng %s.\n",
+    fprintf(fp, "   Compiled with libpng %s; using libpng %s.\n",
       PNG_LIBPNG_VER_STRING, png_get_header_ver(NULL));
-    fprintf(stderr, "   Compiled with zlib %s; using zlib %s.\n",
-      ZLIB_VERSION, zlib_version);
+#if USE_COCOA
+    fputs("   Compiled with Apple Cocoa image reader.\n", fp);
+#endif
 }
 
+
+struct rwpng_read_data {
+    FILE *fp;
+    png_size_t bytes_read;
+};
+
+static void user_read_data(png_structp png_ptr, png_bytep data, png_size_t length)
+{
+    struct rwpng_read_data *read_data = (struct rwpng_read_data *)png_get_io_ptr(png_ptr);
+
+    png_size_t read = fread(data, 1, length, read_data->fp);
+    if (!read) png_error(png_ptr, "Read error");
+    read_data->bytes_read += read;
+}
+
+static png_bytepp rwpng_create_row_pointers(png_infop info_ptr, png_structp png_ptr, unsigned char *base, unsigned int height, unsigned int rowbytes)
+{
+    if (!rowbytes) rowbytes = png_get_rowbytes(png_ptr, info_ptr);
+
+    png_bytepp row_pointers = malloc(height * sizeof(row_pointers[0]));
+    if (!row_pointers) return NULL;
+    for(unsigned int row = 0;  row < height;  ++row) {
+        row_pointers[row] = base + row * rowbytes;
+    }
+    return row_pointers;
+}
 
 
 /*
@@ -58,26 +93,15 @@ void rwpng_version_info(void)
     26 = wrong PNG color type (no alpha channel)
  */
 
-int rwpng_read_image(FILE *infile, read_info *mainprog_ptr)
+pngquant_error rwpng_read_image24_libpng(FILE *infile, png24_image *mainprog_ptr)
 {
     png_structp  png_ptr = NULL;
     png_infop    info_ptr = NULL;
-    png_uint_32  i, rowbytes;
+    png_size_t   rowbytes;
     int          color_type, bit_depth;
-    unsigned char sig[8];
-
-
-    /* first do a quick check that the file really is a PNG image; could
-     * have used slightly more general png_sig_cmp() function instead */
-
-    fread(sig, 1, 8, infile);
-    if (png_sig_cmp(sig, 0, 8)) {
-        return BAD_SIGNATURE_ERROR;   /* bad signature */
-    }
-
 
     png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, mainprog_ptr,
-      NULL, NULL);
+      rwpng_error_handler, NULL);
     if (!png_ptr) {
         return PNG_OUT_OF_MEMORY_ERROR;   /* out of memory */
     }
@@ -88,25 +112,16 @@ int rwpng_read_image(FILE *infile, read_info *mainprog_ptr)
         return PNG_OUT_OF_MEMORY_ERROR;   /* out of memory */
     }
 
-
-    /* GRR TO DO:  use end_info struct */
-    /* we could create a second info struct here (end_info), but it's only
-     * useful if we want to keep pre- and post-IDAT chunk info separated
-     * (mainly for PNG-aware image editors and converters) */
-
-
     /* setjmp() must be called in every function that calls a non-trivial
      * libpng function */
 
-    jmp_buf jmpbuf;
-    if (setjmp(jmpbuf)) {
+    if (setjmp(mainprog_ptr->jmpbuf)) {
         png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
         return LIBPNG_FATAL_ERROR;   /* fatal libpng error (via longjmp()) */
     }
 
-
-    png_init_io(png_ptr, infile);
-    png_set_sig_bytes(png_ptr, 8);  /* we already read the 8 signature bytes */
+    struct rwpng_read_data read_data = {infile, 0};
+    png_set_read_fn(png_ptr, &read_data, user_read_data);
 
     png_read_info(png_ptr, info_ptr);  /* read all PNG info up to image data */
 
@@ -116,17 +131,14 @@ int rwpng_read_image(FILE *infile, read_info *mainprog_ptr)
      * compression_type and filter_type => NULLs] */
 
     png_get_IHDR(png_ptr, info_ptr, &mainprog_ptr->width, &mainprog_ptr->height,
-      &bit_depth, &color_type, &mainprog_ptr->interlaced, NULL, NULL);
+      &bit_depth, &color_type, NULL, NULL, NULL);
 
 
     /* expand palette images to RGB, low-bit-depth grayscale images to 8 bits,
      * transparency chunks to full alpha channel; strip 16-bit-per-sample
      * images to 8 bits per sample; and convert grayscale to RGB[A] */
 
-    /* GRR TO DO:  handle each of GA, RGB, RGBA without conversion to RGBA */
-    /* GRR TO DO:  allow sub-8-bit quantization? */
     /* GRR TO DO:  preserve all safe-to-copy ancillary PNG chunks */
-    /* GRR TO DO:  get and map background color? */
 
     if (!(color_type & PNG_COLOR_MASK_ALPHA)) {
 #ifdef PNG_READ_FILLER_SUPPORTED
@@ -147,10 +159,9 @@ int rwpng_read_image(FILE *infile, read_info *mainprog_ptr)
     if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS))
         png_set_expand(png_ptr);
  */
-    /* GRR TO DO:  handle 16-bps data natively? */
     if (bit_depth == 16)
         png_set_strip_16(png_ptr);
-    /* GRR TO DO:  probably want to handle this separately, without expansion */
+
     if (color_type == PNG_COLOR_TYPE_GRAY ||
         color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
         png_set_gray_to_rgb(png_ptr);
@@ -158,41 +169,29 @@ int rwpng_read_image(FILE *infile, read_info *mainprog_ptr)
 
     /* get and save the gamma info (if any) for writing */
 
-    if (!png_get_gAMA(png_ptr, info_ptr, &mainprog_ptr->gamma)) {
-        mainprog_ptr->gamma = 0.45455;
-    }
+    double gamma;
+    mainprog_ptr->gamma = png_get_gAMA(png_ptr, info_ptr, &gamma) ? gamma : 0.45455;
+
+    png_set_interlace_handling(png_ptr);
 
     /* all transformations have been registered; now update info_ptr data,
      * get rowbytes and channels, and allocate image memory */
 
     png_read_update_info(png_ptr, info_ptr);
 
-    mainprog_ptr->rowbytes = rowbytes = png_get_rowbytes(png_ptr, info_ptr);
-    //mainprog_ptr->channels = (int)png_get_channels(png_ptr, info_ptr);
+    rowbytes = png_get_rowbytes(png_ptr, info_ptr);
 
     if ((mainprog_ptr->rgba_data = malloc(rowbytes*mainprog_ptr->height)) == NULL) {
         fprintf(stderr, "pngquant readpng:  unable to allocate image data\n");
         png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
         return PNG_OUT_OF_MEMORY_ERROR;
     }
-    if ((mainprog_ptr->row_pointers = (png_bytepp)malloc(mainprog_ptr->height*sizeof(png_bytep))) == NULL) {
-        fprintf(stderr, "pngquant readpng:  unable to allocate row pointers\n");
-        png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
-        free(mainprog_ptr->rgba_data);
-        mainprog_ptr->rgba_data = NULL;
-        return PNG_OUT_OF_MEMORY_ERROR;
-    }
 
-    /* set the individual row_pointers to point at the correct offsets */
-
-    for (i = 0;  i < mainprog_ptr->height;  ++i)
-        mainprog_ptr->row_pointers[i] = mainprog_ptr->rgba_data + i*rowbytes;
-
+    png_bytepp row_pointers = rwpng_create_row_pointers(info_ptr, png_ptr, mainprog_ptr->rgba_data, mainprog_ptr->height, 0);
 
     /* now we can go ahead and just read the whole image */
 
-    png_read_image(png_ptr, (png_bytepp)mainprog_ptr->row_pointers);
-
+    png_read_image(png_ptr, row_pointers);
 
     /* and we're done!  (png_read_end() can be omitted if no processing of
      * post-IDAT text/time/etc. is desired) */
@@ -201,39 +200,37 @@ int rwpng_read_image(FILE *infile, read_info *mainprog_ptr)
 
     png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
 
+    mainprog_ptr->file_size = read_data.bytes_read;
+    mainprog_ptr->row_pointers = (unsigned char **)row_pointers;
+
     return SUCCESS;
 }
 
 
-
-
-
-/*
-   retval:
-     0 = success
-    34 = insufficient memory
-    35 = libpng error (via longjmp())
- */
-
-int rwpng_write_image_init(FILE *outfile, write_info *mainprog_ptr)
+pngquant_error rwpng_read_image24(FILE *infile, png24_image *input_image_p)
 {
-    png_structp png_ptr;       /* note:  temporary variables! */
-    png_infop info_ptr;
+#if USE_COCOA
+    return rwpng_read_image24_cocoa(infile, input_image_p);
+#else
+    return rwpng_read_image24_libpng(infile, input_image_p);
+#endif
+}
 
 
+static pngquant_error rwpng_write_image_init(rwpng_png_image *mainprog_ptr, png_structpp png_ptr_p, png_infopp info_ptr_p, FILE *outfile, int fast_compression)
+{
     /* could also replace libpng warning-handler (final NULL), but no need: */
 
-    png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, mainprog_ptr,
-      NULL, NULL);
-    if (!png_ptr) {
-        return INIT_OUT_OF_MEMORY_ERROR;   /* out of memory */
-    }
-    mainprog_ptr->png_ptr = png_ptr;
+    *png_ptr_p = png_create_write_struct(PNG_LIBPNG_VER_STRING, mainprog_ptr, rwpng_error_handler, NULL);
 
-    info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr) {
-        png_destroy_write_struct(&png_ptr, NULL);
-        return INIT_OUT_OF_MEMORY_ERROR;   /* out of memory */
+    if (!(*png_ptr_p)) {
+        return LIBPNG_INIT_ERROR;   /* out of memory */
+    }
+
+    *info_ptr_p = png_create_info_struct(*png_ptr_p);
+    if (!(*info_ptr_p)) {
+        png_destroy_write_struct(png_ptr_p, NULL);
+        return LIBPNG_INIT_ERROR;   /* out of memory */
     }
 
 
@@ -242,38 +239,57 @@ int rwpng_write_image_init(FILE *outfile, write_info *mainprog_ptr)
      * but compatible error handlers must either use longjmp() themselves
      * (as in this program) or exit immediately, so here we go: */
 
-    jmp_buf jmpbuf;
-    if (setjmp(jmpbuf)) {
-        png_destroy_write_struct(&png_ptr, &info_ptr);
+    if (setjmp(mainprog_ptr->jmpbuf)) {
+        png_destroy_write_struct(png_ptr_p, info_ptr_p);
         return LIBPNG_INIT_ERROR;   /* libpng error (via longjmp()) */
     }
 
+    png_init_io(*png_ptr_p, outfile);
 
-    /* make sure outfile is (re)opened in BINARY mode */
+    png_set_compression_level(*png_ptr_p, fast_compression ? Z_BEST_SPEED : Z_BEST_COMPRESSION);
 
-    png_init_io(png_ptr, outfile);
+    return SUCCESS;
+}
 
 
-    /* set the compression levels--in general, always want to leave filtering
-     * turned on (except for palette images) and allow all of the filters,
-     * which is the default; want 32K zlib window, unless entire image buffer
-     * is 16K or smaller (unknown here)--also the default; usually want max
-     * compression (NOT the default); and remaining compression flags should
-     * be left alone */
+void rwpng_write_end(png_infopp info_ptr_p, png_structpp png_ptr_p, png_bytepp row_pointers)
+{
+    png_write_info(*png_ptr_p, *info_ptr_p);
 
-    png_set_compression_level(png_ptr, Z_BEST_COMPRESSION);
-/*
-    >> this is default for no filtering; Z_FILTERED is default otherwise:
-    png_set_compression_strategy(png_ptr, Z_DEFAULT_STRATEGY);
-    >> these are all defaults:
-    png_set_compression_mem_level(png_ptr, 8);
-    png_set_compression_window_bits(png_ptr, 15);
-    png_set_compression_method(png_ptr, 8);
- */
+    png_set_packing(*png_ptr_p);
 
+    png_write_image(*png_ptr_p, row_pointers);
+
+    png_write_end(*png_ptr_p, NULL);
+
+    png_destroy_write_struct(png_ptr_p, info_ptr_p);
+}
+
+void rwpng_set_gamma(png_infop info_ptr, png_structp png_ptr, double gamma)
+{
+    if (gamma > 0.0) {
+        png_set_gAMA(png_ptr, info_ptr, gamma);
+
+        if (gamma > 0.45454 && gamma < 0.45456) {
+            png_set_sRGB(png_ptr, info_ptr, 0); // 0 = Perceptual
+        }
+    }
+}
+
+pngquant_error rwpng_write_image8(FILE *outfile, png8_image *mainprog_ptr)
+{
+    png_structp png_ptr;
+    png_infop info_ptr;
+
+    pngquant_error retval = rwpng_write_image_init((rwpng_png_image*)mainprog_ptr, &png_ptr, &info_ptr, outfile, mainprog_ptr->fast_compression);
+    if (retval) return retval;
+
+    // Palette images generally don't gain anything from filtering
+    png_set_filter(png_ptr, PNG_FILTER_TYPE_BASE, PNG_FILTER_VALUE_NONE);
+
+    rwpng_set_gamma(info_ptr, png_ptr, mainprog_ptr->gamma);
 
     /* set the image parameters appropriately */
-
     int sample_depth;
     if (mainprog_ptr->num_palette <= 2)
         sample_depth = 1;
@@ -286,217 +302,63 @@ int rwpng_write_image_init(FILE *outfile, write_info *mainprog_ptr)
 
     png_set_IHDR(png_ptr, info_ptr, mainprog_ptr->width, mainprog_ptr->height,
       sample_depth, PNG_COLOR_TYPE_PALETTE,
-      mainprog_ptr->interlaced, PNG_COMPRESSION_TYPE_DEFAULT,
-      PNG_FILTER_TYPE_DEFAULT);
+      0, PNG_COMPRESSION_TYPE_DEFAULT,
+      PNG_FILTER_TYPE_BASE);
 
-    /* GRR WARNING:  cast of rwpng_colorp to png_colorp could fail in future
-     * major revisions of libpng (but png_ptr/info_ptr will fail, regardless) */
     png_set_PLTE(png_ptr, info_ptr, &mainprog_ptr->palette[0], mainprog_ptr->num_palette);
 
     if (mainprog_ptr->num_trans > 0)
         png_set_tRNS(png_ptr, info_ptr, mainprog_ptr->trans, mainprog_ptr->num_trans, NULL);
 
-    if (mainprog_ptr->gamma > 0.0)
-        png_set_gAMA(png_ptr, info_ptr, mainprog_ptr->gamma);
+    rwpng_write_end(&info_ptr, &png_ptr, mainprog_ptr->row_pointers);
 
-#if 0
-    if (mainprog_ptr->have_bg) {   /* we know it's RGBA, not gray+alpha */
-        png_color_16  background;
-
-        background.red = mainprog_ptr->bg_red;
-        background.green = mainprog_ptr->bg_green;
-        background.blue = mainprog_ptr->bg_blue;
-        png_set_bKGD(png_ptr, info_ptr, &background);
-    }
-
-    if (mainprog_ptr->have_time) {
-        png_time  modtime;
-
-        png_convert_from_time_t(&modtime, mainprog_ptr->modtime);
-        png_set_tIME(png_ptr, info_ptr, &modtime);
-    }
-
-    if (mainprog_ptr->have_text) {
-        png_text  text[6];
-        int  num_text = 0;
-
-        if (mainprog_ptr->have_text & TEXT_TITLE) {
-            text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-            text[num_text].key = "Title";
-            text[num_text].text = mainprog_ptr->title;
-            ++num_text;
-        }
-        if (mainprog_ptr->have_text & TEXT_AUTHOR) {
-            text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-            text[num_text].key = "Author";
-            text[num_text].text = mainprog_ptr->author;
-            ++num_text;
-        }
-        if (mainprog_ptr->have_text & TEXT_DESC) {
-            text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-            text[num_text].key = "Description";
-            text[num_text].text = mainprog_ptr->desc;
-            ++num_text;
-        }
-        if (mainprog_ptr->have_text & TEXT_COPY) {
-            text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-            text[num_text].key = "Copyright";
-            text[num_text].text = mainprog_ptr->copyright;
-            ++num_text;
-        }
-        if (mainprog_ptr->have_text & TEXT_EMAIL) {
-            text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-            text[num_text].key = "E-mail";
-            text[num_text].text = mainprog_ptr->email;
-            ++num_text;
-        }
-        if (mainprog_ptr->have_text & TEXT_URL) {
-            text[num_text].compression = PNG_TEXT_COMPRESSION_NONE;
-            text[num_text].key = "URL";
-            text[num_text].text = mainprog_ptr->url;
-            ++num_text;
-        }
-        png_set_text(png_ptr, info_ptr, text, num_text);
-    }
-#endif /* 0 */
-
-
-    /* write all chunks up to (but not including) first IDAT */
-
-    png_write_info(png_ptr, info_ptr);
-
-
-    /* if we wanted to write any more text info *after* the image data, we
-     * would set up text struct(s) here and call png_set_text() again, with
-     * just the new data; png_set_tIME() could also go here, but it would
-     * have no effect since we already called it above (only one tIME chunk
-     * allowed) */
-
-
-    /* set up the transformations:  for now, just pack low-bit-depth pixels
-     * into bytes (one, two or four pixels per byte) */
-
-    png_set_packing(png_ptr);
-/*  png_set_shift(png_ptr, &sig_bit);  to scale low-bit-depth values */
-
-
-    /* make sure we save our pointers for use in writepng_encode_image() */
-
-    mainprog_ptr->png_ptr = png_ptr;
-    mainprog_ptr->info_ptr = info_ptr;
-
-
-    /* OK, that's all we need to do for now; return happy */
     return SUCCESS;
 }
 
-
-
-
-
-
-/* returns 0 for success, 45 for libpng (longjmp) problem */
-
-int rwpng_write_image_whole(write_info *mainprog_ptr)
+pngquant_error rwpng_write_image24(FILE *outfile, png24_image *mainprog_ptr)
 {
-    png_structp png_ptr = (png_structp)mainprog_ptr->png_ptr;
-    png_infop info_ptr = (png_infop)mainprog_ptr->info_ptr;
+    png_structp png_ptr;
+    png_infop info_ptr;
 
-    /* as always, setjmp() must be called in every function that calls a
-     * PNG-writing libpng function */
+    pngquant_error retval = rwpng_write_image_init((rwpng_png_image*)mainprog_ptr, &png_ptr, &info_ptr, outfile, 0);
+    if (retval) return retval;
 
-    jmp_buf jmpbuf;
-    if (setjmp(jmpbuf)) {
-        png_destroy_write_struct(&png_ptr, &info_ptr);
-        mainprog_ptr->png_ptr = NULL;
-        mainprog_ptr->info_ptr = NULL;
-        return LIBPNG_WRITE_WHOLE_ERROR; /* libpng error (via longjmp()) */
-    }
+    rwpng_set_gamma(info_ptr, png_ptr, mainprog_ptr->gamma);
 
-
-    /* and now we just write the whole image; libpng takes care of interlacing
-     * for us */
-
-    png_write_image(png_ptr, mainprog_ptr->row_pointers);
+    png_set_IHDR(png_ptr, info_ptr, mainprog_ptr->width, mainprog_ptr->height,
+                 8, PNG_COLOR_TYPE_RGB_ALPHA,
+                 0, PNG_COMPRESSION_TYPE_DEFAULT,
+                 PNG_FILTER_TYPE_BASE);
 
 
-    /* since that's it, we also close out the end of the PNG file now--if we
-     * had any text or time info to write after the IDATs, second argument
-     * would be info_ptr, but we optimize slightly by sending NULL pointer: */
+    png_bytepp row_pointers = rwpng_create_row_pointers(info_ptr, png_ptr, mainprog_ptr->rgba_data, mainprog_ptr->height, 0);
 
-    png_write_end(png_ptr, NULL);
+    rwpng_write_end(&info_ptr, &png_ptr, row_pointers);
 
-    png_destroy_write_struct(&png_ptr, &info_ptr);
-    mainprog_ptr->png_ptr = NULL;
-    mainprog_ptr->info_ptr = NULL;
+    free(row_pointers);
 
     return SUCCESS;
 }
 
 
-
-
-
-/* this routine is called only for non-interlaced images */
-/* returns 0 if succeeds, 55 if libpng problem */
-
-int rwpng_write_image_row(write_info *mainprog_ptr)
+static void rwpng_error_handler(png_structp png_ptr, png_const_charp msg)
 {
-    png_structp png_ptr = (png_structp)mainprog_ptr->png_ptr;
-    png_infop info_ptr = (png_infop)mainprog_ptr->info_ptr;
+    rwpng_png_image  *mainprog_ptr;
 
+    /* This function, aside from the extra step of retrieving the "error
+     * pointer" (below) and the fact that it exists within the application
+     * rather than within libpng, is essentially identical to libpng's
+     * default error handler.  The second point is critical:  since both
+     * setjmp() and longjmp() are called from the same code, they are
+     * guaranteed to have compatible notions of how big a jmp_buf is,
+     * regardless of whether _BSD_SOURCE or anything else has (or has not)
+     * been defined. */
 
-    /* as always, setjmp() must be called in every function that calls a
-     * PNG-writing libpng function */
+    fprintf(stderr, "  error: %s\n", msg);
+    fflush(stderr);
 
-    jmp_buf jmpbuf;
-    if (setjmp(jmpbuf)) {
-        png_destroy_write_struct(&png_ptr, &info_ptr);
-        mainprog_ptr->png_ptr = NULL;
-        mainprog_ptr->info_ptr = NULL;
-        return LIBPNG_WRITE_ERROR;   /* libpng error (via longjmp()) */
-    }
+    mainprog_ptr = png_get_error_ptr(png_ptr);
+    if (mainprog_ptr == NULL) abort();
 
-
-    /* indexed_data points at our one row of indexed data */
-
-    png_write_row(png_ptr, mainprog_ptr->indexed_data);
-
-    return SUCCESS;
-}
-
-
-
-
-
-/* this routine is called only after rwpng_write_image_row() */
-/* returns 0 if succeeds, 65 if libpng problem */
-
-int rwpng_write_image_finish(write_info *mainprog_ptr)
-{
-    png_structp png_ptr = (png_structp)mainprog_ptr->png_ptr;
-    png_infop info_ptr = (png_infop)mainprog_ptr->info_ptr;
-
-
-    /* as always, setjmp() must be called in every function that calls a
-     * PNG-writing libpng function */
-
-    jmp_buf jmpbuf;
-    if (setjmp(jmpbuf)) {
-        png_destroy_write_struct(&png_ptr, &info_ptr);
-        mainprog_ptr->png_ptr = NULL;
-        mainprog_ptr->info_ptr = NULL;
-        return LIBPNG_WRITE_ERROR;   /* libpng error (via longjmp()) */
-    }
-
-
-    /* close out PNG file; if we had any text or time info to write after
-     * the IDATs, second argument would be info_ptr */
-    png_write_end(png_ptr, NULL);
-
-    png_destroy_write_struct(&png_ptr, &info_ptr);
-    mainprog_ptr->png_ptr = NULL;
-    mainprog_ptr->info_ptr = NULL;
-
-    return SUCCESS;
+    longjmp(mainprog_ptr->jmpbuf, 1);
 }

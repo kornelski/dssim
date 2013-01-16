@@ -24,6 +24,10 @@
 #include <math.h>
 #include "dssim.h"
 
+#ifndef MIN
+#define MIN(a,b) ((a)<=(b)?(a):(b))
+#endif
+
 typedef struct {
     unsigned char r, g, b, a;
 } rgba8;
@@ -226,7 +230,6 @@ static void write_image(const char *filename,
                                                   NULL, NULL, NULL);
     png_infop info_ptr  = png_create_info_struct(png_ptr);
     png_init_io(png_ptr, outfile);
-    png_set_compression_level(png_ptr, Z_BEST_SPEED);
     png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGBA,
                  0, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
     png_set_gAMA(png_ptr, info_ptr, gamma);
@@ -274,11 +277,11 @@ inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
 /*
  * Algorithm based on Rabah Mehdi's C++ implementation
  *
- * frees memory in read_info structs.
+ * frees memory in png24_image structs.
  * saves dissimilarity visualisation as ssimfilename (pass NULL if not needed)
  */
-double dssim_image(read_info *image1,
-                   read_info *image2,
+double dssim_image(png24_image *image1,
+                   png24_image *image2,
                    const char *ssimfilename)
 {
     float gamma1 = image1->gamma,
