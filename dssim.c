@@ -99,27 +99,37 @@ inline static rgba8 rgbaf_to_8(const float gamma, rgbaf px)
     };
 }
 
-static const float D65x = 0.9505f, D65y = 1.0f, D65z = 1.089f;
-
-inline static laba rgba_to_laba(const float gamma, const rgba8 px)
+static double gamma_lut[256];
+static void set_gamma(const double invgamma)
 {
-    float r = powf(px.r / 255.0f, 1.0f / gamma),
-          g = powf(px.g / 255.0f, 1.0f / gamma),
-          b = powf(px.b / 255.0f, 1.0f / gamma),
-          a = px.a / 255.0f;
+    for (int i = 0; i < 256; i++) {
+        gamma_lut[i] = pow(i / 255.0, 1.0 / invgamma);
+    }
+}
 
-    float fx = (r * 0.4124f + g * 0.3576f + b * 0.1805f) / D65x;
-    float fy = (r * 0.2126f + g * 0.7152f + b * 0.0722f) / D65y;
-    float fz = (r * 0.0193f + g * 0.1192f + b * 0.9505f) / D65z;
-    const float epsilon = 216.0 / 24389.0;
-    const float k = 24389.0 / 27.0; // http://www.brucelindbloom.com/index.html?LContinuity.html
-    fx = (fx > epsilon) ? powf(fx, 1.f / 3.f) : k * fx / 116.0 + (16.f / 116.f);
-    fy = (fy > epsilon) ? powf(fy, 1.f / 3.f) : k * fy / 116.0 + (16.f / 116.f);
-    fz = (fz > epsilon) ? powf(fz, 1.f / 3.f) : k * fz / 116.0 + (16.f / 116.f);
+static const double D65x = 0.9505, D65y = 1.0, D65z = 1.089;
+
+inline static laba rgba_to_laba(const rgba8 px)
+{
+    const double r = gamma_lut[px.r],
+                 g = gamma_lut[px.g],
+                 b = gamma_lut[px.b];
+    const float  a = px.a / 255.f;
+
+    double fx = (r * 0.4124 + g * 0.3576 + b * 0.1805) / D65x;
+    double fy = (r * 0.2126 + g * 0.7152 + b * 0.0722) / D65y;
+    double fz = (r * 0.0193 + g * 0.1192 + b * 0.9505) / D65z;
+
+    const double epsilon = 216.0 / 24389.0;
+    const double k = 24389.0 / 27.0; // http://www.brucelindbloom.com/index.html?LContinuity.html
+    const float X = (fx > epsilon) ? powf(fx, 1.f / 3.f) : k * fx / 116.0 + (16.0 / 116.0);
+    const float Y = (fy > epsilon) ? powf(fy, 1.f / 3.f) : k * fy / 116.0 + (16.0 / 116.0);
+    const float Z = (fz > epsilon) ? powf(fz, 1.f / 3.f) : k * fz / 116.0 + (16.0 / 116.0);
+
     return (laba) {
-        (116.0f * fy - 16.0f) / 100.0 * a,
-        (86.2f + 500.0f * (fx - fy)) / 220.0 * a, /* 86 is a fudge to make the value positive */
-        (107.9f + 200.0f * (fy - fz)) / 220.0 * a, /* 107 is a fudge to make the value positive */
+        (116.0f * Y - 16.0f) / 100.0f * a,
+        (86.2f + 500.0f * (X - Y)) / 220.0f * a, /* 86 is a fudge to make the value positive */
+        (107.9f + 200.0f * (Y - Z)) / 220.0f * a, /* 107 is a fudge to make the value positive */
         a
     };
 }
@@ -272,9 +282,9 @@ static void write_image(const char *filename,
 /*
  * Conversion is not reversible
  */
-inline static laba convert_pixel(rgba8 px, float gamma, int i, int j)
+inline static laba convert_pixel(rgba8 px, int i, int j)
 {
-    laba f1 = rgba_to_laba(gamma, px);
+    laba f1 = rgba_to_laba(px);
     assert(f1.l >= 0.0f && f1.A >= 0.0f && f1.b >= 0.0f && f1.a <= 1.0);
 
     // Compose image on coloured background to better judge dissimilarity with various backgrounds
@@ -309,7 +319,7 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
 {
     int width = inf->width = image1->width;
     int height = inf->height = image1->height;
-    float gamma = image1->gamma;
+    set_gamma(image1->gamma);
 
     laba *restrict img1 = inf->img1 = malloc(width * height * sizeof(laba));
     laba *restrict sigma1_tmp = malloc(width * height * sizeof(laba));
@@ -318,7 +328,7 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
     for (int j = 0; j < height; j++) {
         rgba8 *px1 = (rgba8 *)image1->row_pointers[j];
         for (int i = 0; i < width; i++, offset++) {
-            laba f1 = convert_pixel(px1[i], gamma, i, j);
+            laba f1 = convert_pixel(px1[i], i, j);
 
             img1[offset] = f1;
             LABA_OP(sigma1_tmp[offset], f1, *, f1);
@@ -350,7 +360,7 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
         return 1;
     }
 
-    float gamma2 = image2->gamma;
+    set_gamma(image2->gamma);
 
     laba *restrict img1 = inf->img1;
     laba *restrict img2 = malloc(width * height * sizeof(laba));
@@ -360,7 +370,7 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
     for (int j = 0; j < height; j++) {
         rgba8 *px2 = (rgba8 *)image2->row_pointers[j];
         for (int i = 0; i < width; i++, offset++) {
-            laba f2 = convert_pixel(px2[i], gamma2, i, j);
+            laba f2 = convert_pixel(px2[i], i, j);
 
             img2[offset] = f2;
             LABA_OP(img1_img2[offset], img1[offset], *, f2);
