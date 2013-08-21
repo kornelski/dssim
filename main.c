@@ -39,6 +39,32 @@ static int read_image(const char *filename, png24_image *image)
     return retval;
 }
 
+static void write_image(const char *filename,
+                        const rgba8 *pixels,
+                        int width,
+                        int height)
+{
+    FILE *outfile = fopen(filename, "wb");
+    if (!outfile) {
+        return;
+    }
+
+    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING,
+                          NULL, NULL, NULL);
+    png_infop info_ptr = png_create_info_struct(png_ptr);
+    png_init_io(png_ptr, outfile);
+    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGBA,
+                 0, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+    png_write_info(png_ptr, info_ptr);
+
+    for (int i = 0; i < height; i++) {
+        png_write_row(png_ptr, (png_bytep)(pixels + i * width));
+    }
+
+    png_write_end(png_ptr, info_ptr);
+    png_destroy_write_struct(&png_ptr, &info_ptr);
+}
+
 static void usage(const char *argv0)
 {
     fprintf(stderr, "Usage: %s original.png modified.png [modified.png...]\n\n" \
@@ -47,6 +73,12 @@ static void usage(const char *argv0)
             "Images must have identical size. May have different gamma & depth.\n" \
             "\nVersion 0.2 http://pornel.net/dssim\n" \
             , argv0);
+}
+
+inline static unsigned char to_byte(float in) {
+    if (in <= 0) return 0;
+    if (in >= 255.f/256.f) return 255;
+    return in * 256.f;
 }
 
 int main(int argc, const char *argv[])
@@ -88,7 +120,22 @@ int main(int argc, const char *argv[])
             break;
         }
 
+        float *map = NULL;
         double dssim = dssim_compare(dinf, NULL);
+        if (map) {
+            rgba8 *out = (rgba8*)map;
+            for(int i=0; i < image2.width*image2.height; i++) {
+                const float max = 1.0 - map[i];
+                const float maxsq = max * max;
+                out[i] = (rgba8) {
+                    .r = to_byte(max * 3.0),
+                    .g = to_byte(maxsq * 3.0),
+                    .b = to_byte((max-0.5) * 2.0f),
+                    .a = 255,
+                };
+            }
+            write_image("/tmp/dssim-map.png", out, image2.width, image2.height);
+        }
         printf("%.6f\t%s\n", dssim, file2);
     }
 

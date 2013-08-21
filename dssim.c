@@ -29,9 +29,6 @@
 #define MIN(a,b) ((a)<=(b)?(a):(b))
 #endif
 
-typedef struct {
-    unsigned char r, g, b, a;
-} rgba8;
 
 typedef struct {
     float r, g, b, a;
@@ -61,29 +58,6 @@ void dssim_dealloc(dssim_info *inf)
     free(inf->mu1); inf->mu1 = NULL;
     free(inf->sigma1_sq); inf->sigma1_sq = NULL;
     free(inf);
-}
-
-/* Converts premultiplied alpha 0..1 to 0..255 */
-inline static rgba8 rgbaf_to_8(const float gamma, rgbaf px)
-{
-    if (px.a < 1.0 / 256.0f) {
-        return (rgba8) {0, 0, 0, 0};
-    }
-
-    float r, g, b, a;
-
-    // 256, because numbers are in range 0..255.9999… rounded down
-    r = powf(px.r / px.a, gamma) * 256.0f;
-    g = powf(px.g / px.a, gamma) * 256.0f;
-    b = powf(px.b / px.a, gamma) * 256.0f;
-    a = px.a * 256.0f;
-
-    return (rgba8) {
-        r >= 255 ? 255 : (r <= 0 ? 0 : r),
-        g >= 255 ? 255 : (g <= 0 ? 0 : g),
-        b >= 255 ? 255 : (b <= 0 ? 0 : b),
-        a >= 255 ? 255 : a,
-    };
 }
 
 static double gamma_lut[256];
@@ -263,34 +237,6 @@ static void blur(laba *restrict src, laba *restrict tmp, laba *restrict dst,
     transposing_1d_blur(tmp, dst, height, width);
 }
 
-static void write_image(const char *filename,
-                        const rgba8 *pixels,
-                        int width,
-                        int height,
-                        float gamma)
-{
-    FILE *outfile = fopen(filename, "wb");
-    if (!outfile) {
-        return;
-    }
-
-    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING,
-                          NULL, NULL, NULL);
-    png_infop info_ptr = png_create_info_struct(png_ptr);
-    png_init_io(png_ptr, outfile);
-    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGBA,
-                 0, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
-    png_set_gAMA(png_ptr, info_ptr, gamma);
-    png_write_info(png_ptr, info_ptr);
-
-    for (int i = 0; i < height; i++) {
-        png_write_row(png_ptr, (png_bytep)(pixels + i * width));
-    }
-
-    png_write_end(png_ptr, info_ptr);
-    png_destroy_write_struct(&png_ptr, &info_ptr);
-}
-
 /*
  * Conversion is not reversible
  */
@@ -420,7 +366,7 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
 
  You must call dssim_set_original and dssim_set_modified first.
  */
-double dssim_compare(dssim_info *inf, const char *ssimfilename)
+double dssim_compare(dssim_info *inf, float **ssim_map_out)
 {
     int width = inf->width;
     int height = inf->height;
@@ -431,7 +377,7 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
     laba *restrict sigma2_sq = inf->sigma2_sq;
     laba *restrict sigma12 = inf->sigma12;
 
-    rgba8 *ssimmap = (rgba8*)mu2; // result can overwrite source. it's safe because sizeof(rgb) <= sizeof(fpixel)
+    float *ssimmap = ssim_map_out ? (float*)mu2 : NULL; // result can overwrite source. it's safe because sizeof(rgb) <= sizeof(fpixel)
 
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
     double avgssim_l = 0;
@@ -453,15 +399,8 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
         double ssim_A = SSIM(A); avgssim_A += ssim_A;
         double ssim_b = SSIM(b); avgssim_b += ssim_b;
 
-        if (ssimfilename) {
-            float max = 1.0 - MIN(MIN(ssim_l, ssim_A), ssim_b);
-            float maxsq = max * max;
-            ssimmap[offset] = rgbaf_to_8(1.0 / 2.2, (rgbaf) {
-                maxsq,
-                max + maxsq,
-                max * 0.25f + maxsq,
-                1
-            });
+        if (ssimmap) {
+            ssimmap[offset] = ssim_l;
         }
     }
 
@@ -475,12 +414,14 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
 
     double minavgssim = MIN(MIN(avgssim_l, avgssim_A), avgssim_b);
 
-    if (ssimfilename) {
-        write_image(ssimfilename, ssimmap, width, height, 1.0 / 2.2);
+    // mu2 is reused for ssimmap
+    if (ssim_map_out) {
+        *ssim_map_out = ssimmap;
+    } else {
+        free(inf->mu2);
     }
 
-    // mu2 is reused for ssimmap
-    free(inf->mu2); inf->mu2 = NULL;
+    inf->mu2 = NULL;
 
     return 1.0 / (minavgssim) - 1.0;
 }
