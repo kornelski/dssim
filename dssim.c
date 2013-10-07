@@ -156,45 +156,84 @@ static void square_row(laba *row, int width)
  * (called twice gives 2d blur)
  * Callback is executed on every row before blurring
  */
-static void transposing_1d_blur(laba *restrict src,
-                                laba *restrict dst,
-                                int width,
-                                int height,
-                                const int size,
-                                rowcallback *const callback)
+static void transposing_1d_blur(laba *restrict src, laba *restrict dst, const int width, const int height)
 {
+    const int size = 3;
     const float sizef = size;
 
     for (int j = 0; j < height; j++) {
         laba *restrict row = src + j * width;
 
-        // preprocess line
-        if (callback) {
-            callback(row, width);
+        // accumulate sum for pixels outside line
+        laba sum;
+        LABA_OPC(sum,row[0],*,sizef);
+        for(int i=0; i < MIN(width,size); i++) {
+            LABA_OP1(sum,+=,row[i]);
         }
+
+        // blur with left side outside line
+        for(int i=0; i < MIN(width,size); i++) {
+            LABA_OP1(sum,-=,row[0]);
+            if((i + size) < width){
+                LABA_OP1(sum,+=,row[i+size]);
+            }
+
+            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0f);
+        }
+
+        for(int i=size; i < width-size; i++) {
+            LABA_OP1(sum,-=,row[i-size]);
+            LABA_OP1(sum,+=,row[i+size]);
+
+            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0f);
+        }
+
+        // blur with right side outside line
+        for(int i=width-size; i < width; i++) {
+            if(i-size >= 0){
+                LABA_OP1(sum,-=,row[i-size]);
+            }
+            LABA_OP1(sum,+=,row[width-1]);
+
+            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0f);
+        }
+    }
+}
+
+static void regular_1d_blur(laba *restrict src, laba *restrict dst, const int width, const int height, rowcallback *const callback)
+{
+    const int size = 1;
+    const float sizef = size;
+
+    for(int j=0; j < height; j++) {
+        laba *restrict row = src + j*width;
+        laba *restrict dstrow = dst + j*width;
+
+        // preprocess line
+        if (callback) callback(row,width);
 
         // accumulate sum for pixels outside line
         laba sum;
         LABA_OPC(sum, row[0], *, sizef);
-        for (int i = 0; i < size; i++) {
+        for(int i=0; i < MIN(width,size); i++) {
             LABA_OP1(sum, +=, row[i]);
         }
 
         // blur with left side outside line
-        for (int i = 0; i < size; i++) {
+        for(int i=0; i < MIN(width,size); i++) {
             LABA_OP1(sum, -=, row[0]);
             if ((i + size) < width) {
                 LABA_OP1(sum, +=, row[i + size]);
             }
 
-            LABA_OPC(dst[i * height + j], sum, /, sizef * 2.0f);
+            LABA_OPC(dstrow[i], sum, /, sizef * 2.0f);
         }
 
         for (int i = size; i < width - size; i++) {
             LABA_OP1(sum, -=, row[i - size]);
             LABA_OP1(sum, +=, row[i + size]);
 
-            LABA_OPC(dst[i * height + j], sum, /, sizef * 2.0f);
+            LABA_OPC(dstrow[i], sum, /, sizef * 2.0f);
         }
 
         // blur with right side outside line
@@ -204,38 +243,24 @@ static void transposing_1d_blur(laba *restrict src,
             }
             LABA_OP1(sum, +=, row[width - 1]);
 
-            LABA_OPC(dst[i * height + j], sum, /, sizef * 2.0f);
+            LABA_OPC(dstrow[i], sum, /, sizef * 2.0f);
         }
     }
 }
 
+
 /*
  * Filters image with callback and blurs (lousy approximate of gaussian)
- * it proportionally to
  */
 static void blur(laba *restrict src, laba *restrict tmp, laba *restrict dst,
                  int width, int height, rowcallback *const callback)
 {
-    int small = 1, big = 1;
-    if (MIN(height, width) > 100) {
-        big++;
-    }
-    if (MIN(height, width) > 200) {
-        big++;
-    }
-    if (MIN(height, width) > 500) {
-        small++;
-    }
-    if (MIN(height, width) > 800) {
-        big++;
-    }
-
-    transposing_1d_blur(src, tmp, width, height, 1, callback);
-    transposing_1d_blur(tmp, dst, height, width, 1, NULL);
-    transposing_1d_blur(src, tmp, width, height, small, NULL);
-    transposing_1d_blur(tmp, dst, height, width, small, NULL);
-    transposing_1d_blur(dst, tmp, width, height, big, NULL);
-    transposing_1d_blur(tmp, dst, height, width, big, NULL);
+    regular_1d_blur(src, tmp, width, height, callback);
+    regular_1d_blur(tmp, dst, width, height, NULL);
+    transposing_1d_blur(dst, tmp, width, height);
+    regular_1d_blur(tmp, dst, height, width, NULL);
+    regular_1d_blur(dst, tmp, height, width, NULL);
+    transposing_1d_blur(tmp, dst, height, width);
 }
 
 static void write_image(const char *filename,
