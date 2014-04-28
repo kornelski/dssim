@@ -22,10 +22,7 @@ simple and I'm not giving any guarantees about correctness (or speed :)
 
 Will output something like `0.2341`. 0 means exactly the same image, >0 (unbounded) is amount of difference.
 
-    dssim file.png file-modified.png totally-rad-visualisation.png
-
-Will also output map of differences. Transparent areas will have funky pattern added.
-
+You can supply multiple filenames to compare them all with the first file.
 
 ##Build
 
