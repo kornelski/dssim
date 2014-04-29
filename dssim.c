@@ -112,15 +112,10 @@ inline static laba rgba_to_laba(const float gamma, const rgba8 px)
     float fy = (r * 0.2126f + g * 0.7152f + b * 0.0722f) / D65y;
     float fz = (r * 0.0193f + g * 0.1192f + b * 0.9505f) / D65z;
     const float epsilon = 216.0 / 24389.0;
-    fx =
-        ((fx > epsilon) ? powf(fx,
-                               (1.0f / 3.0f)) : (7.787f * fx + 16.0f / 116.0f));
-    fy =
-        ((fy > epsilon) ? powf(fy,
-                               (1.0f / 3.0f)) : (7.787f * fy + 16.0f / 116.0f));
-    fz =
-        ((fz > epsilon) ? powf(fz,
-                               (1.0f / 3.0f)) : (7.787f * fz + 16.0f / 116.0f));
+    const float k = 24389.0 / 27.0; // http://www.brucelindbloom.com/index.html?LContinuity.html
+    fx = (fx > epsilon) ? powf(fx, 1.f / 3.f) : k * fx / 116.0 + (16.f / 116.f);
+    fy = (fy > epsilon) ? powf(fy, 1.f / 3.f) : k * fy / 116.0 + (16.f / 116.f);
+    fz = (fz > epsilon) ? powf(fz, 1.f / 3.f) : k * fz / 116.0 + (16.f / 116.f);
     return (laba) {
         (116.0f * fy - 16.0f) / 100.0 * a,
         (86.2f + 500.0f * (fx - fy)) / 220.0 * a, /* 86 is a fudge to make the value positive */
