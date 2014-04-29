@@ -285,7 +285,10 @@ static void write_image(const char *filename,
 inline static laba convert_pixel(rgba8 px, int i, int j)
 {
     laba f1 = rgba_to_laba(px);
-    assert(f1.l >= 0.0f && f1.A >= 0.0f && f1.b >= 0.0f && f1.a <= 1.0);
+    assert(f1.l >= 0.f && f1.l <= 1.0f);
+    assert(f1.A >= 0.f && f1.A <= 1.0f);
+    assert(f1.b >= 0.f && f1.b <= 1.0f);
+    assert(f1.a >= 0.f && f1.a <= 1.0f);
 
     // Compose image on coloured background to better judge dissimilarity with various backgrounds
     int n = i ^ j;
