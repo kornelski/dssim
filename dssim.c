@@ -121,15 +121,15 @@ inline static laba rgba_to_laba(const rgba8 px)
     double fz = (r * 0.0193 + g * 0.1192 + b * 0.9505) / D65z;
 
     const double epsilon = 216.0 / 24389.0;
-    const double k = 24389.0 / 27.0; // http://www.brucelindbloom.com/index.html?LContinuity.html
-    const float X = (fx > epsilon) ? powf(fx, 1.f / 3.f) : k * fx / 116.0 + (16.0 / 116.0);
-    const float Y = (fy > epsilon) ? powf(fy, 1.f / 3.f) : k * fy / 116.0 + (16.0 / 116.0);
-    const float Z = (fz > epsilon) ? powf(fz, 1.f / 3.f) : k * fz / 116.0 + (16.0 / 116.0);
+    const double k = (24389.0 / 27.0) / 116.f; // http://www.brucelindbloom.com/LContinuity.html
+    const float X = (fx > epsilon) ? powf(fx, 1.f / 3.f) - 16.f/116.f : k * fx;
+    const float Y = (fy > epsilon) ? powf(fy, 1.f / 3.f) - 16.f/116.f : k * fy;
+    const float Z = (fz > epsilon) ? powf(fz, 1.f / 3.f) - 16.f/116.f : k * fz;
 
     return (laba) {
-        (116.0f * Y - 16.0f) / 100.0f * a,
-        (86.2f + 500.0f * (X - Y)) / 220.0f * a, /* 86 is a fudge to make the value positive */
-        (107.9f + 200.0f * (Y - Z)) / 220.0f * a, /* 107 is a fudge to make the value positive */
+        Y * 1.16f * a,
+        (86.2f/ 220.0f + 500.0f/ 220.0f * (X - Y)) * a, /* 86 is a fudge to make the value positive */
+        (107.9f/ 220.0f + 200.0f/ 220.0f * (Y - Z)) * a, /* 107 is a fudge to make the value positive */
         a
     };
 }
