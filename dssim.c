@@ -114,9 +114,9 @@ inline static laba rgba_to_laba(const rgba8 px)
     const float Z = (fz > epsilon) ? powf(fz, 1.f / 3.f) - 16.f/116.f : k * fz;
 
     return (laba) {
-        Y * 1.16f * a,
-        (86.2f/ 220.0f + 500.0f/ 220.0f * (X - Y)) * a, /* 86 is a fudge to make the value positive */
-        (107.9f/ 220.0f + 200.0f/ 220.0f * (Y - Z)) * a, /* 107 is a fudge to make the value positive */
+        Y * 1.16f,
+        (86.2f/ 220.0f + 500.0f/ 220.0f * (X - Y)), /* 86 is a fudge to make the value positive */
+        (107.9f/ 220.0f + 200.0f/ 220.0f * (Y - Z)), /* 107 is a fudge to make the value positive */
         a
     };
 }
@@ -278,15 +278,21 @@ inline static laba convert_pixel(rgba8 px, int i, int j)
     assert(f1.a >= 0.f && f1.a <= 1.0f);
 
     // Compose image on coloured background to better judge dissimilarity with various backgrounds
-    int n = i ^ j;
-    if (n & 4) {
-        f1.l += 1.0 - f1.a; // using premultiplied alpha
-    }
-    if (n & 8) {
-        f1.A += 1.0 - f1.a;
-    }
-    if (n & 16) {
-        f1.b += 1.0 - f1.a;
+    if (f1.a < 1.0) {
+        f1.l *= f1.a; // using premultiplied alpha
+        f1.A *= f1.a;
+        f1.b *= f1.a;
+
+        int n = i ^ j;
+        if (n & 4) {
+            f1.l += 1.0 - f1.a;
+        }
+        if (n & 8) {
+            f1.A += 1.0 - f1.a;
+        }
+        if (n & 16) {
+            f1.b += 1.0 - f1.a;
+        }
     }
 
     // SSIM is supposed to be applied only to luma,
