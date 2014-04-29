@@ -289,10 +289,6 @@ inline static laba convert_pixel(rgba8 px, int i, int j)
         f1.b += 1.0 - f1.a;
     }
 
-    // Since alpha is already blended with other channels,
-    // lower amplitude of alpha to lower score for alpha difference
-    f1.a *= 0.75;
-
     // SSIM is supposed to be applied only to luma,
     // lower amplitude of chroma to lower score for chroma difference
     // (chroma is not ignored completely, because IMHO it also matters)
@@ -407,7 +403,9 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
     rgba8 *ssimmap = (rgba8*)mu2; // result can overwrite source. it's safe because sizeof(rgb) <= sizeof(fpixel)
 
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
-    laba avgssim = {0, 0, 0, 0};
+    double avgssim_l = 0;
+    double avgssim_A = 0;
+    double avgssim_b = 0;
 
 #define SSIM(r) ((2.0*(mu1[offset].r*mu2[offset].r) + c1) \
                  * (2.0 * \
@@ -420,19 +418,17 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
         (sigma2_sq[offset].r - (mu2[offset].r * mu2[offset].r)) + c2))
 
     for (int offset = 0; offset < width * height; offset++) {
-        laba ssim = (laba) {
-            SSIM(l), SSIM(A), SSIM(b), SSIM(a)
-        };
-
-        LABA_OP1(avgssim, +=, ssim);
+        double ssim_l = SSIM(l); avgssim_l += ssim_l;
+        double ssim_A = SSIM(A); avgssim_A += ssim_A;
+        double ssim_b = SSIM(b); avgssim_b += ssim_b;
 
         if (ssimfilename) {
-            float max = 1.0 - MIN(MIN(ssim.l, ssim.A), ssim.b);
+            float max = 1.0 - MIN(MIN(ssim_l, ssim_A), ssim_b);
             float maxsq = max * max;
             ssimmap[offset] = rgbaf_to_8(1.0 / 2.2, (rgbaf) {
-                (1.0 - ssim.a) + maxsq,
+                maxsq,
                 max + maxsq,
-                max * 0.5f + (1.0 - ssim.a) * 0.5f + maxsq,
+                max * 0.25f + maxsq,
                 1
             });
         }
@@ -442,9 +438,11 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
     free(inf->sigma12); inf->sigma12 = NULL;
     free(inf->sigma2_sq); inf->sigma2_sq = NULL;
 
-    LABA_OPC(avgssim, avgssim, /, ((double)width * height));
+    avgssim_l /= ((double)width * height);
+    avgssim_A /= ((double)width * height);
+    avgssim_b /= ((double)width * height);
 
-    double minavgssim = MIN(MIN(avgssim.l, avgssim.A), MIN(avgssim.b, avgssim.a));
+    double minavgssim = MIN(MIN(avgssim_l, avgssim_A), avgssim_b);
 
     if (ssimfilename) {
         write_image(ssimfilename, ssimmap, width, height, 1.0 / 2.2);
@@ -452,7 +450,6 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
 
     // mu2 is reused for ssimmap
     free(inf->mu2); inf->mu2 = NULL;
-
 
     return 1.0 / (minavgssim) - 1.0;
 }
