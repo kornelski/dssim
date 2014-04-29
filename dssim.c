@@ -210,11 +210,23 @@ static void regular_1d_blur(float *restrict src, float *restrict dst, const int 
  * Filters image with callback and blurs (lousy approximate of gaussian)
  */
 static void blur(float *restrict src, float *restrict tmp, float *restrict dst,
-                 int width, int height, rowcallback *const callback)
+                 int width, int height, rowcallback *const callback, int extrablur)
 {
     regular_1d_blur(src, tmp, width, height, callback);
     regular_1d_blur(tmp, dst, width, height, NULL);
+    if (extrablur) {
+        regular_1d_blur(tmp, dst, height, width, NULL);
+        regular_1d_blur(dst, tmp, height, width, NULL);
+        regular_1d_blur(tmp, dst, height, width, NULL);
+        regular_1d_blur(dst, tmp, height, width, NULL);
+    }
     transposing_1d_blur(dst, tmp, width, height);
+    if (extrablur) {
+        regular_1d_blur(tmp, dst, height, width, NULL);
+        regular_1d_blur(dst, tmp, height, width, NULL);
+        regular_1d_blur(tmp, dst, height, width, NULL);
+        regular_1d_blur(dst, tmp, height, width, NULL);
+    }
     regular_1d_blur(tmp, dst, height, width, NULL);
     regular_1d_blur(dst, tmp, height, width, NULL);
     transposing_1d_blur(tmp, dst, height, width);
@@ -289,7 +301,7 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
     for(int ch=0; ch < 3; ch++) {
         float *img1 = inf->img1[ch];
         if (ch > 0) {
-            blur(img1, tmp, img1, width, height, NULL);
+            blur(img1, tmp, img1, width, height, NULL, 0);
         }
 
         for (int j = 0; j < width*height; j++) {
@@ -297,10 +309,10 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
         }
 
         inf->mu1[ch] = malloc(width * height * sizeof(float));
-        blur(img1, tmp, inf->mu1[ch], width, height, NULL);
+        blur(img1, tmp, inf->mu1[ch], width, height, NULL, ch > 0);
 
         inf->sigma1_sq[ch] = malloc(width * height * sizeof(float));
-        blur(sigma1_tmp, tmp, inf->sigma1_sq[ch], width, height, NULL);
+        blur(sigma1_tmp, tmp, inf->sigma1_sq[ch], width, height, NULL, ch > 0);
     }
 
     free(tmp);
@@ -344,7 +356,7 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
     float *tmp = malloc(width * height * sizeof(float));
     for(int ch=0; ch < 3; ch++) {
         if (ch > 0) {
-            blur(img2[ch], tmp, img2[ch], width, height, NULL);
+            blur(img2[ch], tmp, img2[ch], width, height, NULL, 0);
         }
         float *restrict img1_img2 = malloc(width * height * sizeof(float));
         float *restrict img1 = inf->img1[ch];
@@ -354,13 +366,13 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
         }
 
         inf->sigma12[ch] = malloc(width * height * sizeof(float));
-        blur(img1_img2, tmp, inf->sigma12[ch], width, height, NULL);
+        blur(img1_img2, tmp, inf->sigma12[ch], width, height, NULL, ch > 0);
 
         inf->mu2[ch] = img1_img2; // reuse mem
-        blur(img2[ch], tmp, inf->mu2[ch], width, height, NULL);
+        blur(img2[ch], tmp, inf->mu2[ch], width, height, NULL, ch > 0);
 
         inf->sigma2_sq[ch] = malloc(width * height * sizeof(float));
-        blur(img2[ch], tmp, inf->sigma2_sq[ch], width, height, square_row);
+        blur(img2[ch], tmp, inf->sigma2_sq[ch], width, height, square_row, ch > 0);
         free(img2[ch]);
     }
     free(tmp);
