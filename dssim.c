@@ -54,21 +54,12 @@ dssim_info *dssim_init()
 
 void dssim_dealloc(dssim_info *inf)
 {
-    if (inf->mu2) {
-        free(inf->mu2);
-        inf->mu2 = NULL;
-    }
-    if (inf->sigma2_sq) {
-        free(inf->sigma2_sq);
-        inf->sigma2_sq = NULL;
-    }
-    if (inf->sigma12) {
-        free(inf->sigma12);
-        inf->sigma12 = NULL;
-    }
-    free(inf->img1);
-    free(inf->mu1);
-    free(inf->sigma1_sq);
+    free(inf->mu2); inf->mu2 = NULL;
+    free(inf->sigma2_sq); inf->sigma2_sq = NULL;
+    free(inf->sigma12); inf->sigma12 = NULL;
+    free(inf->img1); inf->img1 = NULL;
+    free(inf->mu1); inf->mu1 = NULL;
+    free(inf->sigma1_sq); inf->sigma1_sq = NULL;
     free(inf);
 }
 
@@ -453,10 +444,8 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
     }
 
     // mu2 is reused for ssimmap
-    free(inf->sigma12);
-    inf->sigma12 = NULL;
-    free(inf->sigma2_sq);
-    inf->sigma2_sq = NULL;
+    free(inf->sigma12); inf->sigma12 = NULL;
+    free(inf->sigma2_sq); inf->sigma2_sq = NULL;
 
     LABA_OPC(avgssim, avgssim, /, ((double)width * height));
 
@@ -467,8 +456,7 @@ double dssim_compare(dssim_info *inf, const char *ssimfilename)
     }
 
     // mu2 is reused for ssimmap
-    free(inf->mu2);
-    inf->mu2 = NULL;
+    free(inf->mu2); inf->mu2 = NULL;
 
 
     return 1.0 / (minavgssim) - 1.0;
