@@ -63,19 +63,6 @@ void dssim_dealloc(dssim_info *inf)
     free(inf);
 }
 
-/* Converts 0..255 pixel to internal 0..1 with premultiplied alpha */
-/*
- * inline static rgbaf rgba8_to_f(const float gamma, rgba8 px)
- * {
- *  float r = powf(px.r/255.0f, 1.0f/gamma),
- *        g = powf(px.g/255.0f, 1.0f/gamma),
- *        b = powf(px.b/255.0f, 1.0f/gamma),
- *        a = px.a/255.0f;
- *
- *  return (rgbaf){r*a,g*a,b*a,a};
- * }
- */
-
 /* Converts premultiplied alpha 0..1 to 0..255 */
 inline static rgba8 rgbaf_to_8(const float gamma, rgbaf px)
 {
