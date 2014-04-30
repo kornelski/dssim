@@ -21,8 +21,13 @@
 */
 
 #include <stdlib.h>
+
 #include "dssim.h"
 #include "rwpng.h"
+
+#include <getopt.h>
+extern char *optarg;
+extern int optind, opterr;
 
 /*
  Reads image into png24_image struct. Returns non-zero on error
@@ -40,14 +45,14 @@ static int read_image(const char *filename, png24_image *image)
     return retval;
 }
 
-static void write_image(const char *filename,
+static int write_image(const char *filename,
                         const dssim_rgba *pixels,
                         int width,
                         int height)
 {
     FILE *outfile = fopen(filename, "wb");
     if (!outfile) {
-        return;
+        return 1;
     }
 
     png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING,
@@ -64,6 +69,8 @@ static void write_image(const char *filename,
 
     png_write_end(png_ptr, info_ptr);
     png_destroy_write_struct(&png_ptr, &info_ptr);
+
+    return 0;
 }
 
 static void usage(const char *argv0)
@@ -82,14 +89,37 @@ inline static unsigned char to_byte(float in) {
     return in * 256.f;
 }
 
-int main(int argc, const char *argv[])
+int main(int argc, char *const argv[])
 {
+    char *map_output_file = NULL;
+
     if (argc < 3) {
         usage(argv[0]);
-        exit(1);
+        return 1;
     }
 
-    const char *file1 = argv[1];
+    opterr = 0;
+    int c;
+    while((c = getopt(argc, argv, "ho:")) != -1) {
+        switch (c) {
+            case 'h':
+                usage(argv[0]);
+                return 0;
+            case 'o':
+                map_output_file = optarg;
+                break;
+            default:
+                fprintf(stderr, "Unknown option\n");
+                return 1;
+        }
+    }
+
+    if (optind+1 >= argc) {
+        fprintf(stderr, "You must specify at least 2 files to compare\n");
+        return 1;
+    }
+
+    const char *file1 = argv[optind];
     png24_image image1 = {};
     int retval = read_image(file1, &image1);
     if (retval) {
@@ -102,7 +132,7 @@ int main(int argc, const char *argv[])
     free(image1.row_pointers);
     free(image1.rgba_data);
 
-    for (int arg = 2; arg < argc; arg++) {
+    for (int arg = optind+1; arg < argc; arg++) {
         const char *file2 = argv[arg];
 
         png24_image image2 = {};
@@ -122,7 +152,10 @@ int main(int argc, const char *argv[])
         }
 
         float *map = NULL;
-        double dssim = dssim_compare(dinf, NULL);
+        double dssim = dssim_compare(dinf, map_output_file ? &map : NULL);
+
+        printf("%.6f\t%s\n", dssim, file2);
+
         if (map) {
             dssim_rgba *out = (dssim_rgba*)map;
             for(int i=0; i < image2.width*image2.height; i++) {
@@ -135,9 +168,11 @@ int main(int argc, const char *argv[])
                     .a = 255,
                 };
             }
-            write_image("/tmp/dssim-map.png", out, image2.width, image2.height);
+            if (write_image(map_output_file, out, image2.width, image2.height)) {
+                fprintf(stderr, "Can't write %s\n", map_output_file);
+                return 1;
+            }
         }
-        printf("%.6f\t%s\n", dssim, file2);
     }
 
     dssim_dealloc(dinf);
