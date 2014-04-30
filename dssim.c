@@ -288,6 +288,9 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
 
     for(int ch=0; ch < 3; ch++) {
         float *img1 = inf->img1[ch];
+        if (ch > 0) {
+            blur(img1, tmp, img1, width, height, NULL);
+        }
 
         for (int j = 0; j < width*height; j++) {
             sigma1_tmp[j] = img1[j] * img1[j];
@@ -340,6 +343,9 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
 
     float *tmp = malloc(width * height * sizeof(float));
     for(int ch=0; ch < 3; ch++) {
+        if (ch > 0) {
+            blur(img2[ch], tmp, img2[ch], width, height, NULL);
+        }
         float *restrict img1_img2 = malloc(width * height * sizeof(float));
         float *restrict img1 = inf->img1[ch];
 
@@ -378,7 +384,7 @@ double dssim_compare(dssim_info *inf, float **ssim_map_out)
     double avgssim_A = dssim_compare_channel(1, inf, NULL);
     double avgssim_b = dssim_compare_channel(2, inf, NULL);
 
-    double minavgssim = MIN(MIN(avgssim_l, avgssim_A), avgssim_b);
+    double minavgssim = (avgssim_l + avgssim_A + avgssim_b)/3.0;
 
     return 1.0 / (minavgssim) - 1.0;
 }
