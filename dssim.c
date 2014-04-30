@@ -116,7 +116,7 @@ static void square_row(float *row, const int width)
  */
 static void transposing_1d_blur(float *restrict src, float *restrict dst, const int width, const int height)
 {
-    const int size = 3;
+    const int size = 4;
     const float sizef = size;
 
     for (int j = 0; j < height; j++) {
@@ -216,10 +216,8 @@ static void blur(float *restrict src, float *restrict tmp, float *restrict dst,
     regular_1d_blur(src, tmp, width, height, callback);
     regular_1d_blur(tmp, dst, width, height, NULL);
     if (extrablur) {
-        regular_1d_blur(tmp, dst, height, width, NULL);
-        regular_1d_blur(dst, tmp, height, width, NULL);
-        regular_1d_blur(tmp, dst, height, width, NULL);
-        regular_1d_blur(dst, tmp, height, width, NULL);
+        transposing_1d_blur(dst, tmp, width, height);
+        transposing_1d_blur(tmp, dst, width, height);
     }
     transposing_1d_blur(dst, tmp, width, height);
     if (extrablur) {
