@@ -98,8 +98,6 @@ inline static laba rgba_to_laba(const dssim_rgba px)
     };
 }
 
-#define LABA_OPC(dst, X, op, Y) dst = (X) op (Y)
-
 typedef void rowcallback(float *, const int width);
 
 static void square_row(float *row, const int width)
@@ -124,7 +122,7 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
 
         // accumulate sum for pixels outside line
         float sum = 0;
-        LABA_OPC(sum,row[0],*,sizef);
+        sum = row[0] * sizef;
         for(int i=0; i < MIN(width,size); i++) {
             sum += row[i];
         }
@@ -136,14 +134,14 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
                 sum += row[i+size];
             }
 
-            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0f);
+            dst[i*height + j] = sum / (sizef * 2.0f);
         }
 
         for(int i=size; i < width-size; i++) {
             sum -= row[i-size];
             sum += row[i+size];
 
-            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0f);
+            dst[i*height + j] = sum / (sizef * 2.0f);
         }
 
         // blur with right side outside line
@@ -153,7 +151,7 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
             }
             sum += row[width-1];
 
-            LABA_OPC(dst[i*height + j],sum,/,sizef*2.0f);
+            dst[i*height + j] = sum / (sizef * 2.0f);
         }
     }
 }
@@ -172,7 +170,7 @@ static void regular_1d_blur(float *restrict src, float *restrict dst, const int 
 
         // accumulate sum for pixels outside line
         float sum = 0;
-        LABA_OPC(sum, row[0], *, sizef);
+        sum = row[0] * sizef;
         for(int i=0; i < MIN(width,size); i++) {
             sum += row[i];
         }
@@ -184,14 +182,14 @@ static void regular_1d_blur(float *restrict src, float *restrict dst, const int 
                 sum += row[i + size];
             }
 
-            LABA_OPC(dstrow[i], sum, /, sizef * 2.0f);
+            dstrow[i] = sum / (sizef * 2.0f);
         }
 
         for (int i = size; i < width - size; i++) {
             sum -= row[i - size];
             sum += row[i + size];
 
-            LABA_OPC(dstrow[i], sum, /, sizef * 2.0f);
+            dstrow[i] = sum / (sizef * 2.0f);
         }
 
         // blur with right side outside line
@@ -201,7 +199,7 @@ static void regular_1d_blur(float *restrict src, float *restrict dst, const int 
             }
             sum += row[width - 1];
 
-            LABA_OPC(dstrow[i], sum, /, sizef * 2.0f);
+            dstrow[i] = sum / (sizef * 2.0f);
         }
     }
 }
