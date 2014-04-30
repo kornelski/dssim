@@ -19,7 +19,13 @@ It's a rewrite of [Rabah Mehdi's C++ implementation](http://mehdi.rabah.free.fr/
 
 Will output something like `0.2341` (smaller is better) followed by a filename.
 
-You can supply multiple filenames to compare them all with the first file.
+You can supply multiple filenames to compare them all with the first file:
+
+    dssim file.png modified1.png modified2.png modified3.png
+
+You can save an image visualising the difference between files to a file:
+
+    dssim -o difference.png file.png file-modified.png
 
 The `dssim.c` file is also usable as a C library.
 
