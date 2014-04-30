@@ -71,7 +71,7 @@ static void usage(const char *argv0)
             "Compares first image against subsequent images,\n" \
             "outputs SSIM difference for each of them in order.\n" \
             "Images must have identical size. May have different gamma & depth.\n" \
-            "\nVersion 0.2 http://pornel.net/dssim\n" \
+            "\nVersion 0.3 http://pornel.net/dssim\n" \
             , argv0);
 }
 
