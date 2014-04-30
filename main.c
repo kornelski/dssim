@@ -22,6 +22,7 @@
 
 #include <stdlib.h>
 #include "dssim.h"
+#include "rwpng.h"
 
 /*
  Reads image into png24_image struct. Returns non-zero on error
@@ -40,7 +41,7 @@ static int read_image(const char *filename, png24_image *image)
 }
 
 static void write_image(const char *filename,
-                        const rgba8 *pixels,
+                        const dssim_rgba *pixels,
                         int width,
                         int height)
 {
@@ -97,7 +98,7 @@ int main(int argc, const char *argv[])
     }
 
     dssim_info *dinf = dssim_init();
-    dssim_set_original(dinf, &image1);
+    dssim_set_original(dinf, (dssim_rgba**)image1.row_pointers, image1.width, image1.height, image1.gamma);
     free(image1.row_pointers);
     free(image1.rgba_data);
 
@@ -111,7 +112,7 @@ int main(int argc, const char *argv[])
             break;
         }
 
-        retval = dssim_set_modified(dinf, &image2);
+        retval = dssim_set_modified(dinf, (dssim_rgba**)image2.row_pointers, image2.width, image2.height, image2.gamma);
         free(image2.row_pointers);
         free(image2.rgba_data);
 
@@ -123,11 +124,11 @@ int main(int argc, const char *argv[])
         float *map = NULL;
         double dssim = dssim_compare(dinf, NULL);
         if (map) {
-            rgba8 *out = (rgba8*)map;
+            dssim_rgba *out = (dssim_rgba*)map;
             for(int i=0; i < image2.width*image2.height; i++) {
                 const float max = 1.0 - map[i];
                 const float maxsq = max * max;
-                out[i] = (rgba8) {
+                out[i] = (dssim_rgba) {
                     .r = to_byte(max * 3.0),
                     .g = to_byte(maxsq * 3.0),
                     .b = to_byte((max-0.5) * 2.0f),

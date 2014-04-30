@@ -24,6 +24,8 @@ Will output something like `0.2341`. 0 means exactly the same image, >0 (unbound
 
 You can supply multiple filenames to compare them all with the first file.
 
+The `dssim.c` file is also usable as a C library.
+
 ##Build
 
 You need libpng, zlib, pkg-config and make

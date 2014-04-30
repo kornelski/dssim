@@ -73,7 +73,7 @@ static void set_gamma(const double invgamma)
 
 static const double D65x = 0.9505, D65y = 1.0, D65z = 1.089;
 
-inline static laba rgba_to_laba(const rgba8 px)
+inline static laba rgba_to_laba(const dssim_rgba px)
 {
     const double r = gamma_lut[px.r],
                  g = gamma_lut[px.g],
@@ -234,7 +234,7 @@ static void blur(float *restrict src, float *restrict tmp, float *restrict dst,
 /*
  * Conversion is not reversible
  */
-inline static laba convert_pixel(rgba8 px, int i, int j)
+inline static laba convert_pixel(dssim_rgba px, int i, int j)
 {
     laba f1 = rgba_to_laba(px);
     assert(f1.l >= 0.f && f1.l <= 1.0f);
@@ -263,14 +263,15 @@ inline static laba convert_pixel(rgba8 px, int i, int j)
     return f1;
 }
 
-static void convert_image(rgba8 *row_pointers[], dssim_info *inf, float *restrict ch0, float *restrict ch1, float *restrict ch2)
+static void convert_image(dssim_rgba *row_pointers[], const double gamma, dssim_info *inf, float *restrict ch0, float *restrict ch1, float *restrict ch2)
 {
     const int width = inf->chan[0].width;
     const int height = inf->chan[0].height;
+    set_gamma(gamma);
 
     const int halfwidth = inf->chan[1].width;
     for (int y = 0, offset = 0; y < height; y++) {
-        rgba8 *const px1 = row_pointers[y];
+        dssim_rgba *const px1 = row_pointers[y];
         const int halfy = y * inf->chan[1].height / height;
         for (int x = 0; x < width; x++, offset++) {
             laba f1 = convert_pixel(px1[x], x, y);
@@ -288,19 +289,15 @@ static void convert_image(rgba8 *row_pointers[], dssim_info *inf, float *restric
 /*
  Can be called only once. Copies image1.
  */
-void dssim_set_original(dssim_info *inf, png24_image *image1)
+void dssim_set_original(dssim_info *inf, dssim_rgba *row_pointers[], const int width, const int height, double gamma)
 {
-    const int width = image1->width;
-    const int height = image1->height;
-    set_gamma(image1->gamma);
-
     for(int ch=0; ch < CHANS; ch++) {
         inf->chan[ch].width = ch > 0 ? width/2 : width;
         inf->chan[ch].height = ch > 0 ? height/2 : height;
         inf->chan[ch].img1 = calloc(inf->chan[ch].width * inf->chan[ch].height, sizeof(float));
     }
 
-    convert_image((rgba8**)image1->row_pointers, inf, inf->chan[0].img1, inf->chan[1].img1, inf->chan[2].img1);
+    convert_image(row_pointers, gamma, inf, inf->chan[0].img1, inf->chan[1].img1, inf->chan[2].img1);
 
     float *restrict sigma1_tmp = malloc(width * height * sizeof(float));
     float *tmp = malloc(width * height * sizeof(float));
@@ -334,23 +331,21 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
 
     Can be called multiple times.
 */
-int dssim_set_modified(dssim_info *inf, png24_image *image2)
+int dssim_set_modified(dssim_info *inf, dssim_rgba *row_pointers[], const int image_width, const int image_height, double gamma)
 {
     const int width = inf->chan[0].width;
     const int height = inf->chan[0].height;
 
-    if (image2->width != width || image2->height != height) {
+    if (image_width != width || image_height != height) {
         return 1;
     }
-
-    set_gamma(image2->gamma);
 
     float *restrict img2[CHANS];
     for (int ch = 0; ch < CHANS; ch++) {
         img2[ch] = calloc(inf->chan[ch].width * inf->chan[ch].height, sizeof(float));
     }
 
-    convert_image((rgba8**)image2->row_pointers, inf, img2[0], img2[1], img2[2]);
+    convert_image(row_pointers, gamma, inf, img2[0], img2[1], img2[2]);
 
     float *tmp = malloc(width * height * sizeof(float));
     for (int ch = 0; ch < CHANS; ch++) {
