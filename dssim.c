@@ -411,15 +411,13 @@ static double dssim_compare_channel(dssim_info_chan *chan, float *ssimmap)
     double avgssim = 0;
 
     for (int offset = 0; offset < width * height; offset++) {
-        double ssim = ((2.0*(mu1[offset]*mu2[offset]) + c1)
-                 * (2.0 *
-                    (sigma12[offset] - (mu1[offset] * mu2[offset])) + c2))
-                /
-                (((mu1[offset]*mu1[offset]) + (mu2[offset]*mu2[offset]) + c1)
-                     * ((sigma1_sq[offset] -
-                         (mu1[offset] *
-                          mu1[offset])) +
-                        (sigma2_sq[offset] - (mu2[offset] * mu2[offset])) + c2));
+        const double mu1_sq = mu1[offset]*mu1[offset];
+        const double mu2_sq = mu2[offset]*mu2[offset];
+        const double mu1mu2 = mu1[offset]*mu2[offset];
+
+        const double ssim = (c1 + 2.0 * mu1mu2) * (c2 + 2.0 * (sigma12[offset] - mu1mu2))
+                            /
+                            ((c1 + mu1_sq + mu2_sq) * (c2 + sigma1_sq[offset] - mu1_sq + sigma2_sq[offset] - mu2_sq));
 
         avgssim += ssim;
 
