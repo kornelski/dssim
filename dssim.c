@@ -263,6 +263,28 @@ inline static laba convert_pixel(rgba8 px, int i, int j)
     return f1;
 }
 
+static void convert_image(rgba8 *row_pointers[], dssim_info *inf, float *restrict ch0, float *restrict ch1, float *restrict ch2)
+{
+    const int width = inf->chan[0].width;
+    const int height = inf->chan[0].height;
+
+    const int halfwidth = inf->chan[1].width;
+    for (int y = 0, offset = 0; y < height; y++) {
+        rgba8 *const px1 = row_pointers[y];
+        const int halfy = y * inf->chan[1].height / height;
+        for (int x = 0; x < width; x++, offset++) {
+            laba f1 = convert_pixel(px1[x], x, y);
+
+            ch0[offset] = f1.l;
+
+            if (CHANS == 3) {
+                ch1[x/2 + halfy*halfwidth] += f1.A * 0.25f;
+                ch2[x/2 + halfy*halfwidth] += f1.b * 0.25f;
+            }
+        }
+    }
+}
+
 /*
  Can be called only once. Copies image1.
  */
@@ -278,21 +300,7 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
         inf->chan[ch].img1 = calloc(inf->chan[ch].width * inf->chan[ch].height, sizeof(float));
     }
 
-    int offset = 0;
-    const int w2 = width/2;
-    for (int y = 0; y < height; y++) {
-        rgba8 *px1 = (rgba8 *)image1->row_pointers[y];
-        const int y2 = y/2;
-        for (int x = 0; x < width; x++, offset++) {
-            laba f1 = convert_pixel(px1[x], x, y);
-
-            inf->chan[0].img1[offset] = f1.l;
-            if (CHANS == 3) {
-                inf->chan[1].img1[x/2 + y2*w2] += f1.A * 0.25f;
-                inf->chan[2].img1[x/2 + y2*w2] += f1.b * 0.25f;
-            }
-        }
-    }
+    convert_image((rgba8**)image1->row_pointers, inf, inf->chan[0].img1, inf->chan[1].img1, inf->chan[2].img1);
 
     float *restrict sigma1_tmp = malloc(width * height * sizeof(float));
     float *tmp = malloc(width * height * sizeof(float));
@@ -342,21 +350,7 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
         img2[ch] = calloc(inf->chan[ch].width * inf->chan[ch].height, sizeof(float));
     }
 
-    int offset = 0;
-    const int w2 = width/2;
-    for (int y = 0; y < height; y++) {
-        rgba8 *px2 = (rgba8 *)image2->row_pointers[y];
-        const int y2 = y/2;
-        for (int x = 0; x < width; x++, offset++) {
-            laba f2 = convert_pixel(px2[x], x, y);
-
-            img2[0][offset] = f2.l;
-            if (CHANS == 3) {
-                img2[1][x/2 + y2*w2] += f2.A * 0.25f;
-                img2[2][x/2 + y2*w2] += f2.b * 0.25f;
-            }
-        }
-    }
+    convert_image((rgba8**)image2->row_pointers, inf, img2[0], img2[1], img2[2]);
 
     float *tmp = malloc(width * height * sizeof(float));
     for (int ch = 0; ch < CHANS; ch++) {
