@@ -275,21 +275,23 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
     set_gamma(image1->gamma);
 
     for(int ch=0; ch < CHANS; ch++) {
-        inf->chan[ch].width = width;
-        inf->chan[ch].height = height;
-        inf->chan[ch].img1 = malloc(width * height * sizeof(float));
+        inf->chan[ch].width = ch > 0 ? width/2 : width;
+        inf->chan[ch].height = ch > 0 ? height/2 : height;
+        inf->chan[ch].img1 = calloc(inf->chan[ch].width * inf->chan[ch].height, sizeof(float));
     }
 
     int offset = 0;
-    for (int j = 0; j < height; j++) {
-        rgba8 *px1 = (rgba8 *)image1->row_pointers[j];
-        for (int i = 0; i < width; i++, offset++) {
-            laba f1 = convert_pixel(px1[i], i, j);
+    const int w2 = width/2;
+    for (int y = 0; y < height; y++) {
+        rgba8 *px1 = (rgba8 *)image1->row_pointers[y];
+        const int y2 = y/2;
+        for (int x = 0; x < width; x++, offset++) {
+            laba f1 = convert_pixel(px1[x], x, y);
 
             inf->chan[0].img1[offset] = f1.l;
             if (CHANS == 3) {
-                inf->chan[1].img1[offset] = f1.A;
-                inf->chan[2].img1[offset] = f1.b;
+                inf->chan[1].img1[x/2 + y2*w2] += f1.A * 0.25f;
+                inf->chan[2].img1[x/2 + y2*w2] += f1.b * 0.25f;
             }
         }
     }
@@ -339,19 +341,21 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
 
     float *restrict img2[CHANS];
     for (int ch = 0; ch < CHANS; ch++) {
-        img2[ch] = malloc(inf->chan[ch].width * inf->chan[ch].height * sizeof(float));
+        img2[ch] = calloc(inf->chan[ch].width * inf->chan[ch].height, sizeof(float));
     }
 
     int offset = 0;
-    for (int j = 0; j < height; j++) {
-        rgba8 *px2 = (rgba8 *)image2->row_pointers[j];
-        for (int i = 0; i < width; i++, offset++) {
-            laba f2 = convert_pixel(px2[i], i, j);
+    const int w2 = width/2;
+    for (int y = 0; y < height; y++) {
+        rgba8 *px2 = (rgba8 *)image2->row_pointers[y];
+        const int y2 = y/2;
+        for (int x = 0; x < width; x++, offset++) {
+            laba f2 = convert_pixel(px2[x], x, y);
 
             img2[0][offset] = f2.l;
             if (CHANS == 3) {
-                img2[1][offset] = f2.A;
-                img2[2][offset] = f2.b;
+                img2[1][x/2 + y2*w2] += f2.A * 0.25f;
+                img2[2][x/2 + y2*w2] += f2.b * 0.25f;
             }
         }
     }
