@@ -261,12 +261,6 @@ inline static laba convert_pixel(rgba8 px, int i, int j)
         }
     }
 
-    // SSIM is supposed to be applied only to luma,
-    // lower amplitude of chroma to lower score for chroma difference
-    // (chroma is not ignored completely, because IMHO it also matters)
-    f1.A *= 0.75;
-    f1.b *= 0.75;
-
     return f1;
 }
 
