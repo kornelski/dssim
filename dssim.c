@@ -375,7 +375,7 @@ int dssim_set_modified(dssim_info *inf, dssim_rgba *row_pointers[], const int im
     return 0;
 }
 
-static double dssim_compare_channel(dssim_info_chan *chan, float *ssimmap);
+static double dssim_compare_channel(dssim_info_chan *chan, float **ssimmap);
 
 /*
  Algorithm based on Rabah Mehdi's C++ implementation
@@ -389,14 +389,14 @@ double dssim_compare(dssim_info *inf, float **ssim_map_out)
 {
     double avgssim = 0;
     for (int ch = 0; ch < CHANS; ch++) {
-        avgssim += dssim_compare_channel(&inf->chan[ch], NULL);
+        avgssim += dssim_compare_channel(&inf->chan[ch], ssim_map_out && ch == 0 ? ssim_map_out : NULL);
     }
     avgssim /= (double)CHANS;
 
     return 1.0 / (avgssim) - 1.0;
 }
 
-static double dssim_compare_channel(dssim_info_chan *chan, float *ssimmap)
+static double dssim_compare_channel(dssim_info_chan *chan, float **ssim_map_out)
 {
     const int width = chan->width;
     const int height = chan->height;
@@ -409,6 +409,8 @@ static double dssim_compare_channel(dssim_info_chan *chan, float *ssimmap)
 
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
     double avgssim = 0;
+
+    float *const ssimmap = ssim_map_out ? chan->mu2 : NULL;
 
     for (int offset = 0; offset < width * height; offset++) {
         const double mu1_sq = mu1[offset]*mu1[offset];
@@ -426,7 +428,13 @@ static double dssim_compare_channel(dssim_info_chan *chan, float *ssimmap)
         }
     }
 
-    free(chan->mu2); chan->mu2 = NULL;
+    if (ssim_map_out) {
+        *ssim_map_out = ssimmap; // reuses mu2 memory
+    } else {
+        free(chan->mu2);
+    }
+    chan->mu2 = NULL;
+
     free(chan->sigma12); chan->sigma12 = NULL;
     free(chan->sigma2_sq); chan->sigma2_sq = NULL;
 
