@@ -33,7 +33,7 @@ static int read_image(const char *filename, png24_image *image)
         return 1;
     }
 
-    int retval = rwpng_read_image24(fp, image);
+    int retval = rwpng_read_image24(fp, image, 0);
 
     fclose(fp);
     return retval;
