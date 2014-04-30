@@ -1,8 +1,10 @@
 #RGBA Structural Similarity
 
-This tool computes (dis)similarity between two PNG images using (my approximation of) algorithms approximating human vision.
+This tool computes (dis)similarity between two (or more) PNG images using algorithm approximating human vision.
 
-Comparison is done in L\*a\*b\* color space† using SSIM algorithm.
+Comparison is done in L\*a\*b\* color space (D65 white point, gamma 2.2) with chroma subsampling, using the SSIM algorithm.
+
+The value returned is equivalent to 1/SSIM-1, where 0 means identical image, and >0 (unbounded) is amount of difference. Values are not directly comparable with other tools.
 
 It's a rewrite of [Rabah Mehdi's C++ implementation](http://mehdi.rabah.free.fr/SSIM/):
 
@@ -11,16 +13,11 @@ It's a rewrite of [Rabah Mehdi's C++ implementation](http://mehdi.rabah.free.fr/
 * Supports alpha channel
 * Supports gamma correction
 
-Values output are not comparable with other tools. This tool is meant to be
-simple and I'm not giving any guarantees about correctness (or speed :)
-
-†) conversion assumes D65 white point and uses gamma from PNG file, defaulting to 2.2.
-
 ##Usage
 
     dssim file.png file-modified.png
 
-Will output something like `0.2341`. 0 means exactly the same image, >0 (unbounded) is amount of difference.
+Will output something like `0.2341` (smaller is better) followed by a filename.
 
 You can supply multiple filenames to compare them all with the first file.
 
