@@ -35,10 +35,14 @@ typedef struct {
     float l, A, b, a;
 } laba;
 
-struct dssim_info {
+typedef struct {
     int width, height;
-    float *img1[CHANS], *mu1[CHANS], *sigma1_sq[CHANS];
-    float *mu2[CHANS], *sigma2_sq[CHANS], *sigma12[CHANS];
+    float *img1, *mu1, *sigma1_sq;
+    float *mu2, *sigma2_sq, *sigma12;
+} dssim_info_chan;
+
+struct dssim_info {
+    dssim_info_chan chan[CHANS];
 };
 
 dssim_info *dssim_init()
@@ -46,22 +50,16 @@ dssim_info *dssim_init()
     return calloc(1, sizeof(dssim_info));
 }
 
-static void free_channels(float *channels[])
-{
-    for (int i = 0; i < CHANS; i++) {
-        free(channels[i]);
-        channels[i] = NULL;
-    }
-}
-
 void dssim_dealloc(dssim_info *inf)
 {
-    free_channels(inf->mu2);
-    free_channels(inf->sigma2_sq);
-    free_channels(inf->sigma12);
-    free_channels(inf->img1);
-    free_channels(inf->mu1);
-    free_channels(inf->sigma1_sq);
+    for (int ch = 0; ch < CHANS; ch++) {
+        free(inf->chan[ch].mu2); inf->chan[ch].mu2 = NULL;
+        free(inf->chan[ch].sigma2_sq); inf->chan[ch].sigma2_sq = NULL;
+        free(inf->chan[ch].sigma12); inf->chan[ch].sigma12 = NULL;
+        free(inf->chan[ch].img1); inf->chan[ch].img1 = NULL;
+        free(inf->chan[ch].mu1); inf->chan[ch].mu1 = NULL;
+        free(inf->chan[ch].sigma1_sq); inf->chan[ch].sigma1_sq = NULL;
+    }
     free(inf);
 }
 
@@ -102,9 +100,9 @@ inline static laba rgba_to_laba(const rgba8 px)
 
 #define LABA_OPC(dst, X, op, Y) dst = (X) op (Y)
 
-typedef void rowcallback(float *, int width);
+typedef void rowcallback(float *, const int width);
 
-static void square_row(float *row, int width)
+static void square_row(float *row, const int width)
 {
     for (int i = 0; i < width; i++) {
         row[i] = row[i] * row[i];
@@ -213,7 +211,7 @@ static void regular_1d_blur(float *restrict src, float *restrict dst, const int 
  * Filters image with callback and blurs (lousy approximate of gaussian)
  */
 static void blur(float *restrict src, float *restrict tmp, float *restrict dst,
-                 int width, int height, rowcallback *const callback, int extrablur)
+                 const int width, const int height, rowcallback *const callback, int extrablur)
 {
     regular_1d_blur(src, tmp, width, height, callback);
     regular_1d_blur(tmp, dst, width, height, NULL);
@@ -272,12 +270,14 @@ inline static laba convert_pixel(rgba8 px, int i, int j)
  */
 void dssim_set_original(dssim_info *inf, png24_image *image1)
 {
-    int width = inf->width = image1->width;
-    int height = inf->height = image1->height;
+    const int width = image1->width;
+    const int height = image1->height;
     set_gamma(image1->gamma);
 
-    for(int i=0; i < CHANS; i++) {
-        inf->img1[i] = malloc(width * height * sizeof(float));
+    for(int ch=0; ch < CHANS; ch++) {
+        inf->chan[ch].width = width;
+        inf->chan[ch].height = height;
+        inf->chan[ch].img1 = malloc(width * height * sizeof(float));
     }
 
     int offset = 0;
@@ -286,10 +286,10 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
         for (int i = 0; i < width; i++, offset++) {
             laba f1 = convert_pixel(px1[i], i, j);
 
-            inf->img1[0][offset] = f1.l;
+            inf->chan[0].img1[offset] = f1.l;
             if (CHANS == 3) {
-                inf->img1[1][offset] = f1.A;
-                inf->img1[2][offset] = f1.b;
+                inf->chan[1].img1[offset] = f1.A;
+                inf->chan[2].img1[offset] = f1.b;
             }
         }
     }
@@ -298,7 +298,10 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
     float *tmp = malloc(width * height * sizeof(float));
 
     for (int ch = 0; ch < CHANS; ch++) {
-        float *img1 = inf->img1[ch];
+        const int width = inf->chan[ch].width;
+        const int height = inf->chan[ch].height;
+
+        float *img1 = inf->chan[ch].img1;
         if (ch > 0) {
             blur(img1, tmp, img1, width, height, NULL, 0);
         }
@@ -307,11 +310,11 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
             sigma1_tmp[j] = img1[j] * img1[j];
         }
 
-        inf->mu1[ch] = malloc(width * height * sizeof(float));
-        blur(img1, tmp, inf->mu1[ch], width, height, NULL, ch > 0);
+        inf->chan[ch].mu1 = malloc(width * height * sizeof(float));
+        blur(img1, tmp, inf->chan[ch].mu1, width, height, NULL, ch > 0);
 
-        inf->sigma1_sq[ch] = malloc(width * height * sizeof(float));
-        blur(sigma1_tmp, tmp, inf->sigma1_sq[ch], width, height, NULL, ch > 0);
+        inf->chan[ch].sigma1_sq = malloc(width * height * sizeof(float));
+        blur(sigma1_tmp, tmp, inf->chan[ch].sigma1_sq, width, height, NULL, ch > 0);
     }
 
     free(tmp);
@@ -325,8 +328,8 @@ void dssim_set_original(dssim_info *inf, png24_image *image1)
 */
 int dssim_set_modified(dssim_info *inf, png24_image *image2)
 {
-    int width = inf->width;
-    int height = inf->height;
+    const int width = inf->chan[0].width;
+    const int height = inf->chan[0].height;
 
     if (image2->width != width || image2->height != height) {
         return 1;
@@ -336,7 +339,7 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
 
     float *restrict img2[CHANS];
     for (int ch = 0; ch < CHANS; ch++) {
-        img2[ch] = malloc(width * height * sizeof(float));
+        img2[ch] = malloc(inf->chan[ch].width * inf->chan[ch].height * sizeof(float));
     }
 
     int offset = 0;
@@ -355,24 +358,27 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
 
     float *tmp = malloc(width * height * sizeof(float));
     for (int ch = 0; ch < CHANS; ch++) {
+        const int width = inf->chan[ch].width;
+        const int height = inf->chan[ch].height;
+
         if (ch > 0) {
             blur(img2[ch], tmp, img2[ch], width, height, NULL, 0);
         }
         float *restrict img1_img2 = malloc(width * height * sizeof(float));
-        float *restrict img1 = inf->img1[ch];
+        float *restrict img1 = inf->chan[ch].img1;
 
         for (int j = 0; j < width*height; j++) {
             img1_img2[j] = img1[j] * img2[ch][j];
         }
 
-        inf->sigma12[ch] = malloc(width * height * sizeof(float));
-        blur(img1_img2, tmp, inf->sigma12[ch], width, height, NULL, ch > 0);
+        inf->chan[ch].sigma12 = malloc(width * height * sizeof(float));
+        blur(img1_img2, tmp, inf->chan[ch].sigma12, width, height, NULL, ch > 0);
 
-        inf->mu2[ch] = img1_img2; // reuse mem
-        blur(img2[ch], tmp, inf->mu2[ch], width, height, NULL, ch > 0);
+        inf->chan[ch].mu2 = img1_img2; // reuse mem
+        blur(img2[ch], tmp, inf->chan[ch].mu2, width, height, NULL, ch > 0);
 
-        inf->sigma2_sq[ch] = malloc(width * height * sizeof(float));
-        blur(img2[ch], tmp, inf->sigma2_sq[ch], width, height, square_row, ch > 0);
+        inf->chan[ch].sigma2_sq = malloc(width * height * sizeof(float));
+        blur(img2[ch], tmp, inf->chan[ch].sigma2_sq, width, height, square_row, ch > 0);
         free(img2[ch]);
     }
     free(tmp);
@@ -380,7 +386,7 @@ int dssim_set_modified(dssim_info *inf, png24_image *image2)
     return 0;
 }
 
-static double dssim_compare_channel(const int ch, dssim_info *inf, float *ssimmap);
+static double dssim_compare_channel(dssim_info_chan *chan, float *ssimmap);
 
 /*
  Algorithm based on Rabah Mehdi's C++ implementation
@@ -394,23 +400,23 @@ double dssim_compare(dssim_info *inf, float **ssim_map_out)
 {
     double avgssim = 0;
     for (int ch = 0; ch < CHANS; ch++) {
-        avgssim += dssim_compare_channel(ch, inf, NULL);
+        avgssim += dssim_compare_channel(&inf->chan[ch], NULL);
     }
     avgssim /= (double)CHANS;
 
     return 1.0 / (avgssim) - 1.0;
 }
 
-static double dssim_compare_channel(const int ch, dssim_info *inf, float *ssimmap)
+static double dssim_compare_channel(dssim_info_chan *chan, float *ssimmap)
 {
-    int width = inf->width;
-    int height = inf->height;
+    const int width = chan->width;
+    const int height = chan->height;
 
-    float *restrict mu1 = inf->mu1[ch];
-    float *restrict mu2 = inf->mu2[ch];
-    float *restrict sigma1_sq = inf->sigma1_sq[ch];
-    float *restrict sigma2_sq = inf->sigma2_sq[ch];
-    float *restrict sigma12 = inf->sigma12[ch];
+    float *restrict mu1 = chan->mu1;
+    float *restrict mu2 = chan->mu2;
+    float *restrict sigma1_sq = chan->sigma1_sq;
+    float *restrict sigma2_sq = chan->sigma2_sq;
+    float *restrict sigma12 = chan->sigma12;
 
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
     double avgssim = 0;
@@ -433,9 +439,9 @@ static double dssim_compare_channel(const int ch, dssim_info *inf, float *ssimma
         }
     }
 
-    free(inf->mu2[ch]); inf->mu2[ch] = NULL;
-    free(inf->sigma12[ch]); inf->sigma12[ch] = NULL;
-    free(inf->sigma2_sq[ch]); inf->sigma2_sq[ch] = NULL;
+    free(chan->mu2); chan->mu2 = NULL;
+    free(chan->sigma12); chan->sigma12 = NULL;
+    free(chan->sigma2_sq); chan->sigma2_sq = NULL;
 
     return avgssim / ((double)width * height);
 }
