@@ -29,10 +29,13 @@ You can save an image visualising the difference between files to a file:
 
 The `dssim.c` file is also usable as a C library.
 
-##Build
+##Build or Download
 
 You need libpng, zlib, pkg-config and make
 
     make
 
-Will give you dssim
+Will give you dssim.
+
+You'll find [downloads on GitHub releases page](https://github.com/pornel/dssim/releases).
+
