@@ -65,21 +65,19 @@ void rwpng_version_info(FILE *fp)
 {
     const char *pngver = png_get_header_ver(NULL);
 
-    fprintf(fp, "   Compiled with libpng %s; using libpng %s.\n",
-      PNG_LIBPNG_VER_STRING, pngver);
+#if USE_COCOA
+    fprintf(fp, "   Using libpng %s and Apple Cocoa image reader.\n", pngver);
+#elif USE_LCMS
+    fprintf(fp, "   Using libpng %s with Little CMS color profile support.\n", pngver);
+#else
+    fprintf(fp, "   Using libpng %s and Apple Cocoa image reader.\n", pngver);
+#endif
 
 #if PNG_LIBPNG_VER < 10600
     if (strcmp(pngver, "1.3.") < 0) {
         fputs("\nWARNING: Your version of libpng is outdated and may produce corrupted files.\n"
-              "Please recompile pngquant with newer version of libpng (1.5 or later.)\n", fp);
+              "Please recompile pngquant with a newer version of libpng (1.5 or later).\n", fp);
     }
-#endif
-
-#if USE_COCOA
-    fputs("   Compiled with Apple Cocoa image reader.\n", fp);
-#endif
-#if USE_LCMS
-    fputs("   Compiled with Little CMS color profile support.\n", fp);
 #endif
 }
 
@@ -100,24 +98,30 @@ static void user_read_data(png_structp png_ptr, png_bytep data, png_size_t lengt
     read_data->bytes_read += read;
 }
 
-struct rwpng_write_data {
-    unsigned char *buffer;
+struct rwpng_write_state {
+    FILE *outfile;
+    png_size_t maximum_file_size;
     png_size_t bytes_written;
-    png_size_t bytes_left;
+    pngquant_error retval;
 };
 
 static void user_write_data(png_structp png_ptr, png_bytep data, png_size_t length)
 {
-    struct rwpng_write_data *write_data = (struct rwpng_write_data *)png_get_io_ptr(png_ptr);
+    struct rwpng_write_state *write_state = (struct rwpng_write_state *)png_get_io_ptr(png_ptr);
 
-    if (length <= write_data->bytes_left) {
-        memcpy(write_data->buffer + write_data->bytes_written, data, length);
-        write_data->bytes_left -= length;
-        write_data->bytes_written += length;
-    } else {
-        write_data->bytes_written = 0;
-        write_data->bytes_left = 0;
+    if (SUCCESS != write_state->retval) {
+        return;
     }
+
+    if (write_state->maximum_file_size && write_state->bytes_written + length > write_state->maximum_file_size) {
+        write_state->retval = TOO_LARGE_FILE;
+    }
+
+    if (!fwrite(data, 1, length, write_state->outfile)) {
+        write_state->retval = CANT_WRITE_ERROR;
+    }
+
+    write_state->bytes_written += length;
 }
 
 static void user_flush_data(png_structp png_ptr)
@@ -215,7 +219,7 @@ pngquant_error rwpng_read_image24_libpng(FILE *infile, png24_image *mainprog_ptr
      * compression_type and filter_type => NULLs] */
 
     png_get_IHDR(png_ptr, info_ptr, &mainprog_ptr->width, &mainprog_ptr->height,
-      &bit_depth, &color_type, NULL, NULL, NULL);
+                 &bit_depth, &color_type, NULL, NULL, NULL);
 
 
     /* expand palette images to RGB, low-bit-depth grayscale images to 8 bits,
@@ -302,10 +306,10 @@ pngquant_error rwpng_read_image24_libpng(FILE *infile, png24_image *mainprog_ptr
 
         /* only RGB (and GRAY) valid for PNGs */
         if (colorspace == cmsSigRgbData && COLOR_PNG) {
-             mainprog_ptr->lcms_status = ICCP;
+            mainprog_ptr->lcms_status = ICCP;
         } else {
             if (colorspace == cmsSigGrayData && !COLOR_PNG) {
-                 mainprog_ptr->lcms_status = ICCP_WARN_GRAY;
+                mainprog_ptr->lcms_status = ICCP_WARN_GRAY;
             }
             cmsCloseProfile(hInProfile);
             hInProfile = NULL;
@@ -442,6 +446,7 @@ static pngquant_error rwpng_write_image_init(rwpng_png_image *mainprog_ptr, png_
     }
 
     png_set_compression_level(*png_ptr_p, fast_compression ? Z_BEST_SPEED : Z_BEST_COMPRESSION);
+    png_set_compression_mem_level(*png_ptr_p, fast_compression ? 9 : 5); // judging by optipng results, smaller mem makes libpng compress slightly better
 
     return SUCCESS;
 }
@@ -462,12 +467,12 @@ void rwpng_write_end(png_infopp info_ptr_p, png_structpp png_ptr_p, png_bytepp r
 
 void rwpng_set_gamma(png_infop info_ptr, png_structp png_ptr, double gamma)
 {
-        /* remap sets gamma to 0.45455 */
-        png_set_gAMA(png_ptr, info_ptr, gamma);
-        png_set_sRGB(png_ptr, info_ptr, 0); // 0 = Perceptual
+    /* remap sets gamma to 0.45455 */
+    png_set_gAMA(png_ptr, info_ptr, gamma);
+    png_set_sRGB(png_ptr, info_ptr, 0); // 0 = Perceptual
 }
 
-pngquant_error rwpng_write_image8(FILE *outfile, png8_image *mainprog_ptr)
+pngquant_error rwpng_write_image8(FILE *outfile, const png8_image *mainprog_ptr)
 {
     png_structp png_ptr;
     png_infop info_ptr;
@@ -475,17 +480,13 @@ pngquant_error rwpng_write_image8(FILE *outfile, png8_image *mainprog_ptr)
     pngquant_error retval = rwpng_write_image_init((rwpng_png_image*)mainprog_ptr, &png_ptr, &info_ptr, mainprog_ptr->fast_compression);
     if (retval) return retval;
 
-    struct rwpng_write_data write_data;
-    if (mainprog_ptr->maximum_file_size) {
-        write_data = (struct rwpng_write_data){
-            .buffer = malloc(mainprog_ptr->maximum_file_size),
-            .bytes_left = mainprog_ptr->maximum_file_size,
-        };
-        if (!write_data.buffer) return PNG_OUT_OF_MEMORY_ERROR;
-        png_set_write_fn(png_ptr, &write_data, user_write_data, user_flush_data);
-    } else {
-        png_init_io(png_ptr, outfile);
-    }
+    struct rwpng_write_state write_state;
+    write_state = (struct rwpng_write_state){
+        .outfile = outfile,
+        .maximum_file_size = mainprog_ptr->maximum_file_size,
+        .retval = SUCCESS,
+    };
+    png_set_write_fn(png_ptr, &write_state, user_write_data, user_flush_data);
 
     // Palette images generally don't gain anything from filtering
     png_set_filter(png_ptr, PNG_FILTER_TYPE_BASE, PNG_FILTER_VALUE_NONE);
@@ -516,7 +517,7 @@ pngquant_error rwpng_write_image8(FILE *outfile, png8_image *mainprog_ptr)
         memcpy(pngchunk.name, chunk->name, 5);
         png_set_unknown_chunks(png_ptr, info_ptr, &pngchunk, 1);
 
-        #if PNG_LIBPNG_VER < 10600
+        #if defined(PNG_HAVE_IHDR) && PNG_LIBPNG_VER < 10600
         png_set_unknown_chunk_location(png_ptr, info_ptr, chunk_num, pngchunk.location ? pngchunk.location : PNG_HAVE_IHDR);
         #endif
 
@@ -537,21 +538,10 @@ pngquant_error rwpng_write_image8(FILE *outfile, png8_image *mainprog_ptr)
 
     rwpng_write_end(&info_ptr, &png_ptr, mainprog_ptr->row_pointers);
 
-    if (mainprog_ptr->maximum_file_size) {
-        if (!write_data.bytes_written) {
-            retval = TOO_LARGE_FILE;
-        } else {
-            if (!fwrite(write_data.buffer, 1, write_data.bytes_written, outfile)) {
-                retval = CANT_WRITE_ERROR;
-            }
-        }
-
-        free(write_data.buffer);
-    }
-    return retval;
+    return write_state.retval;
 }
 
-pngquant_error rwpng_write_image24(FILE *outfile, png24_image *mainprog_ptr)
+pngquant_error rwpng_write_image24(FILE *outfile, const png24_image *mainprog_ptr)
 {
     png_structp png_ptr;
     png_infop info_ptr;
