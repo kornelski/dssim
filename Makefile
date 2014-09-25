@@ -10,7 +10,7 @@ ifdef USE_COCOA
 SOURCES += rwpng_cocoa.m
 CC=clang
 CFLAGS += -DUSE_COCOA=1
-LDFLAGS += -framework Cocoa
+LDFLAGS += -mmacosx-version-min=10.7 -framework Cocoa
 endif
 
 %.o: %.c %.h
