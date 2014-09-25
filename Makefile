@@ -9,6 +9,7 @@ LDFLAGS += `pkg-config libpng --libs || pkg-config libpng16 --libs` $(LDFLAGSADD
 ifdef USE_COCOA
 SOURCES += rwpng_cocoa.m
 CC=clang
+CFLAGS += -DUSE_COCOA=1
 LDFLAGS += -framework Cocoa
 endif
 
