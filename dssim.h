@@ -1,10 +1,3 @@
-/*
- *  dssim.h
- *  dssim
- *
- *  Created by porneL on 22.lut.11.
- *
- */
 
 typedef struct dssim_info dssim_info;
 
