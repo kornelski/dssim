@@ -291,48 +291,70 @@ inline static laba convert_pixel(dssim_rgba px, int i, int j)
     return f1;
 }
 
-static void convert_image(dssim_rgba *row_pointers[], const double gamma, dssim_image *img, const int channels)
+static void convert_image(dssim_image *img, dssim_row_callback cb, void *callback_user_data, const int channels)
 {
     const int width = img->chan[0].width;
     const int height = img->chan[0].height;
-    set_gamma(gamma);
+    float *row_tmp[channels];
 
-    float *const ch0 = img->chan[0].img;
-    float *const ch1 = channels >= 3 ? img->chan[1].img : NULL;
-    float *const ch2 = channels >= 3 ? img->chan[2].img : NULL;
+    for(int ch = 1; ch < channels; ch++) {
+        row_tmp[ch] = calloc(width, sizeof(float)); // for the callback all channels have the same width!
+    }
 
-    const int halfwidth = img->chan[1].width;
-    for (int y = 0, offset = 0; y < height; y++) {
-        dssim_rgba *const px1 = row_pointers[y];
-        const int halfy = y * img->chan[1].height / height;
-        for (int x = 0; x < width; x++, offset++) {
-            laba f1 = convert_pixel(px1[x], x, y);
+    for(int y = 0; y < height; y++) {
+        row_tmp[0] = &img->chan[0].img[width * y]; // Luma can be written directly (it's unscaled)
 
-            ch0[offset] = f1.l;
+        cb(row_tmp, channels, y, width, callback_user_data);
 
-            if (ch1) {
-                ch1[x/2 + halfy*halfwidth] += f1.A * 0.25f;
-                ch2[x/2 + halfy*halfwidth] += f1.b * 0.25f;
+        for(int ch = 1; ch < channels; ch++) { // Chroma is downsampled
+            const int halfy = y * img->chan[ch].height / height;
+            float *dstrow = &img->chan[ch].img[halfy * img->chan[ch].width];
+
+            for(int x = 0; x < width; x++) {
+                dstrow[x/2] += row_tmp[ch][x] * 0.25f;
             }
         }
+    }
+
+    for(int ch = 1; ch < channels; ch++) {
+        free(row_tmp[ch]);
     }
 }
 
 static void dssim_preprocess_image_channel(dssim_image *img, float *restrict tmp, const int channels);
+
+static void convert_image_row(float *const channels[], const int num_channels, const int y, const int width, void *user_data)
+{
+    dssim_rgba *const row = ((dssim_rgba **)user_data)[y];
+
+    for (int x = 0; x < width; x++) {
+        laba px = convert_pixel(row[x], x, y);
+        channels[0][x] = px.l;
+        if (num_channels >= 3) {
+            channels[1][x] = px.A;
+            channels[2][x] = px.b;
+        }
+    }
+}
 
 /*
  Can be called only once. Copies the image.
  */
 void dssim_set_original(dssim_info *inf, dssim_rgba *row_pointers[], const int width, const int height, double gamma)
 {
-    float *restrict chans[inf->channels];
-    for(int ch=0; ch < inf->channels; ch++) {
+    set_gamma(gamma);
+    dssim_set_original_float_callback(inf, width, height, convert_image_row, (void*)row_pointers);
+}
+
+void dssim_set_original_float_callback(dssim_info *inf, const int width, const int height, dssim_row_callback cb, void *callback_user_data)
+{
+    for(int ch = 0; ch < inf->channels; ch++) {
         inf->img[0].chan[ch].width = ch > 0 ? width/2 : width;
         inf->img[0].chan[ch].height = ch > 0 ? height/2 : height;
-        inf->img[0].chan[ch].img = chans[ch] = calloc(inf->img[0].chan[ch].width * inf->img[0].chan[ch].height, sizeof(float));
+        inf->img[0].chan[ch].img = calloc(inf->img[0].chan[ch].width * inf->img[0].chan[ch].height, sizeof(float));
     }
 
-    convert_image(row_pointers, gamma, &inf->img[0], inf->channels);
+    convert_image(&inf->img[0], cb, callback_user_data, inf->channels);
 
     float *tmp = malloc(width * height * sizeof(float));
     for (int ch = 0; ch < inf->channels; ch++) {
@@ -363,6 +385,12 @@ static void dssim_preprocess_image_channel(dssim_image *img, float *restrict tmp
 */
 int dssim_set_modified(dssim_info *inf, dssim_rgba *row_pointers[], const int image_width, const int image_height, double gamma)
 {
+    set_gamma(gamma);
+    return dssim_set_modified_float_callback(inf, image_width, image_height, convert_image_row, (void*)row_pointers);
+}
+
+int dssim_set_modified_float_callback(dssim_info *inf, const int image_width, const int image_height, dssim_row_callback cb, void *callback_user_data)
+{
     const int width = inf->img[0].chan[0].width;
     const int height = inf->img[0].chan[0].height;
 
@@ -376,7 +404,7 @@ int dssim_set_modified(dssim_info *inf, dssim_rgba *row_pointers[], const int im
         inf->img[1].chan[ch].img = calloc(inf->img[1].chan[ch].width * inf->img[1].chan[ch].height, sizeof(float));
     }
 
-    convert_image(row_pointers, gamma, &inf->img[1], inf->channels);
+    convert_image(&inf->img[1], cb, callback_user_data, inf->channels);
 
     float *tmp = malloc(width * height * sizeof(float));
     for (int ch = 0; ch < inf->channels; ch++) {
