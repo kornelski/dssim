@@ -5,7 +5,7 @@ typedef struct {
     unsigned char r, g, b, a;
 } dssim_rgba;
 
-dssim_info *dssim_init();
+dssim_info *dssim_init(int channels);
 
 void dssim_dealloc(dssim_info *inf);
 

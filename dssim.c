@@ -30,7 +30,7 @@
 #define MIN(a,b) ((a)<=(b)?(a):(b))
 #endif
 
-#define CHANS 3
+#define MAX_CHANS 3
 
 typedef struct {
     float l, A, b, a;
@@ -43,17 +43,26 @@ typedef struct {
 } dssim_info_chan;
 
 struct dssim_info {
-    dssim_info_chan chan[CHANS];
+    dssim_info_chan chan[MAX_CHANS];
+    int channels;
 };
 
-dssim_info *dssim_init()
+dssim_info *dssim_init(int channels)
 {
-    return calloc(1, sizeof(dssim_info));
+    if (channels != 1 && channels != MAX_CHANS) {
+        return NULL;
+    }
+
+    dssim_info *inf = calloc(1, sizeof(dssim_info));
+    if (inf) {
+        inf->channels = channels;
+    }
+    return inf;
 }
 
 void dssim_dealloc(dssim_info *inf)
 {
-    for (int ch = 0; ch < CHANS; ch++) {
+    for (int ch = 0; ch < inf->channels; ch++) {
         free(inf->chan[ch].mu2); inf->chan[ch].mu2 = NULL;
         free(inf->chan[ch].sigma2_sq); inf->chan[ch].sigma2_sq = NULL;
         free(inf->chan[ch].sigma12); inf->chan[ch].sigma12 = NULL;
@@ -262,11 +271,15 @@ inline static laba convert_pixel(dssim_rgba px, int i, int j)
     return f1;
 }
 
-static void convert_image(dssim_rgba *row_pointers[], const double gamma, dssim_info *inf, float *restrict ch0, float *restrict ch1, float *restrict ch2)
+static void convert_image(dssim_rgba *row_pointers[], const double gamma, dssim_info *inf, float *restrict chans[])
 {
     const int width = inf->chan[0].width;
     const int height = inf->chan[0].height;
     set_gamma(gamma);
+
+    float *const ch0 = chans[0];
+    float *const ch1 = inf->channels >= 3 ? chans[1] : NULL;
+    float *const ch2 = inf->channels >= 3 ? chans[2] : NULL;
 
     const int halfwidth = inf->chan[1].width;
     for (int y = 0, offset = 0; y < height; y++) {
@@ -277,7 +290,7 @@ static void convert_image(dssim_rgba *row_pointers[], const double gamma, dssim_
 
             ch0[offset] = f1.l;
 
-            if (CHANS == 3) {
+            if (ch1) {
                 ch1[x/2 + halfy*halfwidth] += f1.A * 0.25f;
                 ch2[x/2 + halfy*halfwidth] += f1.b * 0.25f;
             }
@@ -286,22 +299,23 @@ static void convert_image(dssim_rgba *row_pointers[], const double gamma, dssim_
 }
 
 /*
- Can be called only once. Copies image1.
+ Can be called only once. Copies the image.
  */
 void dssim_set_original(dssim_info *inf, dssim_rgba *row_pointers[], const int width, const int height, double gamma)
 {
-    for(int ch=0; ch < CHANS; ch++) {
+    float *restrict chans[inf->channels];
+    for(int ch=0; ch < inf->channels; ch++) {
         inf->chan[ch].width = ch > 0 ? width/2 : width;
         inf->chan[ch].height = ch > 0 ? height/2 : height;
-        inf->chan[ch].img1 = calloc(inf->chan[ch].width * inf->chan[ch].height, sizeof(float));
+        inf->chan[ch].img1 = chans[ch] = calloc(inf->chan[ch].width * inf->chan[ch].height, sizeof(float));
     }
 
-    convert_image(row_pointers, gamma, inf, inf->chan[0].img1, inf->chan[1].img1, inf->chan[2].img1);
+    convert_image(row_pointers, gamma, inf, chans);
 
     float *restrict sigma1_tmp = malloc(width * height * sizeof(float));
     float *tmp = malloc(width * height * sizeof(float));
 
-    for (int ch = 0; ch < CHANS; ch++) {
+    for (int ch = 0; ch < inf->channels; ch++) {
         const int width = inf->chan[ch].width;
         const int height = inf->chan[ch].height;
 
@@ -339,15 +353,15 @@ int dssim_set_modified(dssim_info *inf, dssim_rgba *row_pointers[], const int im
         return 1;
     }
 
-    float *restrict img2[CHANS];
-    for (int ch = 0; ch < CHANS; ch++) {
+    float *restrict img2[inf->channels];
+    for (int ch = 0; ch < inf->channels; ch++) {
         img2[ch] = calloc(inf->chan[ch].width * inf->chan[ch].height, sizeof(float));
     }
 
-    convert_image(row_pointers, gamma, inf, img2[0], img2[1], img2[2]);
+    convert_image(row_pointers, gamma, inf, img2);
 
     float *tmp = malloc(width * height * sizeof(float));
-    for (int ch = 0; ch < CHANS; ch++) {
+    for (int ch = 0; ch < inf->channels; ch++) {
         const int width = inf->chan[ch].width;
         const int height = inf->chan[ch].height;
 
@@ -389,10 +403,10 @@ static double dssim_compare_channel(dssim_info_chan *chan, float **ssimmap);
 double dssim_compare(dssim_info *inf, float **ssim_map_out)
 {
     double avgssim = 0;
-    for (int ch = 0; ch < CHANS; ch++) {
+    for (int ch = 0; ch < inf->channels; ch++) {
         avgssim += dssim_compare_channel(&inf->chan[ch], ssim_map_out && ch == 0 ? ssim_map_out : NULL);
     }
-    avgssim /= (double)CHANS;
+    avgssim /= (double)inf->channels;
 
     return 1.0 / (avgssim) - 1.0;
 }

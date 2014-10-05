@@ -129,7 +129,7 @@ int main(int argc, char *const argv[])
         return retval;
     }
 
-    dssim_info *dinf = dssim_init();
+    dssim_info *dinf = dssim_init(3);
     dssim_set_original(dinf, (dssim_rgba**)image1.row_pointers, image1.width, image1.height, image1.gamma);
     free(image1.row_pointers);
     free(image1.rgba_data);
