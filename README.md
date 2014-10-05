@@ -1,4 +1,4 @@
-#RGBA Structural Similarity
+# RGBA Structural Similarity
 
 This tool computes (dis)similarity between two (or more) PNG images using algorithm approximating human vision.
 
@@ -9,13 +9,13 @@ The value returned is equivalent to 1/SSIM-1, where 0 means identical image, and
 It's a rewrite of [Rabah Mehdi's C++ implementation](http://mehdi.rabah.free.fr/SSIM/):
 
 * No C++ (C99)
-* No OpenCV dependency (only `libpng`)
+* No OpenCV dependency (only `libpng` or Cocoa on OS X)
 * Supports alpha channel
 * Supports gamma correction
 
-##Usage
+## Usage
 
-    dssim file.png file-modified.png
+    dssim file-original.png file-modified.png
 
 Will output something like `0.2341` (smaller is better) followed by a filename.
 
@@ -23,19 +23,19 @@ You can supply multiple filenames to compare them all with the first file:
 
     dssim file.png modified1.png modified2.png modified3.png
 
-You can save an image visualising the difference between files to a file:
+You can save an image visualising the difference between the files:
 
     dssim -o difference.png file.png file-modified.png
 
 The `dssim.c` file is also usable as a C library.
 
-##Build or Download
+## Build or Download
 
 You need libpng, zlib, pkg-config and make
 
     make
 
-Will give you dssim.
+Will give you dssim. On OS X `make USE_COCOA=1` will compile without libpng.
 
 You'll find [downloads on GitHub releases page](https://github.com/pornel/dssim/releases).
 
