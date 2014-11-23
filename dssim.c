@@ -26,6 +26,12 @@
 #include <assert.h>
 #include "dssim.h"
 
+/** Bigger number puts more emphasis on color channels. */
+#define COLOR_WEIGHT 4
+
+/** Smaller values are more sensitive to single-pixel differences. Increase for high-DPI images. */
+#define DETAIL_SIZE 5
+
 #ifndef MIN
 #define MIN(a,b) ((a)<=(b)?(a):(b))
 #endif
@@ -126,7 +132,7 @@ static void square_row(float *row, const int width)
  */
 static void transposing_1d_blur(float *restrict src, float *restrict dst, const int width, const int height)
 {
-    const int size = 5;
+    const int size = DETAIL_SIZE;
     const float invdivisor = 1.0 / (size * 2 + 1);
 
     for (int j = 0; j < height; j++) {
@@ -380,10 +386,13 @@ static double dssim_compare_channel(dssim_info_chan *chan, float **ssimmap);
 double dssim_compare(dssim_info *inf, float **ssim_map_out)
 {
     double avgssim = 0;
+    int area = 0;
     for (int ch = 0; ch < inf->channels; ch++) {
-        avgssim += dssim_compare_channel(&inf->chan[ch], ssim_map_out && ch == 0 ? ssim_map_out : NULL);
+        const double weight = ch ? COLOR_WEIGHT : 1;
+        avgssim += weight * dssim_compare_channel(&inf->chan[ch], ssim_map_out && ch == 0 ? ssim_map_out : NULL);
+        area += weight * inf->chan[ch].width * inf->chan[ch].height;
     }
-    avgssim /= (double)inf->channels;
+    avgssim /= (double)area;
 
     return 1.0 / (avgssim) - 1.0;
 }
@@ -400,7 +409,7 @@ static double dssim_compare_channel(dssim_info_chan *chan, float **ssim_map_out)
     float *restrict sigma12 = chan->sigma12;
 
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
-    double avgssim = 0;
+    double ssim_sum = 0;
 
     float *const ssimmap = ssim_map_out ? chan->mu2 : NULL;
 
@@ -413,7 +422,7 @@ static double dssim_compare_channel(dssim_info_chan *chan, float **ssim_map_out)
                             /
                             ((c1 + mu1_sq + mu2_sq) * (c2 + sigma1_sq[offset] - mu1_sq + sigma2_sq[offset] - mu2_sq));
 
-        avgssim += ssim;
+        ssim_sum += ssim;
 
         if (ssimmap) {
             ssimmap[offset] = ssim;
@@ -430,5 +439,5 @@ static double dssim_compare_channel(dssim_info_chan *chan, float **ssim_map_out)
     free(chan->sigma12); chan->sigma12 = NULL;
     free(chan->sigma2_sq); chan->sigma2_sq = NULL;
 
-    return avgssim / ((double)width * height);
+    return ssim_sum;
 }
