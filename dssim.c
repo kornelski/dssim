@@ -29,6 +29,9 @@
 #ifndef MIN
 #define MIN(a,b) ((a)<=(b)?(a):(b))
 #endif
+#ifndef MAX
+#define MAX(a,b) ((a)>=(b)?(a):(b))
+#endif
 
 #define MAX_CHANS 3
 
@@ -120,48 +123,47 @@ static void square_row(float *row, const int width)
 /*
  * Blurs image horizontally (width 2*size+1) and writes it transposed to dst
  * (called twice gives 2d blur)
- * Callback is executed on every row before blurring
  */
 static void transposing_1d_blur(float *restrict src, float *restrict dst, const int width, const int height)
 {
-    const int size = 4;
-    const float sizef = size;
+    const int size = 5;
+    const float invdivisor = 1.0 / (size * 2 + 1);
 
     for (int j = 0; j < height; j++) {
         float *restrict row = src + j * width;
 
-        // accumulate sum for pixels outside line
-        float sum = 0;
-        sum = row[0] * sizef;
-        for(int i=0; i < MIN(width,size); i++) {
-            sum += row[i];
+        // accumulate sum for pixels outside the image
+        float sum = row[0] * size;
+
+        // preload sum for the right side of the blur
+        for(int i=0; i < size; i++) {
+            sum += row[MIN(width-1, i)];
         }
 
         // blur with left side outside line
-        for(int i=0; i < MIN(width,size); i++) {
-            sum -= row[0];
-            if((i + size) < width){
-                sum += row[i+size];
-            }
+        for(int i=0; i < size; i++) {
+            sum += row[MIN(width-1, i+size)];
 
-            dst[i*height + j] = sum / (sizef * 2.0f);
+            dst[i*height + j] = sum * invdivisor;
+
+            sum -= row[MAX(0, i-size)];
         }
 
         for(int i=size; i < width-size; i++) {
-            sum -= row[i-size];
             sum += row[i+size];
 
-            dst[i*height + j] = sum / (sizef * 2.0f);
+            dst[i*height + j] = sum * invdivisor;
+
+            sum -= row[i-size];
         }
 
         // blur with right side outside line
         for(int i=width-size; i < width; i++) {
-            if(i-size >= 0){
-                sum -= row[i-size];
-            }
-            sum += row[width-1];
+            sum += row[MIN(width-1, i+size)];
 
-            dst[i*height + j] = sum / (sizef * 2.0f);
+            dst[i*height + j] = sum * invdivisor;
+
+            sum -= row[MAX(0, i-size)];
         }
     }
 }
