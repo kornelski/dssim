@@ -39,3 +39,19 @@ Will give you dssim. On OS X `make USE_COCOA=1` will compile without libpng.
 
 You'll find [downloads on GitHub releases page](https://github.com/pornel/dssim/releases).
 
+## Accuracy
+
+Scores for version 0.6 measured against [TID2008][1] database:
+
+TID2008 Category | Spearman correlation
+--- | ---
+Noise   | -0.683
+Noise2  | -0.733
+Safe    | -0.719
+Hard    | -0.870
+Simple  | -0.844
+Exotic  | -0.431
+Exotic2 | -0.628
+Full    | -0.718
+
+[1]: http://www.computervisiononline.com/dataset/tid2008-tampere-image-database-2008
