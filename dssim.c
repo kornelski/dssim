@@ -201,18 +201,17 @@ static void blur(float *restrict src, float *restrict tmp, float *restrict dst,
     regular_1d_blur(src, tmp, width, height, callback);
     regular_1d_blur(tmp, dst, width, height, NULL);
     if (extrablur) {
-        transposing_1d_blur(dst, tmp, width, height);
-        transposing_1d_blur(tmp, dst, width, height);
+        regular_1d_blur(dst, tmp, height, width, NULL);
+        regular_1d_blur(tmp, dst, height, width, NULL);
     }
     transposing_1d_blur(dst, tmp, width, height);
+
+    regular_1d_blur(tmp, dst, height, width, NULL);
+    regular_1d_blur(dst, tmp, height, width, NULL);
     if (extrablur) {
         regular_1d_blur(tmp, dst, height, width, NULL);
         regular_1d_blur(dst, tmp, height, width, NULL);
-        regular_1d_blur(tmp, dst, height, width, NULL);
-        regular_1d_blur(dst, tmp, height, width, NULL);
     }
-    regular_1d_blur(tmp, dst, height, width, NULL);
-    regular_1d_blur(dst, tmp, height, width, NULL);
     transposing_1d_blur(tmp, dst, height, width);
 }
 
