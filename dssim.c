@@ -168,26 +168,31 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
     }
 }
 
-static void regular_1d_blur(float *restrict src, float *restrict dst, const int width, const int height, rowcallback *const callback)
+static void regular_1d_blur(float *src, float *restrict tmp, float *dst, const int width, const int height, const int runs, rowcallback *const callback)
 {
+    float *const srcs[4] = {src,tmp,dst,tmp};
+    float *const dsts[4] = {tmp,dst,tmp,dst};
+
     for(int j=0; j < height; j++) {
-        float *restrict row = src + j*width;
-        float *restrict dstrow = dst + j*width;
+        for(int run = 0; run < runs; run++) {
+            float *restrict row = srcs[run] + j*width;
+            float *restrict dstrow = dsts[run] + j*width;
 
-        if (callback) callback(row,width);
+            if (!run && callback) callback(row, width);
 
-        // accumulate sum for pixels outside the image
-        float sum = row[0] + row[1];
+            // accumulate sum for pixels outside the image
+            float sum = row[0] + row[1];
 
-        dstrow[0] = (row[0] + sum) / 3.f;
+            dstrow[0] = (row[0] + sum) / 3.f;
 
-        for (int i = 1; i < width-1; i++) {
-            sum += row[i+1];
-            dstrow[i] = sum * (1.f / 3.f);
-            sum -= row[i-1];
+            for (int i = 1; i < width-1; i++) {
+                sum += row[i+1];
+                dstrow[i] = sum * (1.f / 3.f);
+                sum -= row[i-1];
+            }
+
+            dstrow[width - 1] = (row[width - 1] + sum) / 3.f;
         }
-
-        dstrow[width - 1] = (row[width - 1] + sum) / 3.f;
     }
 }
 
@@ -198,19 +203,15 @@ static void regular_1d_blur(float *restrict src, float *restrict dst, const int 
 static void blur(float *restrict src, float *restrict tmp, float *restrict dst,
                  const int width, const int height, rowcallback *const callback, int extrablur)
 {
-    regular_1d_blur(src, tmp, width, height, callback);
-    regular_1d_blur(tmp, dst, width, height, NULL);
+    regular_1d_blur(src, tmp, dst, width, height, 2, callback);
     if (extrablur) {
-        regular_1d_blur(dst, tmp, height, width, NULL);
-        regular_1d_blur(tmp, dst, height, width, NULL);
+        regular_1d_blur(dst, tmp, dst, height, width, 4, NULL);
     }
     transposing_1d_blur(dst, tmp, width, height);
 
-    regular_1d_blur(tmp, dst, height, width, NULL);
-    regular_1d_blur(dst, tmp, height, width, NULL);
+    regular_1d_blur(tmp, dst, tmp, height, width, 2, NULL);
     if (extrablur) {
-        regular_1d_blur(tmp, dst, height, width, NULL);
-        regular_1d_blur(dst, tmp, height, width, NULL);
+        regular_1d_blur(tmp, dst, tmp, height, width, 4, NULL);
     }
     transposing_1d_blur(tmp, dst, height, width);
 }
