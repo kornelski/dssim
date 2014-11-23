@@ -168,49 +168,24 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
 
 static void regular_1d_blur(float *restrict src, float *restrict dst, const int width, const int height, rowcallback *const callback)
 {
-    const int size = 1;
-    const float sizef = size;
-
     for(int j=0; j < height; j++) {
         float *restrict row = src + j*width;
         float *restrict dstrow = dst + j*width;
 
-        // preprocess line
         if (callback) callback(row,width);
 
-        // accumulate sum for pixels outside line
-        float sum = 0;
-        sum = row[0] * sizef;
-        for(int i=0; i < MIN(width,size); i++) {
-            sum += row[i];
+        // accumulate sum for pixels outside the image
+        float sum = row[0] + row[1];
+
+        dstrow[0] = (row[0] + sum) / 3.f;
+
+        for (int i = 1; i < width-1; i++) {
+            sum += row[i+1];
+            dstrow[i] = sum * (1.f / 3.f);
+            sum -= row[i-1];
         }
 
-        // blur with left side outside line
-        for(int i=0; i < MIN(width,size); i++) {
-            sum -= row[0];
-            if ((i + size) < width) {
-                sum += row[i + size];
-            }
-
-            dstrow[i] = sum / (sizef * 2.0f);
-        }
-
-        for (int i = size; i < width - size; i++) {
-            sum -= row[i - size];
-            sum += row[i + size];
-
-            dstrow[i] = sum / (sizef * 2.0f);
-        }
-
-        // blur with right side outside line
-        for (int i = width - size; i < width; i++) {
-            if (i - size >= 0) {
-                sum -= row[i - size];
-            }
-            sum += row[width - 1];
-
-            dstrow[i] = sum / (sizef * 2.0f);
-        }
+        dstrow[width - 1] = (row[width - 1] + sum) / 3.f;
     }
 }
 
