@@ -174,15 +174,16 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
     }
 }
 
-static void regular_1d_blur(float *src, float *restrict tmp, float *dst, const int width, const int height, const int runs, rowcallback *const callback)
+static void regular_1d_blur(float *src, float *dst, const int width, const int height, const int runs, rowcallback *const callback)
 {
+    float tmp[width];
     float *const srcs[4] = {src,tmp,dst,tmp};
     float *const dsts[4] = {tmp,dst,tmp,dst};
 
     for(int j=0; j < height; j++) {
         for(int run = 0; run < runs; run++) {
-            float *restrict row = srcs[run] + j*width;
-            float *restrict dstrow = dsts[run] + j*width;
+            float *restrict row = srcs[run] == tmp ? tmp : srcs[run] + j*width;
+            float *restrict dstrow = dsts[run] == tmp ? tmp : dsts[run] + j*width;
 
             if (!run && callback) callback(row, width);
 
@@ -209,15 +210,15 @@ static void regular_1d_blur(float *src, float *restrict tmp, float *dst, const i
 static void blur(float *restrict src, float *restrict tmp, float *restrict dst,
                  const int width, const int height, rowcallback *const callback, int extrablur)
 {
-    regular_1d_blur(src, tmp, dst, width, height, 2, callback);
+    regular_1d_blur(src, dst, width, height, 2, callback);
     if (extrablur) {
-        regular_1d_blur(dst, tmp, dst, height, width, 4, NULL);
+        regular_1d_blur(dst, dst, height, width, 4, NULL);
     }
     transposing_1d_blur(dst, tmp, width, height);
 
-    regular_1d_blur(tmp, dst, tmp, height, width, 2, NULL);
+    regular_1d_blur(tmp, tmp, height, width, 2, NULL);
     if (extrablur) {
-        regular_1d_blur(tmp, dst, tmp, height, width, 4, NULL);
+        regular_1d_blur(tmp, tmp, height, width, 4, NULL);
     }
     transposing_1d_blur(tmp, dst, height, width);
 }
