@@ -133,13 +133,13 @@ static void square_row(float *row, const int width)
 static void transposing_1d_blur(float *restrict src, float *restrict dst, const int width, const int height)
 {
     const int size = DETAIL_SIZE;
-    const float invdivisor = 1.0 / (size * 2 + 1);
+    const double invdivisor = 1.0 / (size * 2 + 1);
 
     for (int j = 0; j < height; j++) {
         float *restrict row = src + j * width;
 
         // accumulate sum for pixels outside the image
-        float sum = row[0] * size;
+        double sum = row[0] * size;
 
         // preload sum for the right side of the blur
         for(int i=0; i < size; i++) {
@@ -187,13 +187,13 @@ static void regular_1d_blur(float *src, float *dst, const int width, const int h
 
             if (!run && callback) callback(row, width);
 
-            float sum = row[0] + row[MIN(width-1, 1)];
+            double sum = row[0] + row[MIN(width-1, 1)];
 
             dstrow[0] = (row[0] + sum) / 3.f;
 
             for (int i = 1; i < width-1; i++) {
                 sum += row[i+1];
-                dstrow[i] = sum * (1.f / 3.f);
+                dstrow[i] = sum * (1.0 / 3.0);
                 sum -= row[i-1];
             }
 
