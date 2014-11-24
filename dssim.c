@@ -187,8 +187,7 @@ static void regular_1d_blur(float *src, float *dst, const int width, const int h
 
             if (!run && callback) callback(row, width);
 
-            // accumulate sum for pixels outside the image
-            float sum = row[0] + row[1];
+            float sum = row[0] + row[MIN(width-1, 1)];
 
             dstrow[0] = (row[0] + sum) / 3.f;
 
