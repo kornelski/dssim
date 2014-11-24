@@ -30,7 +30,7 @@
 #define COLOR_WEIGHT 4
 
 /** Smaller values are more sensitive to single-pixel differences. Increase for high-DPI images. */
-#define DETAIL_SIZE 5
+#define DETAIL_SIZE 3
 
 #ifndef MIN
 #define MIN(a,b) ((a)<=(b)?(a):(b))
@@ -132,7 +132,7 @@ static void square_row(float *row, const int width)
  */
 static void transposing_1d_blur(float *restrict src, float *restrict dst, const int width, const int height)
 {
-    const int size = DETAIL_SIZE;
+    const int size = DETAIL_SIZE-1;
     const double invdivisor = 1.0 / (size * 2 + 1);
 
     for (int j = 0; j < height; j++) {
@@ -187,17 +187,42 @@ static void regular_1d_blur(float *src, float *dst, const int width, const int h
 
             if (!run && callback) callback(row, width);
 
-            double sum = row[0] + row[MIN(width-1, 1)];
+            const int size = DETAIL_SIZE;
+            const double invdivisor = 1.0 / (size * 2 + 1);
 
-            dstrow[0] = (row[0] + sum) / 3.f;
+            // accumulate sum for pixels outside the image
+            float sum = row[0] * size;
 
-            for (int i = 1; i < width-1; i++) {
-                sum += row[i+1];
-                dstrow[i] = sum * (1.0 / 3.0);
-                sum -= row[i-1];
+            // preload sum for the right side of the blur
+            for(int i=0; i < size; i++) {
+                sum += row[MIN(width-1, i)];
             }
 
-            dstrow[width - 1] = (row[width - 1] + sum) / 3.f;
+            // blur with left side outside line
+            for(int i=0; i < size; i++) {
+                sum += row[MIN(width-1, i+size)];
+
+                dstrow[i] = sum * invdivisor;
+
+                sum -= row[MAX(0, i-size)];
+            }
+
+            for(int i=size; i < width-size; i++) {
+                sum += row[i+size];
+
+                dstrow[i] = sum * invdivisor;
+
+                sum -= row[i-size];
+            }
+
+            // blur with right side outside line
+            for(int i=width-size; i < width; i++) {
+                sum += row[MIN(width-1, i+size)];
+
+                dstrow[i] = sum * invdivisor;
+
+                sum -= row[MAX(0, i-size)];
+            }
         }
     }
 }
