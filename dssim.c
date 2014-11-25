@@ -191,7 +191,7 @@ static void regular_1d_blur(float *src, float *dst, const int width, const int h
             const double invdivisor = 1.0 / (size * 2 + 1);
 
             // accumulate sum for pixels outside the image
-            float sum = row[0] * size;
+            double sum = row[0] * size;
 
             // preload sum for the right side of the blur
             for(int i=0; i < size; i++) {
