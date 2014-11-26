@@ -326,7 +326,6 @@ void dssim_set_original(dssim_info *inf, dssim_rgba *row_pointers[], const int w
 
     convert_image(row_pointers, gamma, inf, chans);
 
-    float *restrict sigma1_tmp = malloc(width * height * sizeof(float));
     float *tmp = malloc(width * height * sizeof(float));
 
     for (int ch = 0; ch < inf->channels; ch++) {
@@ -338,19 +337,14 @@ void dssim_set_original(dssim_info *inf, dssim_rgba *row_pointers[], const int w
             blur(img1, tmp, img1, width, height, NULL, 0);
         }
 
-        for (int j = 0; j < width*height; j++) {
-            sigma1_tmp[j] = img1[j] * img1[j];
-        }
-
         inf->chan[ch].mu1 = malloc(width * height * sizeof(float));
         blur(img1, tmp, inf->chan[ch].mu1, width, height, NULL, ch > 0);
 
         inf->chan[ch].sigma1_sq = malloc(width * height * sizeof(float));
-        blur(sigma1_tmp, tmp, inf->chan[ch].sigma1_sq, width, height, NULL, ch > 0);
+        blur(img1, tmp, inf->chan[ch].sigma1_sq, width, height, square_row, ch > 0);
     }
 
     free(tmp);
-    free(sigma1_tmp);
 }
 
 /*
