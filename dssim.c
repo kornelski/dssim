@@ -117,12 +117,12 @@ inline static laba rgba_to_laba(const dssim_rgba px)
     };
 }
 
-typedef void rowcallback(float *, const int width);
+typedef void rowcallback(const float *restrict src, float *restrict dst, const int width);
 
-static void square_row(float *row, const int width)
+static void square_row(const float *restrict src, float *restrict dst, const int width)
 {
     for (int i = 0; i < width; i++) {
-        row[i] = row[i] * row[i];
+        dst[i] = src[i] * src[i];
     }
 }
 
@@ -174,18 +174,22 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
     }
 }
 
-static void regular_1d_blur(float *src, float *dst, const int width, const int height, const int runs, rowcallback *const callback)
+static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, const int width, const int height, const int runs, rowcallback *const callback)
 {
-    float tmp[width];
-    float *const srcs[4] = {src,tmp,dst,tmp};
-    float *const dsts[4] = {tmp,dst,tmp,dst};
+    // tmp1 is expected to hold at least two lines
+    float *restrict tmp2 = tmp1 + width;
 
     for(int j=0; j < height; j++) {
         for(int run = 0; run < runs; run++) {
-            float *restrict row = srcs[run] == tmp ? tmp : srcs[run] + j*width;
-            float *restrict dstrow = dsts[run] == tmp ? tmp : dsts[run] + j*width;
+            // To improve locality blur is done on tmp1->tmp2 and tmp2->tmp1 buffers,
+            // except first and last run which use src->tmp and tmp->dst
+            const float *restrict row = (run == 0   ? src + j*width : (run & 1) ? tmp1 : tmp2);
+            float *restrict dstrow = (run == runs-1 ? dst + j*width : (run & 1) ? tmp2 : tmp1);
 
-            if (!run && callback) callback(row, width);
+            if (!run && callback) {
+                callback(row, tmp2, width); // on the first run tmp2 is not used
+                row = tmp2;
+            }
 
             const int size = DETAIL_SIZE;
             const double invdivisor = 1.0 / (size * 2 + 1);
@@ -231,18 +235,20 @@ static void regular_1d_blur(float *src, float *dst, const int width, const int h
 /*
  * Filters image with callback and blurs (lousy approximate of gaussian)
  */
-static void blur(float *restrict src, float *restrict tmp, float *restrict dst,
+static void blur(const float *restrict src, float *restrict tmp, float *restrict dst,
                  const int width, const int height, rowcallback *const callback, int extrablur)
 {
-    regular_1d_blur(src, dst, width, height, 2, callback);
+    regular_1d_blur(src, tmp, dst, width, height, 2, callback);
     if (extrablur) {
-        regular_1d_blur(dst, dst, height, width, 4, NULL);
+        regular_1d_blur(dst, tmp, dst, height, width, 4, NULL);
     }
     transposing_1d_blur(dst, tmp, width, height);
 
-    regular_1d_blur(tmp, tmp, height, width, 2, NULL);
+    // After transposing buffer is rotated, so height and width are swapped
+    // And reuse of buffers made tmp hold the image, and dst used as temporary until the last transpose
+    regular_1d_blur(tmp, dst, tmp, height, width, 2, NULL);
     if (extrablur) {
-        regular_1d_blur(tmp, tmp, height, width, 4, NULL);
+        regular_1d_blur(tmp, dst, tmp, height, width, 4, NULL);
     }
     transposing_1d_blur(tmp, dst, height, width);
 }
