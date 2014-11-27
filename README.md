@@ -2,9 +2,10 @@
 
 This tool computes (dis)similarity between two (or more) PNG images using algorithm approximating human vision.
 
-Comparison is done in L\*a\*b\* color space (D65 white point, gamma 2.2) with chroma subsampling, using the SSIM algorithm.
+Comparison is done in L\*a\*b\* color space (D65 white point, gamma 2.2) with chroma subsampling,
+using [the SSIM algorithm](https://ece.uwaterloo.ca/~z70wang/research/ssim/).
 
-The value returned is equivalent to 1/SSIM-1, where 0 means identical image, and >0 (unbounded) is amount of difference. Values are not directly comparable with other tools.
+The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded) is amount of difference. Values are not directly comparable with other tools.
 
 It's a rewrite of [Rabah Mehdi's C++ implementation](http://mehdi.rabah.free.fr/SSIM/):
 
