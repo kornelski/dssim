@@ -1,4 +1,4 @@
-SOURCES = dssim.c rwpng.c main.c
+SOURCES = dssim.o rwpng.o main.o
 
 CFLAGSOPT ?= -DNDEBUG -O3 -fstrict-aliasing -ffast-math -funroll-loops -fomit-frame-pointer -ffinite-math-only
 CFLAGS ?= -Wall -I. $(CFLAGSOPT)
@@ -20,4 +20,4 @@ dssim: $(SOURCES)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS) -lm -lz
 
 clean:
-	-rm dssim
+	-rm -f dssim *.o
