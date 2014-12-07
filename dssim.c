@@ -318,6 +318,8 @@ static void convert_image(dssim_rgba *row_pointers[], const double gamma, dssim_
     }
 }
 
+static void dssim_preprocess_image_channel(dssim_image *img, float *restrict tmp, const int channels);
+
 /*
  Can be called only once. Copies the image.
  */
@@ -333,24 +335,25 @@ void dssim_set_original(dssim_info *inf, dssim_rgba *row_pointers[], const int w
     convert_image(row_pointers, gamma, &inf->img[0], inf->channels);
 
     float *tmp = malloc(width * height * sizeof(float));
-
     for (int ch = 0; ch < inf->channels; ch++) {
-        const int width = inf->img[0].chan[ch].width;
-        const int height = inf->img[0].chan[ch].height;
+        dssim_preprocess_image_channel(&inf->img[0], tmp, ch);
+    }
+    free(tmp);
+}
 
-        float *img1 = inf->img[0].chan[ch].img;
-        if (ch > 0) {
-            blur(img1, tmp, img1, width, height, NULL, 0);
-        }
+static void dssim_preprocess_image_channel(dssim_image *img, float *restrict tmp, const int ch) {
+    const int width = img->chan[ch].width;
+    const int height = img->chan[ch].height;
 
-        inf->img[0].chan[ch].mu = malloc(width * height * sizeof(float));
-        blur(img1, tmp, inf->img[0].chan[ch].mu, width, height, NULL, ch > 0);
-
-        inf->img[0].chan[ch].img_sq_blur = malloc(width * height * sizeof(float));
-        blur(img1, tmp, inf->img[0].chan[ch].img_sq_blur, width, height, square_row, ch > 0);
+    if (ch > 0) {
+        blur(img->chan[ch].img, tmp, img->chan[ch].img, width, height, NULL, 0);
     }
 
-    free(tmp);
+    img->chan[ch].mu = malloc(width * height * sizeof(float));
+    blur(img->chan[ch].img, tmp, img->chan[ch].mu, width, height, NULL, ch > 0);
+
+    img->chan[ch].img_sq_blur = malloc(width * height * sizeof(float));
+    blur(img->chan[ch].img, tmp, img->chan[ch].img_sq_blur, width, height, square_row, ch > 0);
 }
 
 /*
@@ -380,23 +383,19 @@ int dssim_set_modified(dssim_info *inf, dssim_rgba *row_pointers[], const int im
         const int width = inf->img[0].chan[ch].width;
         const int height = inf->img[0].chan[ch].height;
 
-        if (ch > 0) {
-            blur(inf->img[1].chan[ch].img, tmp, inf->img[1].chan[ch].img, width, height, NULL, 0);
-        }
+        dssim_preprocess_image_channel(&inf->img[1], tmp, ch);
 
         float *restrict img1_img2 = malloc(width * height * sizeof(float));
+        float *restrict img1 = inf->img[0].chan[ch].img;
+        float *restrict img2 = inf->img[1].chan[ch].img;
+
         for (int j = 0; j < width*height; j++) {
-            img1_img2[j] = inf->img[0].chan[ch].img[j] * inf->img[1].chan[ch].img[j];
+            img1_img2[j] = img1[j] * img2[j];
         }
+        blur(img1_img2, tmp, img1_img2, width, height, NULL, ch > 0);
+        inf->img1_img2_blur[ch] = img1_img2;
 
-        inf->img1_img2_blur[ch] = malloc(width * height * sizeof(float));
-        blur(img1_img2, tmp, inf->img1_img2_blur[ch], width, height, NULL, ch > 0);
 
-        inf->img[1].chan[ch].mu = img1_img2; // reuse mem
-        blur(inf->img[1].chan[ch].img, tmp, inf->img[1].chan[ch].mu, width, height, NULL, ch > 0);
-
-        inf->img[1].chan[ch].img_sq_blur = malloc(width * height * sizeof(float));
-        blur(inf->img[1].chan[ch].img, tmp, inf->img[1].chan[ch].img_sq_blur, width, height, square_row, ch > 0);
         free(inf->img[1].chan[ch].img); inf->img[1].chan[ch].img = NULL;
     }
     free(tmp);
