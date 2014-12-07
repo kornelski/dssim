@@ -291,20 +291,20 @@ inline static laba convert_pixel(dssim_rgba px, int i, int j)
     return f1;
 }
 
-static void convert_image(dssim_rgba *row_pointers[], const double gamma, dssim_info *inf, float *restrict chans[])
+static void convert_image(dssim_rgba *row_pointers[], const double gamma, dssim_image *img, const int channels)
 {
-    const int width = inf->img[0].chan[0].width;
-    const int height = inf->img[0].chan[0].height;
+    const int width = img->chan[0].width;
+    const int height = img->chan[0].height;
     set_gamma(gamma);
 
-    float *const ch0 = chans[0];
-    float *const ch1 = inf->channels >= 3 ? chans[1] : NULL;
-    float *const ch2 = inf->channels >= 3 ? chans[2] : NULL;
+    float *const ch0 = img->chan[0].img;
+    float *const ch1 = channels >= 3 ? img->chan[1].img : NULL;
+    float *const ch2 = channels >= 3 ? img->chan[2].img : NULL;
 
-    const int halfwidth = inf->img[0].chan[1].width;
+    const int halfwidth = img->chan[1].width;
     for (int y = 0, offset = 0; y < height; y++) {
         dssim_rgba *const px1 = row_pointers[y];
-        const int halfy = y * inf->img[0].chan[1].height / height;
+        const int halfy = y * img->chan[1].height / height;
         for (int x = 0; x < width; x++, offset++) {
             laba f1 = convert_pixel(px1[x], x, y);
 
@@ -330,7 +330,7 @@ void dssim_set_original(dssim_info *inf, dssim_rgba *row_pointers[], const int w
         inf->img[0].chan[ch].img = chans[ch] = calloc(inf->img[0].chan[ch].width * inf->img[0].chan[ch].height, sizeof(float));
     }
 
-    convert_image(row_pointers, gamma, inf, chans);
+    convert_image(row_pointers, gamma, &inf->img[0], inf->channels);
 
     float *tmp = malloc(width * height * sizeof(float));
 
@@ -367,12 +367,13 @@ int dssim_set_modified(dssim_info *inf, dssim_rgba *row_pointers[], const int im
         return 1;
     }
 
-    float *restrict img2[inf->channels];
     for (int ch = 0; ch < inf->channels; ch++) {
-        img2[ch] = calloc(inf->img[0].chan[ch].width * inf->img[0].chan[ch].height, sizeof(float));
+        inf->img[1].chan[ch].width = inf->img[0].chan[ch].width;
+        inf->img[1].chan[ch].height = inf->img[0].chan[ch].height;
+        inf->img[1].chan[ch].img = calloc(inf->img[1].chan[ch].width * inf->img[1].chan[ch].height, sizeof(float));
     }
 
-    convert_image(row_pointers, gamma, inf, img2);
+    convert_image(row_pointers, gamma, &inf->img[1], inf->channels);
 
     float *tmp = malloc(width * height * sizeof(float));
     for (int ch = 0; ch < inf->channels; ch++) {
@@ -380,24 +381,23 @@ int dssim_set_modified(dssim_info *inf, dssim_rgba *row_pointers[], const int im
         const int height = inf->img[0].chan[ch].height;
 
         if (ch > 0) {
-            blur(img2[ch], tmp, img2[ch], width, height, NULL, 0);
+            blur(inf->img[1].chan[ch].img, tmp, inf->img[1].chan[ch].img, width, height, NULL, 0);
         }
-        float *restrict img1_img2 = malloc(width * height * sizeof(float));
-        float *restrict img1 = inf->img[0].chan[ch].img;
 
+        float *restrict img1_img2 = malloc(width * height * sizeof(float));
         for (int j = 0; j < width*height; j++) {
-            img1_img2[j] = img1[j] * img2[ch][j];
+            img1_img2[j] = inf->img[0].chan[ch].img[j] * inf->img[1].chan[ch].img[j];
         }
 
         inf->img1_img2_blur[ch] = malloc(width * height * sizeof(float));
         blur(img1_img2, tmp, inf->img1_img2_blur[ch], width, height, NULL, ch > 0);
 
         inf->img[1].chan[ch].mu = img1_img2; // reuse mem
-        blur(img2[ch], tmp, inf->img[1].chan[ch].mu, width, height, NULL, ch > 0);
+        blur(inf->img[1].chan[ch].img, tmp, inf->img[1].chan[ch].mu, width, height, NULL, ch > 0);
 
         inf->img[1].chan[ch].img_sq_blur = malloc(width * height * sizeof(float));
-        blur(img2[ch], tmp, inf->img[1].chan[ch].img_sq_blur, width, height, square_row, ch > 0);
-        free(img2[ch]);
+        blur(inf->img[1].chan[ch].img, tmp, inf->img[1].chan[ch].img_sq_blur, width, height, square_row, ch > 0);
+        free(inf->img[1].chan[ch].img); inf->img[1].chan[ch].img = NULL;
     }
     free(tmp);
 
