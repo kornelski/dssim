@@ -378,6 +378,7 @@ static void dssim_preprocess_image(dssim_image *img, const int width, const int 
     for (int ch = 0; ch < img->channels; ch++) {
         img->chan[ch].width = img->subsample_channels && ch > 0 ? width/2 : width;
         img->chan[ch].height = img->subsample_channels && ch > 0 ? height/2 : height;
+        // subsampling in convert_image relies on zeroed bitmaps
         img->chan[ch].img = calloc(img->chan[ch].width * img->chan[ch].height, sizeof(img->chan[ch].img[0]));
     }
 
