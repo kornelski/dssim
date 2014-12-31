@@ -417,16 +417,19 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
  @param ssim_map_out Saves dissimilarity visualisation (pass NULL if not needed)
  @return DSSIM value or NaN on error.
  */
-double dssim_compare(const dssim_image *restrict original, dssim_image *restrict modified, float **ssim_map_out)
+double dssim_compare(const dssim_image *restrict original_image, dssim_image *restrict modified_image, float **ssim_map_out)
 {
-    const int channels = MIN(original->channels, modified->channels);
-    float *tmp = malloc(original->chan[0].width * original->chan[0].height * sizeof(tmp[0]));
+    const int channels = MIN(original_image->channels, modified_image->channels);
+    float *tmp = malloc(original_image->chan[0].width * original_image->chan[0].height * sizeof(tmp[0]));
 
     double ssim_sum = 0;
     double total = 0;
     for (int ch = 0; ch < channels; ch++) {
-        const double weight = original->chan[ch].is_chroma ? COLOR_WEIGHT : 1.0;
-        ssim_sum += weight * dssim_compare_channel(&original->chan[ch], &modified->chan[ch], tmp, ssim_map_out && ch == 0 ? ssim_map_out : NULL);
+        const dssim_chan *original = &original_image->chan[ch];
+        dssim_chan *modified = &modified_image->chan[ch];
+        double weight = original->is_chroma ? COLOR_WEIGHT : 1.0;
+        const bool use_ssim_map_out = ssim_map_out && ch == 0;
+        ssim_sum += weight * dssim_compare_channel(original, modified, tmp, use_ssim_map_out ? ssim_map_out : NULL);
         total += weight;
     }
     free(tmp);
