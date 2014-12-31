@@ -46,13 +46,13 @@ Scores for version 0.8 measured against [TID2008][1] database:
 
 TID2008 Category | Spearman correlation
 --- | ---
-Noise   | -0.702
-Noise2  | -0.747
-Safe    | -0.733
-Hard    | -0.871
-Simple  | -0.852
-Exotic  | -0.444
-Exotic2 | -0.635
-Full    | -0.729
+Noise   | -0.789
+Noise2  | -0.819
+Safe    | -0.808
+Hard    | -0.890
+Simple  | -0.891
+Exotic  | -0.455
+Exotic2 | -0.610
+Full    | -0.771
 
 [1]: http://www.computervisiononline.com/dataset/tid2008-tampere-image-database-2008

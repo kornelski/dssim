@@ -26,6 +26,8 @@
 /** Bigger number puts more emphasis on color channels. */
 #define COLOR_WEIGHT 1.0
 
+#define IW_SCALES 4
+
 /** Smaller values are more sensitive to single-pixel differences. Increase for high-DPI images. */
 #define DETAIL_SIZE 3
 
@@ -49,6 +51,7 @@ typedef struct {
 typedef struct {
     int width, height;
     float *img, *mu, *img_sq_blur;
+    struct dssim_chan *next_half;
     bool is_chroma;
 } dssim_chan;
 
@@ -57,12 +60,19 @@ struct dssim_image {
     int channels;
 };
 
+static void dealloc_chan(dssim_chan *chan) {
+    free(chan->img);
+    free(chan->mu);
+    free(chan->img_sq_blur);
+    if (chan->next_half) {
+        dealloc_chan(chan->next_half);
+    }
+}
+
 void dssim_dealloc_image(dssim_image *img)
 {
     for (int ch = 0; ch < img->channels; ch++) {
-        free(img->chan[ch].img);
-        free(img->chan[ch].mu);
-        free(img->chan[ch].img_sq_blur);
+        dealloc_chan(&img->chan[ch]);
     }
     free(img);
 }
@@ -135,7 +145,7 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
             dst[i*height + j] = sum * invdivisor;
 
             sum -= row[MAX(0, i-size)];
-    }
+        }
 
         for(int i=size; i < width-size; i++) {
             sum += row[i+size];
@@ -152,8 +162,8 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
             dst[i*height + j] = sum * invdivisor;
 
             sum -= row[MAX(0, i-size)];
+        }
     }
-}
 }
 
 static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, const int width, const int height, const int runs, rowcallback *const callback)
@@ -208,9 +218,9 @@ static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, 
                 dstrow[i] = sum * invdivisor;
 
                 sum -= row[MAX(0, i-size)];
+            }
         }
     }
-}
 }
 
 
@@ -231,7 +241,7 @@ static void blur(const float *restrict src, float *restrict tmp, float *restrict
     regular_1d_blur(tmp, dst, tmp, height, width, 2, NULL);
     if (extrablur) {
         regular_1d_blur(tmp, dst, tmp, height, width, 4, NULL);
-}
+    }
     transposing_1d_blur(tmp, dst, height, width);
 }
 
@@ -339,8 +349,8 @@ static void convert_image_row_rgb(float *const restrict channels[], const int nu
         if (num_channels >= 3) {
             channels[1][x] = px.A;
             channels[2][x] = px.b;
-        }
     }
+}
 }
 
 static void convert_image_row_gray_init(double gamma_lut[static 256]) {
@@ -417,6 +427,8 @@ dssim_image *dssim_create_image(unsigned char *row_pointers[], dssim_colortype c
     return dssim_create_image_float_callback(num_channels, width, height, converter, (void*)&im);
 }
 
+static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int depth);
+
 dssim_image *dssim_create_image_float_callback(const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data)
 {
     if (num_channels != 1 && num_channels != MAX_CHANS) {
@@ -442,24 +454,50 @@ dssim_image *dssim_create_image_float_callback(const int num_channels, const int
 
     float *tmp = malloc(width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < img->channels; ch++) {
-        dssim_chan *const chan = &img->chan[ch];
-        const bool extrablur = chan->is_chroma;
-    const int width = chan->width;
-    const int height = chan->height;
-
-        if (extrablur) {
-            blur(chan->img, tmp, chan->img, width, height, NULL, 0);
+        dssim_preprocess_channel(&img->chan[ch], tmp, IW_SCALES);
     }
-
-    chan->mu = malloc(width * height * sizeof(chan->mu[0]));
-        blur(chan->img, tmp, chan->mu, width, height, NULL, extrablur);
-
-    chan->img_sq_blur = malloc(width * height * sizeof(chan->img_sq_blur[0]));
-        blur(chan->img, tmp, chan->img_sq_blur, width, height, square_row, extrablur);
-}
     free(tmp);
 
     return img;
+}
+
+static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int depth)
+{
+    const bool extrablur = chan->is_chroma;
+    const int width = chan->width;
+    const int height = chan->height;
+
+    if (depth) {
+        dssim_chan *const new_chan = malloc(sizeof(new_chan[0]));
+        *new_chan = (dssim_chan){
+            .width = width/2,
+            .height = height/2,
+            .is_chroma = chan->is_chroma,
+            .img = calloc(width/2 * (height/2), sizeof(new_chan->img[0])),
+        };
+        chan->next_half = new_chan;
+
+        for(int y = 0; y < new_chan->height; y++) {
+            for(int x = 0; x < new_chan->width; x++) {
+                new_chan->img[x + y * new_chan->width] = 0.25 * (
+                    chan->img[x*2 + y*2 * chan->width] + chan->img[x*2+1 + y*2 * chan->width] +
+                    chan->img[x*2 + (y*2+1) * chan->width] + chan->img[x*2+1 + (y*2+1) * chan->width]
+                );
+            }
+        }
+
+        dssim_preprocess_channel(chan->next_half, tmp, depth-1);
+    }
+
+    if (extrablur) {
+        blur(chan->img, tmp, chan->img, width, height, NULL, 0);
+    }
+
+    chan->mu = malloc(width * height * sizeof(chan->mu[0]));
+    blur(chan->img, tmp, chan->mu, width, height, NULL, extrablur);
+
+    chan->img_sq_blur = malloc(width * height * sizeof(chan->img_sq_blur[0]));
+    blur(chan->img, tmp, chan->img_sq_blur, width, height, square_row, extrablur);
 }
 
 static float *get_img1_img2_blur(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp)
@@ -496,13 +534,24 @@ double dssim_compare(const dssim_image *restrict original_image, dssim_image *re
     double ssim_sum = 0;
     double total = 0;
     for (int ch = 0; ch < channels; ch++) {
+
         const dssim_chan *original = &original_image->chan[ch];
         dssim_chan *modified = &modified_image->chan[ch];
         double weight = original->is_chroma ? COLOR_WEIGHT : 1.0;
-        const bool use_ssim_map_out = ssim_map_out && ch == 0;
-        ssim_sum += weight * dssim_compare_channel(original, modified, tmp, use_ssim_map_out ? ssim_map_out : NULL);
+
+        bool use_ssim_map_out = ssim_map_out && ch == 0;
+        for(;;) {
+            ssim_sum += weight * dssim_compare_channel(original, modified, tmp, use_ssim_map_out ? ssim_map_out : NULL);
             total += weight;
+            weight *= 0.75;
+            original = original->next_half;
+            modified = modified->next_half;
+            if (!original || !modified) {
+                break;
             }
+            use_ssim_map_out = false;
+        }
+    }
     free(tmp);
 
     return 1.0 / (ssim_sum / total) - 1.0;
