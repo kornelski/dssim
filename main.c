@@ -172,8 +172,10 @@ int main(int argc, char *const argv[])
             }
             if (write_image(map_output_file, out, image2.width, image2.height)) {
                 fprintf(stderr, "Can't write %s\n", map_output_file);
+                free(map);
                 return 1;
             }
+            free(map);
         }
     }
 
