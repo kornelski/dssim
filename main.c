@@ -81,7 +81,7 @@ static void usage(const char *argv0)
         "Compares first image against subsequent images, and outputs\n" \
         "1/SSIM-1 difference for each of them in order (0 = identical).\n\n" \
         "Images must have identical size, but may have different gamma & depth.\n" \
-        "\nVersion 0.7 http://pornel.net/dssim\n" \
+        "\nVersion 0.8 http://pornel.net/dssim\n" \
         , argv0, argv0);
 }
 
@@ -129,8 +129,7 @@ int main(int argc, char *const argv[])
         return retval;
     }
 
-    dssim_info *dinf = dssim_init();
-    dssim_set_original(dinf, (dssim_rgba**)image1.row_pointers, 3, image1.width, image1.height, image1.gamma);
+    dssim_image *original = dssim_create_image((dssim_rgba**)image1.row_pointers, 3, image1.width, image1.height, image1.gamma);
     free(image1.row_pointers);
     free(image1.rgba_data);
 
@@ -144,17 +143,18 @@ int main(int argc, char *const argv[])
             break;
         }
 
-        retval = dssim_set_modified(dinf, (dssim_rgba**)image2.row_pointers, 3, image2.width, image2.height, image2.gamma);
-        free(image2.row_pointers);
-        free(image2.rgba_data);
-
-        if (retval) {
+        if (image1.width != image2.width || image1.height != image2.height) {
             fprintf(stderr, "Image %s has different size than %s\n", file2, file1);
             break;
         }
 
+        dssim_image *modified = dssim_create_image((dssim_rgba**)image2.row_pointers, 3, image2.width, image2.height, image2.gamma);
+        free(image2.row_pointers);
+        free(image2.rgba_data);
+
         float *map = NULL;
-        double dssim = dssim_compare(dinf, map_output_file ? &map : NULL);
+        double dssim = dssim_compare(original, modified, map_output_file ? &map : NULL);
+        dssim_dealloc_image(modified);
 
         printf("%.6f\t%s\n", dssim, file2);
 
@@ -179,6 +179,6 @@ int main(int argc, char *const argv[])
         }
     }
 
-    dssim_dealloc(dinf);
+    dssim_dealloc_image(original);
     return retval;
 }

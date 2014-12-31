@@ -1,13 +1,9 @@
 
-typedef struct dssim_info dssim_info;
+typedef struct dssim_image dssim_image;
 
 typedef struct {
     unsigned char r, g, b, a;
 } dssim_rgba;
-
-dssim_info *dssim_init(void);
-
-void dssim_dealloc(dssim_info *inf);
 
 /*
   Write one row (from index `y`) of `width` pixels to pre-allocated arrays in `channels`.
@@ -16,10 +12,8 @@ void dssim_dealloc(dssim_info *inf);
  */
 typedef void dssim_row_callback(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data);
 
-void dssim_set_original(dssim_info *inf, dssim_rgba *row_pointers[], const int num_channels, const int width, const int height, double gamma);
-void dssim_set_original_float_callback(dssim_info *inf, const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
+dssim_image *dssim_create_image(dssim_rgba *row_pointers[], const int num_channels, const int width, const int height, const double gamma);
+dssim_image *dssim_create_image_float_callback(const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
+void dssim_dealloc_image(dssim_image *);
 
-int dssim_set_modified(dssim_info *inf, dssim_rgba *row_pointers[], const int num_channels, const int width, const int height, double gamma);
-int dssim_set_modified_float_callback(dssim_info *inf, const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
-
-double dssim_compare(dssim_info *inf, float **ssimmap);
+double dssim_compare(const dssim_image *restrict original, dssim_image *restrict modified, float **ssim_map_out);
