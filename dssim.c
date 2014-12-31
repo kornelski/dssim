@@ -337,6 +337,7 @@ static void convert_image(dssim_image *img, dssim_row_callback cb, void *callbac
     }
 }
 
+static void dssim_preprocess_image(dssim_image *img, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
 static void dssim_preprocess_image_channel(dssim_image *img, float *restrict tmp, const int channels, bool extrablur);
 
 static void convert_image_row(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
@@ -379,7 +380,12 @@ void dssim_set_original_float_callback(dssim_info *inf, const int num_channels, 
     img->channels = num_channels;
     img->subsample_channels = num_channels > 1;
 
-    for(int ch = 0; ch < img->channels; ch++) {
+    dssim_preprocess_image(img, width, height, cb, callback_user_data);
+}
+
+static void dssim_preprocess_image(dssim_image *img, const int width, const int height, dssim_row_callback cb, void *callback_user_data) {
+
+    for (int ch = 0; ch < img->channels; ch++) {
         img->chan[ch].width = img->subsample_channels && ch > 0 ? width/2 : width;
         img->chan[ch].height = img->subsample_channels && ch > 0 ? height/2 : height;
         img->chan[ch].img = calloc(img->chan[ch].width * img->chan[ch].height, sizeof(img->chan[ch].img[0]));
@@ -442,24 +448,7 @@ int dssim_set_modified_float_callback(dssim_info *inf, const int num_channels, c
     img->channels = num_channels;
     img->subsample_channels = num_channels > 1;
 
-    for (int ch = 0; ch < img->channels; ch++) {
-        img->chan[ch].width = inf->img[0].chan[ch].width;
-        img->chan[ch].height = inf->img[0].chan[ch].height;
-        img->chan[ch].img = calloc(img->chan[ch].width * img->chan[ch].height, sizeof(img->chan[ch].img[0]));
-    }
-
-    if (img->subsample_channels) {
-        convert_image_subsampled(img, cb, callback_user_data);
-    } else {
-        convert_image(img, cb, callback_user_data);
-    }
-
-    float *tmp = malloc(width * height * sizeof(tmp[0]));
-    for (int ch = 0; ch < img->channels; ch++) {
-        dssim_preprocess_image_channel(img, tmp, ch, ch > 0 && img->subsample_channels);
-    }
-    free(tmp);
-
+    dssim_preprocess_image(img, width, height, cb, callback_user_data);
     return 0;
 }
 
