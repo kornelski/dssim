@@ -293,47 +293,42 @@ inline static laba convert_pixel(dssim_rgba px, int i, int j)
     return f1;
 }
 
-static void convert_image_subsampled(dssim_image *img, dssim_row_callback cb, void *callback_user_data)
-{
-    const int width = img->chan[0].width;
-    const int height = img->chan[0].height;
-    float *row_tmp[img->channels];
-
-    for(int ch = 1; ch < img->channels; ch++) {
-        row_tmp[ch] = calloc(width, sizeof(row_tmp[0])); // for the callback all channels have the same width!
-    }
-
-    for(int y = 0; y < height; y++) {
-    row_tmp[0] = &img->chan[0].img[width * y]; // Luma can be written directly (it's unscaled)
-
-    cb(row_tmp, img->channels, y, width, callback_user_data);
-
-    for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
-        const int halfy = y * img->chan[ch].height / height;
-        float *dstrow = &img->chan[ch].img[halfy * img->chan[ch].width];
-
-            for(int x = 0; x < width; x++) {
-                dstrow[x/2] += row_tmp[ch][x] * 0.25f;
-            }
-        }
-    }
-
-    for(int ch = 1; ch < img->channels; ch++) {
-        free(row_tmp[ch]);
-    }
-}
-
 static void convert_image(dssim_image *img, dssim_row_callback cb, void *callback_user_data)
 {
     const int width = img->chan[0].width;
     const int height = img->chan[0].height;
     float *row_tmp[img->channels];
 
-    for(int y = 0; y < height; y++) {
-        for(int ch = 0; ch < img->channels; ch++) {
-            row_tmp[ch] = &img->chan[ch].img[width * y];
+    if (img->subsample_channels) {
+        for(int ch = 1; ch < img->channels; ch++) {
+            row_tmp[ch] = calloc(width, sizeof(row_tmp[0])); // for the callback all channels have the same width!
         }
+
+        for(int y = 0; y < height; y++) {
+        row_tmp[0] = &img->chan[0].img[width * y]; // Luma can be written directly (it's unscaled)
+
         cb(row_tmp, img->channels, y, width, callback_user_data);
+
+        for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
+            const int halfy = y * img->chan[ch].height / height;
+            float *dstrow = &img->chan[ch].img[halfy * img->chan[ch].width];
+
+                for(int x = 0; x < width; x++) {
+                    dstrow[x/2] += row_tmp[ch][x] * 0.25f;
+                }
+            }
+        }
+
+        for(int ch = 1; ch < img->channels; ch++) {
+            free(row_tmp[ch]);
+        }
+    } else {
+        for(int y = 0; y < height; y++) {
+            for(int ch = 0; ch < img->channels; ch++) {
+                row_tmp[ch] = &img->chan[ch].img[width * y];
+            }
+            cb(row_tmp, img->channels, y, width, callback_user_data);
+        }
     }
 }
 
@@ -391,11 +386,7 @@ static void dssim_preprocess_image(dssim_image *img, const int width, const int 
         img->chan[ch].img = calloc(img->chan[ch].width * img->chan[ch].height, sizeof(img->chan[ch].img[0]));
     }
 
-    if (img->subsample_channels) {
-        convert_image_subsampled(img, cb, callback_user_data);
-    } else {
-        convert_image(img, cb, callback_user_data);
-    }
+    convert_image(img, cb, callback_user_data);
 
     float *tmp = malloc(width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < img->channels; ch++) {
