@@ -59,7 +59,6 @@ typedef struct {
 
 struct dssim_info {
     dssim_image img[2];
-    float *img1_img2_blur[MAX_CHANS];
     dssim_row_callback *convert_image_row;
 };
 
@@ -83,9 +82,6 @@ void dssim_dealloc(dssim_info *inf)
             free(inf->img[i].chan[ch].mu); inf->img[i].chan[ch].mu = NULL;
             free(inf->img[i].chan[ch].img_sq_blur); inf->img[i].chan[ch].img_sq_blur = NULL;
         }
-    }
-    for (int ch = 0; ch < inf->img[0].channels; ch++) {
-        free(inf->img1_img2_blur[ch]); inf->img1_img2_blur[ch] = NULL;
     }
     free(inf);
 }
@@ -438,31 +434,24 @@ int dssim_set_modified_float_callback(dssim_info *inf, const int num_channels, c
     return 0;
 }
 
-static void preprocess_combined_images(dssim_info *inf, dssim_image *restrict original, dssim_image *restrict modified)
+static float *get_img1_img2_blur(dssim_image *restrict original, dssim_image *restrict modified, float *restrict tmp, const int ch)
 {
-    for (int ch = 0; ch < original->channels; ch++) {
-        const int width = original->chan[ch].width;
-        const int height = original->chan[ch].height;
+    const int width = original->chan[ch].width;
+    const int height = original->chan[ch].height;
 
-        float *restrict img1_img2 = malloc(width * height * sizeof(img1_img2[0]));
-        float *restrict img1 = original->chan[ch].img;
-        float *restrict img2 = modified->chan[ch].img;
+    float *restrict img1 = original->chan[ch].img;
+    float *restrict img2 = modified->chan[ch].img; modified->chan[ch].img = NULL; // img2 is turned in-place into blur(img1*img2)
 
-        for (int j = 0; j < width*height; j++) {
-            img1_img2[j] = img1[j] * img2[j];
-        }
-
-        float *restrict tmp = modified->chan[ch].img;
-        modified->chan[ch].img = NULL;
-
-        blur(img1_img2, tmp, img1_img2, width, height, NULL, ch > 0 && original->subsample_channels);
-        inf->img1_img2_blur[ch] = img1_img2;
-
-        free(tmp);
+    for (int j = 0; j < width*height; j++) {
+        img2[j] *= img1[j];
     }
+
+    blur(img2, tmp, img2, width, height, NULL, ch > 0 && original->subsample_channels);
+
+    return img2;
 }
 
-static double dssim_compare_channel(dssim_info *inf, int ch, float **ssimmap);
+static double dssim_compare_channel(dssim_info *inf, int ch, float *restrict tmp, float **ssimmap);
 
 /*
  Algorithm based on Rabah Mehdi's C++ implementation
@@ -474,23 +463,23 @@ static double dssim_compare_channel(dssim_info *inf, int ch, float **ssimmap);
  */
 double dssim_compare(dssim_info *inf, float **ssim_map_out)
 {
-    preprocess_combined_images(inf, &inf->img[0], &inf->img[1]);
+    const int channels = MIN(inf->img[0].channels, inf->img[1].channels);
+    float *tmp = malloc(inf->img[0].chan[0].width * inf->img[0].chan[0].height * sizeof(tmp[0]));
 
     double avgssim = 0;
     int area = 0;
-    for (int ch = 0; ch < inf->img[0].channels; ch++) {
+    for (int ch = 0; ch < channels; ch++) {
         const double weight = ch && inf->img[0].subsample_channels ? COLOR_WEIGHT : 1;
-        avgssim += weight * dssim_compare_channel(inf, ch, ssim_map_out && ch == 0 ? ssim_map_out : NULL);
+        avgssim += weight * dssim_compare_channel(inf, ch, tmp, ssim_map_out && ch == 0 ? ssim_map_out : NULL);
         area += weight * inf->img[0].chan[ch].width * inf->img[0].chan[ch].height;
-
-        free(inf->img1_img2_blur[ch]); inf->img1_img2_blur[ch] = NULL;
     }
-    avgssim /= (double)area;
+    free(tmp);
 
+    avgssim /= (double)area;
     return 1.0 / (avgssim) - 1.0;
 }
 
-static double dssim_compare_channel(dssim_info *inf, int ch, float **ssim_map_out)
+static double dssim_compare_channel(dssim_info *inf, int ch, float *restrict tmp, float **ssim_map_out)
 {
     const int width = inf->img[0].chan[ch].width;
     const int height = inf->img[0].chan[ch].height;
@@ -499,7 +488,7 @@ static double dssim_compare_channel(dssim_info *inf, int ch, float **ssim_map_ou
     float *const mu2 = inf->img[1].chan[ch].mu;
     const float *restrict img1_sq_blur = inf->img[0].chan[ch].img_sq_blur;
     const float *restrict img2_sq_blur = inf->img[1].chan[ch].img_sq_blur;
-    const float *restrict img1_img2_blur = inf->img1_img2_blur[ch];
+    float *restrict img1_img2_blur = get_img1_img2_blur(&inf->img[0], &inf->img[1], tmp, ch);
 
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
     double ssim_sum = 0;
@@ -533,6 +522,7 @@ static double dssim_compare_channel(dssim_info *inf, int ch, float **ssim_map_ou
     inf->img[1].chan[ch].mu = NULL;
 
     free(inf->img[1].chan[ch].img_sq_blur); inf->img[1].chan[ch].img_sq_blur = NULL;
+    free(img1_img2_blur);
 
     return ssim_sum;
 }
