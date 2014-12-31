@@ -371,19 +371,20 @@ dssim_image *dssim_create_image_float_callback(const int num_channels, const int
 
     float *tmp = malloc(width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < img->channels; ch++) {
-        const bool extrablur = img->chan[ch].is_chroma;
-        const int width = img->chan[ch].width;
-        const int height = img->chan[ch].height;
+        dssim_chan *const chan = &img->chan[ch];
+        const bool extrablur = chan->is_chroma;
+        const int width = chan->width;
+        const int height = chan->height;
 
         if (extrablur) {
-            blur(img->chan[ch].img, tmp, img->chan[ch].img, width, height, NULL, 0);
+            blur(chan->img, tmp, chan->img, width, height, NULL, 0);
         }
 
-        img->chan[ch].mu = malloc(width * height * sizeof(img->chan[ch].mu[0]));
-        blur(img->chan[ch].img, tmp, img->chan[ch].mu, width, height, NULL, extrablur);
+        chan->mu = malloc(width * height * sizeof(chan->mu[0]));
+        blur(chan->img, tmp, chan->mu, width, height, NULL, extrablur);
 
-        img->chan[ch].img_sq_blur = malloc(width * height * sizeof(img->chan[ch].img_sq_blur[0]));
-        blur(img->chan[ch].img, tmp, img->chan[ch].img_sq_blur, width, height, square_row, extrablur);
+        chan->img_sq_blur = malloc(width * height * sizeof(chan->img_sq_blur[0]));
+        blur(chan->img, tmp, chan->img_sq_blur, width, height, square_row, extrablur);
     }
     free(tmp);
 
