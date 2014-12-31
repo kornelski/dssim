@@ -338,7 +338,7 @@ static void copy_image_row(float *const restrict channels[], const int num_chann
 }
 
 /*
- Can be called only once. Copies the image.
+ Copies the image.
  */
 dssim_image *dssim_create_image(dssim_rgba *row_pointers[], const int num_channels, const int width, const int height, const double gamma)
 {
@@ -407,13 +407,12 @@ static float *get_img1_img2_blur(const dssim_image *restrict original, dssim_ima
 
 static double dssim_compare_channel(const dssim_image *restrict original, dssim_image *restrict modified, int ch, float *restrict tmp, float **ssim_map_out);
 
-/*
+/**
  Algorithm based on Rabah Mehdi's C++ implementation
 
- Returns dssim.
- Saves dissimilarity visualisation as ssimfilename (pass NULL if not needed)
-
- You must call dssim_set_original and dssim_set_modified first.
+ @param modified is destroyed after the comparison (but you still need to call dssim_dealloc_image)
+ @param ssim_map_out Saves dissimilarity visualisation (pass NULL if not needed)
+ @return DSSIM value or NaN on error.
  */
 double dssim_compare(const dssim_image *restrict original, dssim_image *restrict modified, float **ssim_map_out)
 {
