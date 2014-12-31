@@ -531,25 +531,26 @@ double dssim_compare(const dssim_image *restrict original_image, dssim_image *re
     const int channels = MIN(original_image->channels, modified_image->channels);
     float *tmp = malloc(original_image->chan[0].width * original_image->chan[0].height * sizeof(tmp[0]));
 
+    // Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm
+    const double iwssim_weights[] = {0.0448, 0.2856, 0.3001, 0.2363, 0.1333};
+
     double ssim_sum = 0;
     double total = 0;
     for (int ch = 0; ch < channels; ch++) {
 
         const dssim_chan *original = &original_image->chan[ch];
         dssim_chan *modified = &modified_image->chan[ch];
-        double weight = original->is_chroma ? COLOR_WEIGHT : 1.0;
 
-        bool use_ssim_map_out = ssim_map_out && ch == 0;
-        for(;;) {
+        for(int n=0; n < sizeof(iwssim_weights)/sizeof(iwssim_weights[0]); n++) {
+            const double weight = (original->is_chroma ? COLOR_WEIGHT : 1.0) * iwssim_weights[n];
+            const bool use_ssim_map_out = ssim_map_out && n == 0 && ch == 0;
             ssim_sum += weight * dssim_compare_channel(original, modified, tmp, use_ssim_map_out ? ssim_map_out : NULL);
             total += weight;
-            weight *= 0.75;
             original = original->next_half;
             modified = modified->next_half;
             if (!original || !modified) {
                 break;
             }
-            use_ssim_map_out = false;
         }
     }
     free(tmp);
