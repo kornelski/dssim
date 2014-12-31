@@ -49,12 +49,12 @@ typedef struct {
 typedef struct {
     int width, height;
     float *img, *mu, *img_sq_blur;
+    bool is_chroma;
 } dssim_info_chan;
 
 struct dssim_image {
     dssim_info_chan chan[MAX_CHANS];
     int channels;
-    bool subsample_channels;
 };
 
 static void convert_image_row(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data);
@@ -273,13 +273,13 @@ inline static laba convert_pixel(dssim_rgba px, int i, int j)
     return f1;
 }
 
-static void convert_image(dssim_image *img, dssim_row_callback cb, void *callback_user_data)
+static void convert_image(dssim_image *img, dssim_row_callback cb, void *callback_user_data, const bool subsample_chroma)
 {
     const int width = img->chan[0].width;
     const int height = img->chan[0].height;
     float *row_tmp[img->channels];
 
-    if (img->subsample_channels) {
+    if (subsample_chroma) {
         for(int ch = 1; ch < img->channels; ch++) {
             row_tmp[ch] = calloc(width, sizeof(row_tmp[0])); // for the callback all channels have the same width!
         }
@@ -352,24 +352,26 @@ dssim_image *dssim_create_image_float_callback(const int num_channels, const int
         return NULL;
     }
 
+    const bool subsample_chroma = num_channels > 1;
+
     dssim_image *img = malloc(sizeof(img[0]));
     *img = (dssim_image){
         .channels = num_channels,
-        .subsample_channels = num_channels > 1,
     };
 
     for (int ch = 0; ch < img->channels; ch++) {
-        img->chan[ch].width = img->subsample_channels && ch > 0 ? width/2 : width;
-        img->chan[ch].height = img->subsample_channels && ch > 0 ? height/2 : height;
+        img->chan[ch].is_chroma = ch > 0;
+        img->chan[ch].width = subsample_chroma && img->chan[ch].is_chroma ? width/2 : width;
+        img->chan[ch].height = subsample_chroma && img->chan[ch].is_chroma ? height/2 : height;
         // subsampling in convert_image relies on zeroed bitmaps
         img->chan[ch].img = calloc(img->chan[ch].width * img->chan[ch].height, sizeof(img->chan[ch].img[0]));
     }
 
-    convert_image(img, cb, callback_user_data);
+    convert_image(img, cb, callback_user_data, subsample_chroma);
 
     float *tmp = malloc(width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < img->channels; ch++) {
-        const bool extrablur = ch > 0 && img->subsample_channels;
+        const bool extrablur = img->chan[ch].is_chroma;
         const int width = img->chan[ch].width;
         const int height = img->chan[ch].height;
 
@@ -400,7 +402,7 @@ static float *get_img1_img2_blur(const dssim_image *restrict original, dssim_ima
         img2[j] *= img1[j];
     }
 
-    blur(img2, tmp, img2, width, height, NULL, ch > 0 && original->subsample_channels);
+    blur(img2, tmp, img2, width, height, NULL, original->chan[ch].is_chroma);
 
     return img2;
 }
@@ -422,7 +424,7 @@ double dssim_compare(const dssim_image *restrict original, dssim_image *restrict
     double avgssim = 0;
     int area = 0;
     for (int ch = 0; ch < channels; ch++) {
-        const double weight = ch && original->subsample_channels ? COLOR_WEIGHT : 1;
+        const double weight = original->chan[ch].is_chroma ? COLOR_WEIGHT : 1;
         avgssim += weight * dssim_compare_channel(original, modified, ch, tmp, ssim_map_out && ch == 0 ? ssim_map_out : NULL);
         area += weight * original->chan[ch].width * original->chan[ch].height;
     }
