@@ -28,7 +28,7 @@
 #include "dssim.h"
 
 /** Bigger number puts more emphasis on color channels. */
-#define COLOR_WEIGHT 4
+#define COLOR_WEIGHT 1.0
 
 /** Smaller values are more sensitive to single-pixel differences. Increase for high-DPI images. */
 #define DETAIL_SIZE 3
@@ -422,17 +422,16 @@ double dssim_compare(const dssim_image *restrict original, dssim_image *restrict
     const int channels = MIN(original->channels, modified->channels);
     float *tmp = malloc(original->chan[0].width * original->chan[0].height * sizeof(tmp[0]));
 
-    double avgssim = 0;
-    int area = 0;
+    double ssim_sum = 0;
+    double total = 0;
     for (int ch = 0; ch < channels; ch++) {
-        const double weight = original->chan[ch].is_chroma ? COLOR_WEIGHT : 1;
-        avgssim += weight * dssim_compare_channel(&original->chan[ch], &modified->chan[ch], tmp, ssim_map_out && ch == 0 ? ssim_map_out : NULL);
-        area += weight * original->chan[ch].width * original->chan[ch].height;
+        const double weight = original->chan[ch].is_chroma ? COLOR_WEIGHT : 1.0;
+        ssim_sum += weight * dssim_compare_channel(&original->chan[ch], &modified->chan[ch], tmp, ssim_map_out && ch == 0 ? ssim_map_out : NULL);
+        total += weight;
     }
     free(tmp);
 
-    avgssim /= (double)area;
-    return 1.0 / (avgssim) - 1.0;
+    return 1.0 / (ssim_sum / total) - 1.0;
 }
 
 static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp, float **ssim_map_out)
@@ -484,5 +483,5 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
     free(modified->img_sq_blur); modified->img_sq_blur = NULL;
     free(img1_img2_blur);
 
-    return ssim_sum;
+    return ssim_sum / (width * height);
 }
