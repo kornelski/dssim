@@ -333,7 +333,6 @@ static void convert_image(dssim_image *img, dssim_row_callback cb, void *callbac
 }
 
 static void dssim_preprocess_image(dssim_image *img, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
-static void dssim_preprocess_image_channel(dssim_image *img, float *restrict tmp, const int channels, bool extrablur);
 
 static void convert_image_row(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
@@ -390,25 +389,21 @@ static void dssim_preprocess_image(dssim_image *img, const int width, const int 
 
     float *tmp = malloc(width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < img->channels; ch++) {
-        dssim_preprocess_image_channel(img, tmp, ch, ch > 0 && img->subsample_channels);
+        const bool extrablur = ch > 0 && img->subsample_channels;
+        const int width = img->chan[ch].width;
+        const int height = img->chan[ch].height;
+
+        if (extrablur) {
+            blur(img->chan[ch].img, tmp, img->chan[ch].img, width, height, NULL, 0);
+        }
+
+        img->chan[ch].mu = malloc(width * height * sizeof(img->chan[ch].mu[0]));
+        blur(img->chan[ch].img, tmp, img->chan[ch].mu, width, height, NULL, extrablur);
+
+        img->chan[ch].img_sq_blur = malloc(width * height * sizeof(img->chan[ch].img_sq_blur[0]));
+        blur(img->chan[ch].img, tmp, img->chan[ch].img_sq_blur, width, height, square_row, extrablur);
     }
     free(tmp);
-}
-
-static void dssim_preprocess_image_channel(dssim_image *img, float *restrict tmp, const int ch, bool extrablur)
-{
-    const int width = img->chan[ch].width;
-    const int height = img->chan[ch].height;
-
-    if (extrablur) {
-        blur(img->chan[ch].img, tmp, img->chan[ch].img, width, height, NULL, 0);
-    }
-
-    img->chan[ch].mu = malloc(width * height * sizeof(img->chan[ch].mu[0]));
-    blur(img->chan[ch].img, tmp, img->chan[ch].mu, width, height, NULL, extrablur);
-
-    img->chan[ch].img_sq_blur = malloc(width * height * sizeof(img->chan[ch].img_sq_blur[0]));
-    blur(img->chan[ch].img, tmp, img->chan[ch].img_sq_blur, width, height, square_row, extrablur);
 }
 
 /*
