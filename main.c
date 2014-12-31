@@ -129,8 +129,8 @@ int main(int argc, char *const argv[])
         return retval;
     }
 
-    dssim_info *dinf = dssim_init(3);
-    dssim_set_original(dinf, (dssim_rgba**)image1.row_pointers, image1.width, image1.height, image1.gamma);
+    dssim_info *dinf = dssim_init();
+    dssim_set_original(dinf, (dssim_rgba**)image1.row_pointers, 3, image1.width, image1.height, image1.gamma);
     free(image1.row_pointers);
     free(image1.rgba_data);
 
@@ -144,7 +144,7 @@ int main(int argc, char *const argv[])
             break;
         }
 
-        retval = dssim_set_modified(dinf, (dssim_rgba**)image2.row_pointers, image2.width, image2.height, image2.gamma);
+        retval = dssim_set_modified(dinf, (dssim_rgba**)image2.row_pointers, 3, image2.width, image2.height, image2.gamma);
         free(image2.row_pointers);
         free(image2.rgba_data);
 
