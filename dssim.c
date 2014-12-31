@@ -381,21 +381,22 @@ void dssim_set_original(dssim_info *inf, dssim_rgba *row_pointers[], const int w
 
 void dssim_set_original_float_callback(dssim_info *inf, const int width, const int height, dssim_row_callback cb, void *callback_user_data)
 {
+    dssim_image *img = &inf->img[0];
     for(int ch = 0; ch < inf->channels; ch++) {
-        inf->img[0].chan[ch].width = inf->subsample_channels && ch > 0 ? width/2 : width;
-        inf->img[0].chan[ch].height = inf->subsample_channels && ch > 0 ? height/2 : height;
-        inf->img[0].chan[ch].img = calloc(inf->img[0].chan[ch].width * inf->img[0].chan[ch].height, sizeof(inf->img[0].chan[ch].img[0]));
+        img->chan[ch].width = inf->subsample_channels && ch > 0 ? width/2 : width;
+        img->chan[ch].height = inf->subsample_channels && ch > 0 ? height/2 : height;
+        img->chan[ch].img = calloc(img->chan[ch].width * img->chan[ch].height, sizeof(img->chan[ch].img[0]));
     }
 
     if (inf->subsample_channels) {
-        convert_image_subsampled(&inf->img[0], cb, callback_user_data, inf->channels);
+        convert_image_subsampled(img, cb, callback_user_data, inf->channels);
     } else {
-        convert_image(&inf->img[0], cb, callback_user_data, inf->channels);
+        convert_image(img, cb, callback_user_data, inf->channels);
     }
 
     float *tmp = malloc(width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < inf->channels; ch++) {
-        dssim_preprocess_image_channel(&inf->img[0], tmp, ch, ch > 0 && inf->subsample_channels);
+        dssim_preprocess_image_channel(img, tmp, ch, ch > 0 && inf->subsample_channels);
     }
     free(tmp);
 }
@@ -436,21 +437,22 @@ int dssim_set_modified_float_callback(dssim_info *inf, const int image_width, co
         return 1;
     }
 
+    dssim_image *img = &inf->img[1];
     for (int ch = 0; ch < inf->channels; ch++) {
-        inf->img[1].chan[ch].width = inf->img[0].chan[ch].width;
-        inf->img[1].chan[ch].height = inf->img[0].chan[ch].height;
-        inf->img[1].chan[ch].img = calloc(inf->img[1].chan[ch].width * inf->img[1].chan[ch].height, sizeof(inf->img[1].chan[ch].img[0]));
+        img->chan[ch].width = inf->img[0].chan[ch].width;
+        img->chan[ch].height = inf->img[0].chan[ch].height;
+        img->chan[ch].img = calloc(img->chan[ch].width * img->chan[ch].height, sizeof(img->chan[ch].img[0]));
     }
 
     if (inf->subsample_channels) {
-        convert_image_subsampled(&inf->img[1], cb, callback_user_data, inf->channels);
+        convert_image_subsampled(img, cb, callback_user_data, inf->channels);
     } else {
-        convert_image(&inf->img[1], cb, callback_user_data, inf->channels);
+        convert_image(img, cb, callback_user_data, inf->channels);
     }
 
     float *tmp = malloc(width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < inf->channels; ch++) {
-        dssim_preprocess_image_channel(&inf->img[1], tmp, ch, ch > 0 && inf->subsample_channels);
+        dssim_preprocess_image_channel(img, tmp, ch, ch > 0 && inf->subsample_channels);
     }
     free(tmp);
 
