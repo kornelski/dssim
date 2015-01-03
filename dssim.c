@@ -183,41 +183,28 @@ static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, 
                 row = tmp2;
             }
 
-            const int size = DETAIL_SIZE;
-            const double invdivisor = 1.0 / (size * 2 + 1);
-
-            // accumulate sum for pixels outside the image
-            double sum = row[0] * size;
-
-            // preload sum for the right side of the blur
-            for(int i=0; i < size; i++) {
-                sum += row[MIN(width-1, i)];
+            int i=0;
+            for(; i < 4; i++) {
+                dstrow[i] = (row[MAX(0, i-1)] + row[i] + row[MIN(width-1, i+1)]) / 3.f;
             }
 
-            // blur with left side outside line
-            for(int i=0; i < size; i++) {
-                sum += row[MIN(width-1, i+size)];
+            const int end = (width-1) & ~3UL;
+            for(; i < end; i+=4) {
+                const float p1 = row[i-1];
+                const float n0 = row[i+0];
+                const float n1 = row[i+1];
+                const float n2 = row[i+2];
+                const float n3 = row[i+3];
+                const float n4 = row[i+4];
 
-                dstrow[i] = sum * invdivisor;
-
-                sum -= row[MAX(0, i-size)];
+                dstrow[i+0] = (p1 + n0 + n1) / 3.f;
+                dstrow[i+1] = (n0 + n1 + n2) / 3.f;
+                dstrow[i+2] = (n1 + n2 + n3) / 3.f;
+                dstrow[i+3] = (n2 + n3 + n4) / 3.f;
             }
 
-            for(int i=size; i < width-size; i++) {
-                sum += row[i+size];
-
-                dstrow[i] = sum * invdivisor;
-
-                sum -= row[i-size];
-            }
-
-            // blur with right side outside line
-            for(int i=width-size; i < width; i++) {
-                sum += row[MIN(width-1, i+size)];
-
-                dstrow[i] = sum * invdivisor;
-
-                sum -= row[MAX(0, i-size)];
+            for(; i < width; i++) {
+                dstrow[i] = (row[MAX(0, i-1)] + row[i] + row[MIN(width-1, i+1)]) / 3.f;
             }
         }
     }
