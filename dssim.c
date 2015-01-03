@@ -119,49 +119,14 @@ static void square_row(const float *restrict src, float *restrict dst, const int
 }
 
 /*
- * Blurs image horizontally (width 2*size+1) and writes it transposed to dst
- * (called twice gives 2d blur)
+ * Flips x/y (like 90deg rotation)
  */
-static void transposing_1d_blur(float *restrict src, float *restrict dst, const int width, const int height)
+static void transpose(float *restrict src, float *restrict dst, const int width, const int height)
 {
-    const int size = DETAIL_SIZE;
-    const double invdivisor = 1.0 / (size * 2 + 1);
-
     for (int j = 0; j < height; j++) {
         float *restrict row = src + j * width;
-
-        // accumulate sum for pixels outside the image
-        double sum = row[0] * size;
-
-        // preload sum for the right side of the blur
-        for(int i=0; i < size; i++) {
-            sum += row[MIN(width-1, i)];
-        }
-
-        // blur with left side outside line
-        for(int i=0; i < size; i++) {
-            sum += row[MIN(width-1, i+size)];
-
-            dst[i*height + j] = sum * invdivisor;
-
-            sum -= row[MAX(0, i-size)];
-        }
-
-        for(int i=size; i < width-size; i++) {
-            sum += row[i+size];
-
-            dst[i*height + j] = sum * invdivisor;
-
-            sum -= row[i-size];
-        }
-
-        // blur with right side outside line
-        for(int i=width-size; i < width; i++) {
-            sum += row[MIN(width-1, i+size)];
-
-            dst[i*height + j] = sum * invdivisor;
-
-            sum -= row[MAX(0, i-size)];
+        for(int i=0; i < width; i++) {
+            dst[i*height + j] = row[i];
         }
     }
 }
@@ -217,19 +182,19 @@ static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, 
 static void blur(const float *restrict src, float *restrict tmp, float *restrict dst,
                  const int width, const int height, rowcallback *const callback, int extrablur)
 {
-    regular_1d_blur(src, tmp, dst, width, height, 2, callback);
+    regular_1d_blur(src, tmp, dst, width, height, DETAIL_SIZE + 1, callback);
     if (extrablur) {
-        regular_1d_blur(dst, tmp, dst, height, width, 2, NULL);
+        regular_1d_blur(dst, tmp, dst, height, width, DETAIL_SIZE + 1, NULL);
     }
-    transposing_1d_blur(dst, tmp, width, height);
+    transpose(dst, tmp, width, height);
 
     // After transposing buffer is rotated, so height and width are swapped
     // And reuse of buffers made tmp hold the image, and dst used as temporary until the last transpose
-    regular_1d_blur(tmp, dst, tmp, height, width, 2, NULL);
+    regular_1d_blur(tmp, dst, tmp, height, width, DETAIL_SIZE + 1, NULL);
     if (extrablur) {
-        regular_1d_blur(tmp, dst, tmp, height, width, 2, NULL);
+        regular_1d_blur(tmp, dst, tmp, height, width, DETAIL_SIZE + 1, NULL);
     }
-    transposing_1d_blur(tmp, dst, height, width);
+    transpose(tmp, dst, height, width);
 }
 
 /*
