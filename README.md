@@ -49,8 +49,8 @@ Noise2  | -0.882
 Safe    | -0.885
 Hard    | -0.899
 Simple  | -0.920
-Exotic  | -0.451
-Exotic2 | -0.615
-Full    | -0.803
+Exotic  | -0.455
+Exotic2 | -0.617
+Full    | -0.804
 
 [1]: http://www.computervisiononline.com/dataset/tid2008-tampere-image-database-2008

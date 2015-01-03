@@ -52,6 +52,7 @@ typedef struct {
     int width, height;
     float *img, *mu, *img_sq_blur;
     struct dssim_chan *next_half;
+    int blur_size;
     bool is_chroma;
 } dssim_chan;
 
@@ -191,23 +192,17 @@ static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, 
 
 
 /*
- * Filters image with callback and blurs (lousy approximate of gaussian)
+ * Filters image with callback and blurs (approximate of gaussian)
  */
 static void blur(const float *restrict src, float *restrict tmp, float *restrict dst,
-                 const int width, const int height, rowcallback *const callback, int extrablur)
+                 const int width, const int height, int size, rowcallback *const callback)
 {
-    regular_1d_blur(src, tmp, dst, width, height, DETAIL_SIZE + 1, callback);
-    if (extrablur) {
-        regular_1d_blur(dst, tmp, dst, height, width, DETAIL_SIZE + 1, NULL);
-    }
+    regular_1d_blur(src, tmp, dst, width, height, size, callback);
     transpose(dst, tmp, width, height);
 
     // After transposing buffer is rotated, so height and width are swapped
     // And reuse of buffers made tmp hold the image, and dst used as temporary until the last transpose
-    regular_1d_blur(tmp, dst, tmp, height, width, DETAIL_SIZE + 1, NULL);
-    if (extrablur) {
-        regular_1d_blur(tmp, dst, tmp, height, width, DETAIL_SIZE + 1, NULL);
-    }
+    regular_1d_blur(tmp, dst, tmp, height, width, size, NULL);
     transpose(tmp, dst, height, width);
 }
 
@@ -410,6 +405,7 @@ dssim_image *dssim_create_image_float_callback(const int num_channels, const int
 
     for (int ch = 0; ch < img->channels; ch++) {
         img->chan[ch].is_chroma = ch > 0;
+        img->chan[ch].blur_size = (img->chan[ch].is_chroma ? 2 : 1) * (DETAIL_SIZE + 1);
         img->chan[ch].width = subsample_chroma && img->chan[ch].is_chroma ? width/2 : width;
         img->chan[ch].height = subsample_chroma && img->chan[ch].is_chroma ? height/2 : height;
         // subsampling in convert_image relies on zeroed bitmaps
@@ -429,7 +425,6 @@ dssim_image *dssim_create_image_float_callback(const int num_channels, const int
 
 static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int depth)
 {
-    const bool extrablur = chan->is_chroma;
     const int width = chan->width;
     const int height = chan->height;
 
@@ -439,6 +434,7 @@ static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int depth)
             .width = width/2,
             .height = height/2,
             .is_chroma = chan->is_chroma,
+            .blur_size = chan->blur_size,
             .img = calloc(width/2 * (height/2), sizeof(new_chan->img[0])),
         };
         chan->next_half = new_chan;
@@ -455,15 +451,15 @@ static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int depth)
         dssim_preprocess_channel(chan->next_half, tmp, depth-1);
     }
 
-    if (extrablur) {
-        blur(chan->img, tmp, chan->img, width, height, NULL, 0);
+    if (chan->is_chroma) {
+        blur(chan->img, tmp, chan->img, width, height, 2, NULL);
     }
 
     chan->mu = malloc(width * height * sizeof(chan->mu[0]));
-    blur(chan->img, tmp, chan->mu, width, height, NULL, extrablur);
+    blur(chan->img, tmp, chan->mu, width, height, chan->blur_size, NULL);
 
     chan->img_sq_blur = malloc(width * height * sizeof(chan->img_sq_blur[0]));
-    blur(chan->img, tmp, chan->img_sq_blur, width, height, square_row, extrablur);
+    blur(chan->img, tmp, chan->img_sq_blur, width, height, chan->blur_size, square_row);
 }
 
 static float *get_img1_img2_blur(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp)
@@ -478,7 +474,7 @@ static float *get_img1_img2_blur(const dssim_chan *restrict original, dssim_chan
         img2[j] *= img1[j];
     }
 
-    blur(img2, tmp, img2, width, height, NULL, original->is_chroma);
+    blur(img2, tmp, img2, width, height, original->blur_size, NULL);
 
     return img2;
 }
