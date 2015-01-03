@@ -24,12 +24,12 @@
 #include "dssim.h"
 
 /** Bigger number puts more emphasis on color channels. */
-#define COLOR_WEIGHT 1.0
+#define COLOR_WEIGHT 0.95
 
-#define IW_SCALES 4
+#define IW_SCALES 3
 
 /** Smaller values are more sensitive to single-pixel differences. Increase for high-DPI images. */
-#define DETAIL_SIZE 3
+#define DETAIL_SIZE 1
 
 #ifndef MIN
 #define MIN(a,b) ((a)<=(b)?(a):(b))
@@ -124,7 +124,7 @@ static void square_row(const float *restrict src, float *restrict dst, const int
  */
 static void transposing_1d_blur(float *restrict src, float *restrict dst, const int width, const int height)
 {
-    const int size = DETAIL_SIZE-1;
+    const int size = DETAIL_SIZE;
     const double invdivisor = 1.0 / (size * 2 + 1);
 
     for (int j = 0; j < height; j++) {
@@ -232,7 +232,7 @@ static void blur(const float *restrict src, float *restrict tmp, float *restrict
 {
     regular_1d_blur(src, tmp, dst, width, height, 2, callback);
     if (extrablur) {
-        regular_1d_blur(dst, tmp, dst, height, width, 4, NULL);
+        regular_1d_blur(dst, tmp, dst, height, width, 2, NULL);
     }
     transposing_1d_blur(dst, tmp, width, height);
 
@@ -240,7 +240,7 @@ static void blur(const float *restrict src, float *restrict tmp, float *restrict
     // And reuse of buffers made tmp hold the image, and dst used as temporary until the last transpose
     regular_1d_blur(tmp, dst, tmp, height, width, 2, NULL);
     if (extrablur) {
-        regular_1d_blur(tmp, dst, tmp, height, width, 4, NULL);
+        regular_1d_blur(tmp, dst, tmp, height, width, 2, NULL);
     }
     transposing_1d_blur(tmp, dst, height, width);
 }
