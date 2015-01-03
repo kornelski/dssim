@@ -123,7 +123,21 @@ static void square_row(const float *restrict src, float *restrict dst, const int
  */
 static void transpose(float *restrict src, float *restrict dst, const int width, const int height)
 {
-    for (int j = 0; j < height; j++) {
+    int j = 0;
+    for (; j < height-4; j+=4) {
+        float *restrict row0 = src + (j+0) * width;
+        float *restrict row1 = src + (j+1) * width;
+        float *restrict row2 = src + (j+2) * width;
+        float *restrict row3 = src + (j+3) * width;
+        for(int i=0; i < width; i++) {
+            dst[i*height + j+0] = row0[i];
+            dst[i*height + j+1] = row1[i];
+            dst[i*height + j+2] = row2[i];
+            dst[i*height + j+3] = row3[i];
+        }
+    }
+
+    for (; j < height; j++) {
         float *restrict row = src + j * width;
         for(int i=0; i < width; i++) {
             dst[i*height + j] = row[i];
