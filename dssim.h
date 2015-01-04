@@ -33,6 +33,12 @@ typedef enum dssim_colortype {
     DSSIM_RGBA_TO_GRAY = 3 | 32, // 4 bytes per pixel, but only luma is used
 } dssim_colortype;
 
+typedef struct {
+    int width, height;
+    double ssim;
+    float *data;
+} dssim_ssim_map;
+
 dssim_attr *dssim_create_attr(void);
 void dssim_dealloc_attr(dssim_attr *);
 
@@ -43,6 +49,17 @@ void dssim_dealloc_attr(dssim_attr *);
 void dssim_set_scales(dssim_attr *attr, const int num, const double *weights);
 
 /*
+    Maximum number scales for which bitmaps with per-pixel SSIM values are saved (0 = no saving).
+    Set before comparison.
+*/
+void dssim_set_save_ssim_maps(dssim_attr *, unsigned int num_scales, unsigned int num_channels);
+
+/*
+    Get data of ssim map. You must free(map.data);
+    Use after comparison.
+ */
+dssim_ssim_map dssim_pop_ssim_map(dssim_attr *, unsigned int scale_index, unsigned int channel_index);
+
 /*
     If subsampling is enabled, color is tested at half resolution (recommended).
     Color weight controls how much of chroma channels' SSIM contributes to overall result.
@@ -60,4 +77,8 @@ dssim_image *dssim_create_image(dssim_attr *,unsigned char *row_pointers[], dssi
 dssim_image *dssim_create_image_float_callback(dssim_attr *, const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
 void dssim_dealloc_image(dssim_image *);
 
-double dssim_compare(dssim_attr *, const dssim_image *restrict original, dssim_image *restrict modified, float **ssim_map_out);
+/*
+Returns DSSIM between two images.
+Original image can be reused. Modified image is destroyed (but still needs to be freed using dssim_dealloc_image).
+ */
+double dssim_compare(dssim_attr *, const dssim_image *restrict original, dssim_image *restrict modified);

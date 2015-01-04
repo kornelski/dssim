@@ -64,6 +64,8 @@ struct dssim_attr {
     int num_scales;
     int detail_size;
     bool subsample_chroma;
+    int save_maps_scales, save_maps_channels;
+    dssim_ssim_map ssim_maps[MAX_SCALES][MAX_CHANS];
 };
 
 /* Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm */
@@ -85,6 +87,11 @@ dssim_attr *dssim_create_attr(void) {
 }
 
 void dssim_dealloc_attr(dssim_attr *attr) {
+    for(int i = 0; i < MAX_SCALES; i++) {
+        for(int k = 0; k < MAX_CHANS; k++) {
+            free(attr->ssim_maps[k][i].data);
+        }
+    }
     free(attr->tmp);
     free(attr);
 }
@@ -109,6 +116,21 @@ void dssim_set_scales(dssim_attr *attr, const int num, const double *weights) {
 void dssim_set_color_handling(dssim_attr *attr, int subsample_chroma, double color_weight) {
     attr->subsample_chroma = !!subsample_chroma;
     attr->color_weight = color_weight;
+}
+
+void dssim_set_save_ssim_maps(dssim_attr *attr, unsigned int scales, unsigned int channels) {
+    attr->save_maps_scales = scales;
+    attr->save_maps_channels = channels;
+}
+
+dssim_ssim_map dssim_pop_ssim_map(dssim_attr *attr, unsigned int scale_index, unsigned int channel_index) {
+    if (scale_index >= attr->save_maps_scales || scale_index >= attr->num_scales ||
+        channel_index >= attr->save_maps_channels || channel_index >= MAX_CHANS) {
+        return (dssim_ssim_map){};
+    }
+    const dssim_ssim_map t = attr->ssim_maps[scale_index][channel_index];
+    attr->ssim_maps[scale_index][channel_index].data = NULL;
+    return t;
 }
 
 static float *dssim_get_tmp(dssim_attr *attr, size_t size) {
@@ -550,7 +572,7 @@ static float *get_img1_img2_blur(const dssim_chan *restrict original, dssim_chan
     return img2;
 }
 
-static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp, float **ssim_map_out);
+static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp, dssim_ssim_map *ssim_map_out);
 
 /**
  Algorithm based on Rabah Mehdi's C++ implementation
@@ -559,7 +581,7 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
  @param ssim_map_out Saves dissimilarity visualisation (pass NULL if not needed)
  @return DSSIM value or NaN on error.
  */
-double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_image, dssim_image *restrict modified_image, float **ssim_map_out)
+double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_image, dssim_image *restrict modified_image)
 {
     const int channels = MIN(original_image->channels, modified_image->channels);
     float *tmp = dssim_get_tmp(attr, original_image->chan[0]->width * original_image->chan[0]->height * sizeof(tmp[0]));
@@ -573,8 +595,8 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
 
         for(int n=0; n < attr->num_scales; n++) {
             const double weight = (original->is_chroma ? attr->color_weight : 1.0) * attr->scale_weights[n];
-            const bool use_ssim_map_out = ssim_map_out && n == 0 && ch == 0;
-            ssim_sum += weight * dssim_compare_channel(original, modified, tmp, use_ssim_map_out ? ssim_map_out : NULL);
+            const bool save_maps = attr->save_maps_scales > n && attr->save_maps_channels > ch;
+            ssim_sum += weight * dssim_compare_channel(original, modified, tmp, save_maps ? &attr->ssim_maps[ch][n] : NULL);
             total += weight;
             original = original->next_half;
             modified = modified->next_half;
@@ -587,7 +609,7 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
     return 1.0 / (ssim_sum / total) - 1.0;
 }
 
-static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp, float **ssim_map_out)
+static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp, dssim_ssim_map *ssim_map_out)
 {
     if (original->width != modified->width || original->height != modified->height) {
         return 0;
@@ -627,7 +649,15 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
     }
 
     if (ssim_map_out) {
-        *ssim_map_out = ssimmap; // reuses mu2 memory
+        if (ssim_map_out->data) {
+            free(ssim_map_out->data);
+        }
+        *ssim_map_out = (dssim_ssim_map){
+            .width = width,
+            .height = height,
+            .ssim = ssim_sum / (width * height),
+            .data = ssimmap, // reuses mu2 memory
+        };
     } else {
         free(modified->mu);
     }

@@ -150,25 +150,30 @@ int main(int argc, char *const argv[])
         free(image2.row_pointers);
         free(image2.rgba_data);
 
-        float *map = NULL;
-        double dssim = dssim_compare(attr, original, modified, map_output_file ? &map : NULL);
+        if (map_output_file) {
+            dssim_set_save_ssim_maps(attr, 1, 1);
+        }
+
+        double dssim = dssim_compare(attr, original, modified);
         dssim_dealloc_image(modified);
 
         printf("%.6f\t%s\n", dssim, file2);
 
-        if (map) {
+        if (map_output_file) {
+            dssim_ssim_map map_meta = dssim_pop_ssim_map(attr, 0, 0);
+            float *map = map_meta.data;
             dssim_rgba *out = (dssim_rgba*)map;
-            for(int i=0; i < image2.width*image2.height; i++) {
+            for(int i=0; i < map_meta.width*map_meta.height; i++) {
                 const float max = 1.0 - map[i];
                 const float maxsq = max * max;
                 out[i] = (dssim_rgba) {
                     .r = to_byte(max * 3.0),
-                    .g = to_byte(maxsq * 3.0),
-                    .b = to_byte((max-0.5) * 2.0f),
+                    .g = to_byte(maxsq * 6.0),
+                    .b = to_byte(max / ((1.0 - map_meta.ssim) * 4.0)),
                     .a = 255,
                 };
             }
-            if (write_image(map_output_file, out, image2.width, image2.height)) {
+            if (write_image(map_output_file, out, map_meta.width, map_meta.height)) {
                 fprintf(stderr, "Can't write %s\n", map_output_file);
                 free(map);
                 return 1;
