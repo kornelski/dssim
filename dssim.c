@@ -104,6 +104,11 @@ void dssim_set_scales(dssim_attr *attr, const int num, const double *weights) {
     }
 }
 
+void dssim_set_color_handling(dssim_attr *attr, int subsample_chroma, double color_weight) {
+    attr->subsample_chroma = !!subsample_chroma;
+    attr->color_weight = color_weight;
+}
+
 static float *dssim_get_tmp(dssim_attr *attr, size_t size) {
     if (attr->tmp) {
         if (size <= attr->tmp_size) {

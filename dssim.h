@@ -43,6 +43,13 @@ void dssim_dealloc_attr(dssim_attr *);
 void dssim_set_scales(dssim_attr *attr, const int num, const double *weights);
 
 /*
+/*
+    If subsampling is enabled, color is tested at half resolution (recommended).
+    Color weight controls how much of chroma channels' SSIM contributes to overall result.
+ */
+void dssim_set_color_handling(dssim_attr *, int subsampling, double color_weight);
+
+/*
   Write one row (from index `y`) of `width` pixels to pre-allocated arrays in `channels`.
   if num_channels == 1 write only to channels[0][0..width-1]
   if num_channels == 3 the write luma to channel 0, and chroma to 1 and 2.
