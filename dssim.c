@@ -43,8 +43,12 @@
 #define MAX_CHANS 3
 
 typedef struct {
-    float l, A, b, a;
-} laba;
+    float l, A, b;
+} dssim_lab;
+
+typedef struct {
+    unsigned char r, g, b, a;
+} dssim_rgb;
 
 typedef struct {
     int width, height;
@@ -56,9 +60,6 @@ struct dssim_image {
     dssim_chan chan[MAX_CHANS];
     int channels;
 };
-
-static void convert_image_row(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data);
-static void copy_image_row(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data);
 
 void dssim_dealloc_image(dssim_image *img)
 {
@@ -80,12 +81,11 @@ static void set_gamma(const double invgamma)
 
 static const double D65x = 0.9505, D65y = 1.0, D65z = 1.089;
 
-inline static laba rgba_to_laba(const dssim_rgba px)
+inline static dssim_lab rgb_to_lab(unsigned char pxr, unsigned char pxg, unsigned char pxb)
 {
-    const double r = gamma_lut[px.r],
-                 g = gamma_lut[px.g],
-                 b = gamma_lut[px.b];
-    const float  a = px.a / 255.f;
+    const double r = gamma_lut[pxr],
+                 g = gamma_lut[pxg],
+                 b = gamma_lut[pxb];
 
     const double fx = (r * 0.4124 + g * 0.3576 + b * 0.1805) / D65x;
     const double fy = (r * 0.2126 + g * 0.7152 + b * 0.0722) / D65y;
@@ -97,11 +97,10 @@ inline static laba rgba_to_laba(const dssim_rgba px)
     const float Y = (fy > epsilon) ? powf(fy, 1.f / 3.f) - 16.f/116.f : k * fy;
     const float Z = (fz > epsilon) ? powf(fz, 1.f / 3.f) - 16.f/116.f : k * fz;
 
-    return (laba) {
+    return (dssim_lab) {
         Y * 1.16f,
         (86.2f/ 220.0f + 500.0f/ 220.0f * (X - Y)), /* 86 is a fudge to make the value positive */
         (107.9f/ 220.0f + 200.0f/ 220.0f * (Y - Z)), /* 107 is a fudge to make the value positive */
-        a
     };
 }
 
@@ -141,7 +140,7 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
             dst[i*height + j] = sum * invdivisor;
 
             sum -= row[MAX(0, i-size)];
-        }
+    }
 
         for(int i=size; i < width-size; i++) {
             sum += row[i+size];
@@ -158,8 +157,8 @@ static void transposing_1d_blur(float *restrict src, float *restrict dst, const 
             dst[i*height + j] = sum * invdivisor;
 
             sum -= row[MAX(0, i-size)];
-        }
     }
+}
 }
 
 static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, const int width, const int height, const int runs, rowcallback *const callback)
@@ -214,9 +213,9 @@ static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, 
                 dstrow[i] = sum * invdivisor;
 
                 sum -= row[MAX(0, i-size)];
-            }
         }
     }
+}
 }
 
 
@@ -237,36 +236,36 @@ static void blur(const float *restrict src, float *restrict tmp, float *restrict
     regular_1d_blur(tmp, dst, tmp, height, width, 2, NULL);
     if (extrablur) {
         regular_1d_blur(tmp, dst, tmp, height, width, 4, NULL);
-    }
+}
     transposing_1d_blur(tmp, dst, height, width);
 }
 
 /*
  * Conversion is not reversible
  */
-inline static laba convert_pixel(dssim_rgba px, int i, int j)
+inline static dssim_lab convert_pixel_rgba(dssim_rgba px, int i, int j)
 {
-    laba f1 = rgba_to_laba(px);
+    dssim_lab f1 = rgb_to_lab(px.r, px.g, px.b);
     assert(f1.l >= 0.f && f1.l <= 1.0f);
     assert(f1.A >= 0.f && f1.A <= 1.0f);
     assert(f1.b >= 0.f && f1.b <= 1.0f);
-    assert(f1.a >= 0.f && f1.a <= 1.0f);
 
     // Compose image on coloured background to better judge dissimilarity with various backgrounds
-    if (f1.a < 1.0) {
-        f1.l *= f1.a; // using premultiplied alpha
-        f1.A *= f1.a;
-        f1.b *= f1.a;
+    if (px.a < 255) {
+        const float a = px.a / 255.f;
+        f1.l *= a; // using premultiplied alpha
+        f1.A *= a;
+        f1.b *= a;
 
         int n = i ^ j;
         if (n & 4) {
-            f1.l += 1.0 - f1.a;
+            f1.l += 1.0 - a;
         }
         if (n & 8) {
-            f1.A += 1.0 - f1.a;
+            f1.A += 1.0 - a;
         }
         if (n & 16) {
-            f1.b += 1.0 - f1.a;
+            f1.b += 1.0 - a;
         }
     }
 
@@ -312,12 +311,12 @@ static void convert_image(dssim_image *img, dssim_row_callback cb, void *callbac
     }
 }
 
-static void convert_image_row(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
+static void convert_image_row_rgba(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
     dssim_rgba *const row = ((dssim_rgba **)user_data)[y];
 
     for (int x = 0; x < width; x++) {
-        laba px = convert_pixel(row[x], x, y);
+        dssim_lab px = convert_pixel_rgba(row[x], x, y);
         channels[0][x] = px.l;
         if (num_channels >= 3) {
             channels[1][x] = px.A;
@@ -326,24 +325,79 @@ static void convert_image_row(float *const restrict channels[], const int num_ch
     }
 }
 
-static void copy_image_row(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
+static void convert_image_row_rgb(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
-    dssim_rgba *const row = ((dssim_rgba **)user_data)[y];
+    dssim_rgb *const row = ((dssim_rgb **)user_data)[y];
 
     for (int x = 0; x < width; x++) {
-        channels[0][x] = gamma_lut[row[x].r];
-        channels[1][x] = gamma_lut[row[x].g];
-        channels[2][x] = gamma_lut[row[x].b];
+        dssim_lab px = rgb_to_lab(row[x].r, row[x].g, row[x].b);
+        channels[0][x] = px.l;
+        if (num_channels >= 3) {
+            channels[1][x] = px.A;
+            channels[2][x] = px.b;
+        }
+    }
+}
+
+static void convert_image_row_gray(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
+{
+    unsigned char *const row = ((unsigned char **)user_data)[y];
+
+    for (int x = 0; x < width; x++) {
+        channels[0][x] = rgb_to_lab(row[x], row[x], row[x]).l;
+    }
+}
+
+static void copy_image_row(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
+{
+    unsigned char *row = ((unsigned char **)user_data)[y];
+    for (int x = 0; x < width; x++) {
+        channels[0][x] = *row++;
+        if (num_channels == 3) {
+            channels[1][x] = *row++;
+            channels[2][x] = *row++;
+        }
     }
 }
 
 /*
  Copies the image.
  */
-dssim_image *dssim_create_image(dssim_rgba *row_pointers[], const int num_channels, const int width, const int height, const double gamma)
+dssim_image *dssim_create_image(unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma)
 {
+    dssim_row_callback *converter;
+    int num_channels;
+    switch(color_type) {
+        case DSSIM_GRAY:
+            converter = convert_image_row_gray;
+            num_channels = 1;
+            break;
+        case DSSIM_RGB:
+            converter = convert_image_row_rgb;
+            num_channels = 3;
+            break;
+        case DSSIM_RGBA:
+            converter = convert_image_row_rgba;
+            num_channels = 3;
+            break;
+        case DSSIM_RGBA_TO_GRAY:
+            converter = convert_image_row_rgba;
+            num_channels = 1;
+            break;
+        case DSSIM_LUMA:
+            converter = copy_image_row;
+            num_channels = 1;
+            break;
+        case DSSIM_LAB:
+            converter = copy_image_row;
+            num_channels = 3;
+            break;
+        default:
+            return NULL;
+    }
+
     set_gamma(gamma);
-    return dssim_create_image_float_callback(num_channels, width, height, convert_image_row, (void*)row_pointers);
+    return dssim_create_image_float_callback(num_channels, width, height, converter, (void*)row_pointers);
 }
 
 dssim_image *dssim_create_image_float_callback(const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data)
@@ -373,19 +427,19 @@ dssim_image *dssim_create_image_float_callback(const int num_channels, const int
     for (int ch = 0; ch < img->channels; ch++) {
         dssim_chan *const chan = &img->chan[ch];
         const bool extrablur = chan->is_chroma;
-        const int width = chan->width;
-        const int height = chan->height;
+    const int width = chan->width;
+    const int height = chan->height;
 
         if (extrablur) {
             blur(chan->img, tmp, chan->img, width, height, NULL, 0);
-        }
+    }
 
-        chan->mu = malloc(width * height * sizeof(chan->mu[0]));
+    chan->mu = malloc(width * height * sizeof(chan->mu[0]));
         blur(chan->img, tmp, chan->mu, width, height, NULL, extrablur);
 
-        chan->img_sq_blur = malloc(width * height * sizeof(chan->img_sq_blur[0]));
+    chan->img_sq_blur = malloc(width * height * sizeof(chan->img_sq_blur[0]));
         blur(chan->img, tmp, chan->img_sq_blur, width, height, square_row, extrablur);
-    }
+}
     free(tmp);
 
     return img;
@@ -430,8 +484,8 @@ double dssim_compare(const dssim_image *restrict original_image, dssim_image *re
         double weight = original->is_chroma ? COLOR_WEIGHT : 1.0;
         const bool use_ssim_map_out = ssim_map_out && ch == 0;
         ssim_sum += weight * dssim_compare_channel(original, modified, tmp, use_ssim_map_out ? ssim_map_out : NULL);
-        total += weight;
-    }
+            total += weight;
+            }
     free(tmp);
 
     return 1.0 / (ssim_sum / total) - 1.0;
