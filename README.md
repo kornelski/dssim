@@ -40,7 +40,7 @@ You'll find [downloads on GitHub releases page](https://github.com/pornel/dssim/
 
 ## Accuracy
 
-Scores for version 0.8 measured against [TID2008][1] database:
+Scores for version 0.9 measured against [TID2008][1] database:
 
 TID2008 Category | Spearman correlation
 --- | ---

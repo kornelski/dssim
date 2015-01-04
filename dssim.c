@@ -23,14 +23,6 @@
 #include <assert.h>
 #include "dssim.h"
 
-/** Bigger number puts more emphasis on color channels. */
-#define COLOR_WEIGHT 0.95
-
-#define IW_SCALES 3
-
-/** Smaller values are more sensitive to single-pixel differences. Increase for high-DPI images. */
-#define DETAIL_SIZE 1
-
 #ifndef MIN
 #define MIN(a,b) ((a)<=(b)?(a):(b))
 #endif
@@ -39,6 +31,7 @@
 #endif
 
 #define MAX_CHANS 3
+#define MAX_SCALES 5
 
 typedef struct {
     float l, A, b;
@@ -60,6 +53,34 @@ struct dssim_image {
     dssim_chan *chan[MAX_CHANS];
     int channels;
 };
+
+struct dssim_attr {
+    double color_weight;
+    int num_scales;
+    int detail_size;
+    bool subsample_chroma;
+    double scale_weights[MAX_SCALES];
+};
+
+dssim_attr *dssim_create_attr(void) {
+    dssim_attr *attr = malloc(sizeof(attr[0]));
+    *attr = (dssim_attr){
+        /* Bigger number puts more emphasis on color channels. */
+        .color_weight = 0.95,
+        /* Further scales test larger changes */
+        .num_scales = 4,
+        /* Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm */
+        .scale_weights = {0.0448, 0.2856, 0.3001, 0.2363, 0.1333},
+        /* Smaller values are more sensitive to single-pixel differences. Increase for high-DPI images? */
+        .detail_size = 1,
+        .subsample_chroma = true,
+    };
+    return attr;
+}
+
+void dssim_dealloc_attr(dssim_attr *attr) {
+    free(attr);
+}
 
 static void dealloc_chan(dssim_chan *chan) {
     free(chan->img);
@@ -259,7 +280,7 @@ static void convert_image(dssim_image *img, dssim_row_callback cb, void *callbac
     float *row_tmp[img->channels];
     float *row_tmp2[img->channels];
 
-    if (subsample_chroma) {
+    if (subsample_chroma && img->channels > 1) {
         for(int ch = 1; ch < img->channels; ch++) {
             row_tmp[ch] = calloc(width*2, sizeof(row_tmp[0])); // for the callback all channels have the same width!
             row_tmp2[ch] = row_tmp[ch] + width;
@@ -360,7 +381,7 @@ static void copy_image_row(float *const restrict channels[], const int num_chann
 /*
  Copies the image.
  */
-dssim_image *dssim_create_image(unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma)
+dssim_image *dssim_create_image(dssim_attr *attr, unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma)
 {
     dssim_row_callback *converter;
     int num_channels;
@@ -399,7 +420,7 @@ dssim_image *dssim_create_image(unsigned char *row_pointers[], dssim_colortype c
             return NULL;
     }
 
-    return dssim_create_image_float_callback(num_channels, width, height, converter, (void*)&im);
+    return dssim_create_image_float_callback(attr, num_channels, width, height, converter, (void*)&im);
 }
 
 dssim_chan *create_chan(const int width, const int height, const int blur_size, const bool is_chroma) {
@@ -416,13 +437,13 @@ dssim_chan *create_chan(const int width, const int height, const int blur_size, 
 
 static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int depth);
 
-dssim_image *dssim_create_image_float_callback(const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data)
+dssim_image *dssim_create_image_float_callback(dssim_attr *attr, const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data)
 {
     if (num_channels != 1 && num_channels != MAX_CHANS) {
         return NULL;
     }
 
-    const bool subsample_chroma = num_channels > 1;
+    const bool subsample_chroma = attr->subsample_chroma;
 
     dssim_image *img = malloc(sizeof(img[0]));
     *img = (dssim_image){
@@ -434,7 +455,7 @@ dssim_image *dssim_create_image_float_callback(const int num_channels, const int
         img->chan[ch] = create_chan(
             subsample_chroma && is_chroma ? width/2 : width,
             subsample_chroma && is_chroma ? height/2 : height,
-            (is_chroma ? 2 : 1) * (DETAIL_SIZE + 1),
+            (is_chroma ? 2 : 1) * (attr->detail_size + 1),
             is_chroma);
     }
 
@@ -442,23 +463,23 @@ dssim_image *dssim_create_image_float_callback(const int num_channels, const int
 
     float *tmp = malloc(width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < img->channels; ch++) {
-        dssim_preprocess_channel(img->chan[ch], tmp, IW_SCALES);
+        dssim_preprocess_channel(img->chan[ch], tmp, attr->num_scales);
     }
     free(tmp);
 
     return img;
 }
 
-static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int depth)
+static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int num_scales)
 {
     const int width = chan->width;
     const int height = chan->height;
 
-    if (depth) {
+    if (num_scales > 1) {
         dssim_chan *new_chan = create_chan(chan->width/2, chan->height/2, chan->blur_size, chan->is_chroma);
         chan->next_half = new_chan;
         subsampled_copy(new_chan, 0, new_chan->height, chan->img, chan->width);
-        dssim_preprocess_channel(chan->next_half, tmp, depth-1);
+        dssim_preprocess_channel(chan->next_half, tmp, num_scales-1);
     }
 
     if (chan->is_chroma) {
@@ -498,13 +519,10 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
  @param ssim_map_out Saves dissimilarity visualisation (pass NULL if not needed)
  @return DSSIM value or NaN on error.
  */
-double dssim_compare(const dssim_image *restrict original_image, dssim_image *restrict modified_image, float **ssim_map_out)
+double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_image, dssim_image *restrict modified_image, float **ssim_map_out)
 {
     const int channels = MIN(original_image->channels, modified_image->channels);
     float *tmp = malloc(original_image->chan[0]->width * original_image->chan[0]->height * sizeof(tmp[0]));
-
-    // Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm
-    const double iwssim_weights[] = {0.0448, 0.2856, 0.3001, 0.2363, 0.1333};
 
     double ssim_sum = 0;
     double total = 0;
@@ -513,8 +531,8 @@ double dssim_compare(const dssim_image *restrict original_image, dssim_image *re
         const dssim_chan *original = original_image->chan[ch];
         dssim_chan *modified = modified_image->chan[ch];
 
-        for(int n=0; n < sizeof(iwssim_weights)/sizeof(iwssim_weights[0]); n++) {
-            const double weight = (original->is_chroma ? COLOR_WEIGHT : 1.0) * iwssim_weights[n];
+        for(int n=0; n < attr->num_scales; n++) {
+            const double weight = (original->is_chroma ? attr->color_weight : 1.0) * attr->scale_weights[n];
             const bool use_ssim_map_out = ssim_map_out && n == 0 && ch == 0;
             ssim_sum += weight * dssim_compare_channel(original, modified, tmp, use_ssim_map_out ? ssim_map_out : NULL);
             total += weight;

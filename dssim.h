@@ -18,6 +18,7 @@
  */
 
 typedef struct dssim_image dssim_image;
+typedef struct dssim_attr dssim_attr;
 
 typedef struct {
     unsigned char r, g, b, a;
@@ -32,6 +33,9 @@ typedef enum dssim_colortype {
     DSSIM_RGBA_TO_GRAY = 3 | 32, // 4 bytes per pixel, but only luma is used
 } dssim_colortype;
 
+dssim_attr *dssim_create_attr(void);
+void dssim_dealloc_attr(dssim_attr *);
+
 /*
   Write one row (from index `y`) of `width` pixels to pre-allocated arrays in `channels`.
   if num_channels == 1 write only to channels[0][0..width-1]
@@ -39,8 +43,8 @@ typedef enum dssim_colortype {
  */
 typedef void dssim_row_callback(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data);
 
-dssim_image *dssim_create_image(unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma);
-dssim_image *dssim_create_image_float_callback(const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
+dssim_image *dssim_create_image(dssim_attr *,unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma);
+dssim_image *dssim_create_image_float_callback(dssim_attr *, const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
 void dssim_dealloc_image(dssim_image *);
 
-double dssim_compare(const dssim_image *restrict original, dssim_image *restrict modified, float **ssim_map_out);
+double dssim_compare(dssim_attr *, const dssim_image *restrict original, dssim_image *restrict modified, float **ssim_map_out);
