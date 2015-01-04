@@ -239,28 +239,41 @@ inline static dssim_lab convert_pixel_rgba(const double gamma_lut[static 256], d
     return f1;
 }
 
+/* copy number of rows from a 2x larger image */
+static void subsampled_copy(dssim_chan *new_chan, const int dest_y_offset, const int rows, const float *src_img, const int src_width)
+{
+    for(int y = 0; y < rows; y++) {
+        for(int x = 0; x < new_chan->width; x++) {
+            new_chan->img[x + (y + dest_y_offset) * new_chan->width] = 0.25 * (
+                src_img[x*2 + y*2 * src_width] + src_img[x*2+1 + y*2 * src_width] +
+                src_img[x*2 + (y*2+1) * src_width] + src_img[x*2+1 + (y*2+1) * src_width]
+            );
+        }
+    }
+}
+
 static void convert_image(dssim_image *img, dssim_row_callback cb, void *callback_user_data, const bool subsample_chroma)
 {
     const int width = img->chan[0]->width;
     const int height = img->chan[0]->height;
     float *row_tmp[img->channels];
+    float *row_tmp2[img->channels];
 
     if (subsample_chroma) {
         for(int ch = 1; ch < img->channels; ch++) {
-            row_tmp[ch] = calloc(width, sizeof(row_tmp[0])); // for the callback all channels have the same width!
+            row_tmp[ch] = calloc(width*2, sizeof(row_tmp[0])); // for the callback all channels have the same width!
+            row_tmp2[ch] = row_tmp[ch] + width;
         }
 
         for(int y = 0; y < height; y++) {
-        row_tmp[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
+            row_tmp[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
+            row_tmp2[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
 
-        cb(row_tmp, img->channels, y, width, callback_user_data);
+            cb(y&1 ? row_tmp2 : row_tmp, img->channels, y, width, callback_user_data);
 
-        for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
-            const int halfy = y * img->chan[ch]->height / height;
-            float *dstrow = &img->chan[ch]->img[halfy * img->chan[ch]->width];
-
-                for(int x = 0; x < width; x++) {
-                    dstrow[x/2] += row_tmp[ch][x] * 0.25f;
+            if (y & 1) {
+                for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
+                    subsampled_copy(img->chan[ch], y/2, 1, row_tmp[ch], width);
                 }
             }
         }
@@ -396,8 +409,7 @@ dssim_chan *create_chan(const int width, const int height, const int blur_size, 
         .height = height,
         .blur_size = blur_size,
         .is_chroma = is_chroma,
-        // subsampling in convert_image relies on zeroed bitmaps
-        .img = calloc(width * height, sizeof(chan->img[0])),
+        .img = malloc(width * height * sizeof(chan->img[0])),
     };
     return chan;
 }
@@ -445,16 +457,7 @@ static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int depth)
     if (depth) {
         dssim_chan *new_chan = create_chan(chan->width/2, chan->height/2, chan->blur_size, chan->is_chroma);
         chan->next_half = new_chan;
-
-        for(int y = 0; y < new_chan->height; y++) {
-            for(int x = 0; x < new_chan->width; x++) {
-                new_chan->img[x + y * new_chan->width] = 0.25 * (
-                    chan->img[x*2 + y*2 * chan->width] + chan->img[x*2+1 + y*2 * chan->width] +
-                    chan->img[x*2 + (y*2+1) * chan->width] + chan->img[x*2+1 + (y*2+1) * chan->width]
-                );
-            }
-        }
-
+        subsampled_copy(new_chan, 0, new_chan->height, chan->img, chan->width);
         dssim_preprocess_channel(chan->next_half, tmp, depth-1);
     }
 
