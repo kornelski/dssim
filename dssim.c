@@ -55,11 +55,13 @@ struct dssim_image {
 };
 
 struct dssim_attr {
+    float *tmp;
+    size_t tmp_size;
     double color_weight;
+    double scale_weights[MAX_SCALES];
     int num_scales;
     int detail_size;
     bool subsample_chroma;
-    double scale_weights[MAX_SCALES];
 };
 
 dssim_attr *dssim_create_attr(void) {
@@ -79,7 +81,20 @@ dssim_attr *dssim_create_attr(void) {
 }
 
 void dssim_dealloc_attr(dssim_attr *attr) {
+    free(attr->tmp);
     free(attr);
+}
+
+static float *dssim_get_tmp(dssim_attr *attr, size_t size) {
+    if (attr->tmp) {
+        if (size <= attr->tmp_size) {
+            return attr->tmp;
+        }
+        free(attr->tmp);
+    }
+    attr->tmp = malloc(size);
+    attr->tmp_size = size;
+    return attr->tmp;
 }
 
 static void dealloc_chan(dssim_chan *chan) {
@@ -293,7 +308,7 @@ static void convert_image(dssim_image *img, dssim_row_callback cb, void *callbac
             cb(y&1 ? row_tmp2 : row_tmp, img->channels, y, width, callback_user_data);
 
             if (y & 1) {
-                for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
+        for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
                     subsampled_copy(img->chan[ch], y/2, 1, row_tmp[ch], width);
                 }
             }
@@ -461,11 +476,10 @@ dssim_image *dssim_create_image_float_callback(dssim_attr *attr, const int num_c
 
     convert_image(img, cb, callback_user_data, subsample_chroma);
 
-    float *tmp = malloc(width * height * sizeof(tmp[0]));
+    float *tmp = dssim_get_tmp(attr, width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < img->channels; ch++) {
         dssim_preprocess_channel(img->chan[ch], tmp, attr->num_scales);
     }
-    free(tmp);
 
     return img;
 }
@@ -522,7 +536,7 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
 double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_image, dssim_image *restrict modified_image, float **ssim_map_out)
 {
     const int channels = MIN(original_image->channels, modified_image->channels);
-    float *tmp = malloc(original_image->chan[0]->width * original_image->chan[0]->height * sizeof(tmp[0]));
+    float *tmp = dssim_get_tmp(attr, original_image->chan[0]->width * original_image->chan[0]->height * sizeof(tmp[0]));
 
     double ssim_sum = 0;
     double total = 0;
@@ -543,7 +557,6 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
             }
         }
     }
-    free(tmp);
 
     return 1.0 / (ssim_sum / total) - 1.0;
 }
