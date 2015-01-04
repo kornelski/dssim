@@ -37,6 +37,12 @@ dssim_attr *dssim_create_attr(void);
 void dssim_dealloc_attr(dssim_attr *);
 
 /*
+    Number of scales for multiscale (1 = regular SSIM). Optional weights array contains weight of each scale.
+    Set before creating any images.
+*/
+void dssim_set_scales(dssim_attr *attr, const int num, const double *weights);
+
+/*
   Write one row (from index `y`) of `width` pixels to pre-allocated arrays in `channels`.
   if num_channels == 1 write only to channels[0][0..width-1]
   if num_channels == 3 the write luma to channel 0, and chroma to 1 and 2.

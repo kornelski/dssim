@@ -64,25 +64,44 @@ struct dssim_attr {
     bool subsample_chroma;
 };
 
+/* Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm */
+static const double default_weights[] = {0.0448, 0.2856, 0.3001, 0.2363, 0.1333};
+
 dssim_attr *dssim_create_attr(void) {
     dssim_attr *attr = malloc(sizeof(attr[0]));
     *attr = (dssim_attr){
         /* Bigger number puts more emphasis on color channels. */
         .color_weight = 0.95,
-        /* Further scales test larger changes */
-        .num_scales = 4,
-        /* Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm */
-        .scale_weights = {0.0448, 0.2856, 0.3001, 0.2363, 0.1333},
         /* Smaller values are more sensitive to single-pixel differences. Increase for high-DPI images? */
         .detail_size = 1,
         .subsample_chroma = true,
     };
+
+    /* Further scales test larger changes */
+    dssim_set_scales(attr, 4, NULL);
     return attr;
 }
 
 void dssim_dealloc_attr(dssim_attr *attr) {
     free(attr->tmp);
     free(attr);
+}
+
+void dssim_set_scales(dssim_attr *attr, const int num, const double *weights) {
+    attr->num_scales = MIN(MAX_SCALES, num);
+    if (!weights) {
+        weights = default_weights;
+    }
+
+    double sum = 0;
+    for(int i=0; i < attr->num_scales; i++) {
+        attr->scale_weights[i] = weights[i];
+        sum += weights[i];
+    }
+    // Weights must add up to 1
+    for(int i=0; i < attr->num_scales; i++) {
+        attr->scale_weights[i] /= sum;
+    }
 }
 
 static float *dssim_get_tmp(dssim_attr *attr, size_t size) {
