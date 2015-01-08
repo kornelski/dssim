@@ -311,9 +311,14 @@ static void convert_image(dssim_image *img, dssim_row_callback cb, void *callbac
     }
 }
 
+typedef struct {
+    unsigned char **row_pointers;
+} image_data;
+
 static void convert_image_row_rgba(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
-    dssim_rgba *const row = ((dssim_rgba **)user_data)[y];
+    image_data *im = (image_data*)user_data;
+    dssim_rgba *const row = (dssim_rgba *)im->row_pointers[y];
 
     for (int x = 0; x < width; x++) {
         dssim_lab px = convert_pixel_rgba(row[x], x, y);
@@ -327,7 +332,8 @@ static void convert_image_row_rgba(float *const restrict channels[], const int n
 
 static void convert_image_row_rgb(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
-    dssim_rgb *const row = ((dssim_rgb **)user_data)[y];
+    image_data *im = (image_data*)user_data;
+    dssim_rgb *const row = (dssim_rgb*)im->row_pointers[y];
 
     for (int x = 0; x < width; x++) {
         dssim_lab px = rgb_to_lab(row[x].r, row[x].g, row[x].b);
@@ -341,7 +347,8 @@ static void convert_image_row_rgb(float *const restrict channels[], const int nu
 
 static void convert_image_row_gray(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
-    unsigned char *const row = ((unsigned char **)user_data)[y];
+    image_data *im = (image_data*)user_data;
+    unsigned char *const row = im->row_pointers[y];
 
     for (int x = 0; x < width; x++) {
         channels[0][x] = rgb_to_lab(row[x], row[x], row[x]).l;
@@ -367,6 +374,9 @@ dssim_image *dssim_create_image(unsigned char *row_pointers[], dssim_colortype c
 {
     dssim_row_callback *converter;
     int num_channels;
+    image_data im;
+    im.row_pointers = row_pointers;
+
     switch(color_type) {
         case DSSIM_GRAY:
             converter = convert_image_row_gray;
@@ -397,7 +407,7 @@ dssim_image *dssim_create_image(unsigned char *row_pointers[], dssim_colortype c
     }
 
     set_gamma(gamma);
-    return dssim_create_image_float_callback(num_channels, width, height, converter, (void*)row_pointers);
+    return dssim_create_image_float_callback(num_channels, width, height, converter, (void*)&im);
 }
 
 dssim_image *dssim_create_image_float_callback(const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data)
