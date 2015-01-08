@@ -87,9 +87,9 @@ dssim_attr *dssim_create_attr(void) {
 }
 
 void dssim_dealloc_attr(dssim_attr *attr) {
-    for(int i = 0; i < MAX_SCALES; i++) {
-        for(int k = 0; k < MAX_CHANS; k++) {
-            free(attr->ssim_maps[k][i].data);
+    for(int n = 0; n < MAX_SCALES; n++) {
+        for(int ch = 0; ch < MAX_CHANS; ch++) {
+            free(attr->ssim_maps[n][ch].data);
         }
     }
     free(attr->tmp);
@@ -124,8 +124,7 @@ void dssim_set_save_ssim_maps(dssim_attr *attr, unsigned int scales, unsigned in
 }
 
 dssim_ssim_map dssim_pop_ssim_map(dssim_attr *attr, unsigned int scale_index, unsigned int channel_index) {
-    if (scale_index >= attr->save_maps_scales || scale_index >= attr->num_scales ||
-        channel_index >= attr->save_maps_channels || channel_index >= MAX_CHANS) {
+    if (scale_index >= MAX_SCALES || channel_index >= MAX_CHANS) {
         return (dssim_ssim_map){};
     }
     const dssim_ssim_map t = attr->ssim_maps[scale_index][channel_index];
@@ -572,7 +571,11 @@ static float *get_img1_img2_blur(const dssim_chan *restrict original, dssim_chan
     return img2;
 }
 
-static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp, dssim_ssim_map *ssim_map_out);
+static double to_dssim(double ssim) {
+    return 1.0 / (ssim) - 1.0;
+}
+
+static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp, dssim_ssim_map *ssim_map_out, bool save_ssim_map);
 
 /**
  Algorithm based on Rabah Mehdi's C++ implementation
@@ -595,8 +598,13 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
 
         for(int n=0; n < attr->num_scales; n++) {
             const double weight = (original->is_chroma ? attr->color_weight : 1.0) * attr->scale_weights[n];
+
             const bool save_maps = attr->save_maps_scales > n && attr->save_maps_channels > ch;
-            ssim_sum += weight * dssim_compare_channel(original, modified, tmp, save_maps ? &attr->ssim_maps[ch][n] : NULL);
+            if (attr->ssim_maps[n][ch].data) {
+                free(attr->ssim_maps[n][ch].data); // prevent a leak, since ssim_map will always be overwritten
+                attr->ssim_maps[n][ch].data = NULL;
+            }
+            ssim_sum += weight * dssim_compare_channel(original, modified, tmp, &attr->ssim_maps[n][ch], save_maps);
             total += weight;
             original = original->next_half;
             modified = modified->next_half;
@@ -606,10 +614,10 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
         }
     }
 
-    return 1.0 / (ssim_sum / total) - 1.0;
+    return to_dssim(ssim_sum / total);
 }
 
-static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp, dssim_ssim_map *ssim_map_out)
+static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp, dssim_ssim_map *ssim_map_out, bool save_ssim_map)
 {
     if (original->width != modified->width || original->height != modified->height) {
         return 0;
@@ -627,7 +635,7 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
     double ssim_sum = 0;
 
-    float *const ssimmap = ssim_map_out ? mu2 : NULL;
+    float *const ssimmap = save_ssim_map ? mu2 : NULL;
 
     for (int offset = 0; offset < width * height; offset++) {
         const double mu1_sq = mu1[offset]*mu1[offset];
@@ -648,19 +656,16 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
         }
     }
 
-    if (ssim_map_out) {
-        if (ssim_map_out->data) {
-            free(ssim_map_out->data);
-        }
-        *ssim_map_out = (dssim_ssim_map){
-            .width = width,
-            .height = height,
-            .ssim = ssim_sum / (width * height),
-            .data = ssimmap, // reuses mu2 memory
-        };
-    } else {
+    if (!save_ssim_map) { // reuses mu2 memory
         free(modified->mu);
     }
+    *ssim_map_out = (dssim_ssim_map){
+        .width = width,
+        .height = height,
+        .ssim = to_dssim(ssim_sum / (width * height)),
+        .data = ssimmap,
+    };
+
     modified->mu = NULL;
 
     free(modified->img_sq_blur); modified->img_sq_blur = NULL;
