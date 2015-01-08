@@ -71,8 +71,7 @@ void dssim_dealloc_image(dssim_image *img)
     free(img);
 }
 
-static double gamma_lut[256];
-static void set_gamma(const double invgamma)
+static void set_gamma(double gamma_lut[static 256], const double invgamma)
 {
     for (int i = 0; i < 256; i++) {
         gamma_lut[i] = pow(i / 255.0, 1.0 / invgamma);
@@ -81,7 +80,7 @@ static void set_gamma(const double invgamma)
 
 static const double D65x = 0.9505, D65y = 1.0, D65z = 1.089;
 
-inline static dssim_lab rgb_to_lab(unsigned char pxr, unsigned char pxg, unsigned char pxb)
+inline static dssim_lab rgb_to_lab(const double gamma_lut[static 256], const unsigned char pxr, const unsigned char pxg, const unsigned char pxb)
 {
     const double r = gamma_lut[pxr],
                  g = gamma_lut[pxg],
@@ -243,9 +242,9 @@ static void blur(const float *restrict src, float *restrict tmp, float *restrict
 /*
  * Conversion is not reversible
  */
-inline static dssim_lab convert_pixel_rgba(dssim_rgba px, int i, int j)
+inline static dssim_lab convert_pixel_rgba(const double gamma_lut[static 256], dssim_rgba px, int i, int j)
 {
-    dssim_lab f1 = rgb_to_lab(px.r, px.g, px.b);
+    dssim_lab f1 = rgb_to_lab(gamma_lut, px.r, px.g, px.b);
     assert(f1.l >= 0.f && f1.l <= 1.0f);
     assert(f1.A >= 0.f && f1.A <= 1.0f);
     assert(f1.b >= 0.f && f1.b <= 1.0f);
@@ -312,6 +311,7 @@ static void convert_image(dssim_image *img, dssim_row_callback cb, void *callbac
 }
 
 typedef struct {
+    double gamma_lut[256];
     unsigned char **row_pointers;
 } image_data;
 
@@ -319,9 +319,10 @@ static void convert_image_row_rgba(float *const restrict channels[], const int n
 {
     image_data *im = (image_data*)user_data;
     dssim_rgba *const row = (dssim_rgba *)im->row_pointers[y];
+    const double *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
-        dssim_lab px = convert_pixel_rgba(row[x], x, y);
+        dssim_lab px = convert_pixel_rgba(gamma_lut, row[x], x, y);
         channels[0][x] = px.l;
         if (num_channels >= 3) {
             channels[1][x] = px.A;
@@ -334,9 +335,10 @@ static void convert_image_row_rgb(float *const restrict channels[], const int nu
 {
     image_data *im = (image_data*)user_data;
     dssim_rgb *const row = (dssim_rgb*)im->row_pointers[y];
+    const double *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
-        dssim_lab px = rgb_to_lab(row[x].r, row[x].g, row[x].b);
+        dssim_lab px = rgb_to_lab(gamma_lut, row[x].r, row[x].g, row[x].b);
         channels[0][x] = px.l;
         if (num_channels >= 3) {
             channels[1][x] = px.A;
@@ -345,13 +347,20 @@ static void convert_image_row_rgb(float *const restrict channels[], const int nu
     }
 }
 
+static void convert_image_row_gray_init(double gamma_lut[static 256]) {
+    for(int i=0; i < 256; i++) {
+        gamma_lut[i] = rgb_to_lab(gamma_lut, i, i, i).l;
+    }
+}
+
 static void convert_image_row_gray(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
     image_data *im = (image_data*)user_data;
     unsigned char *const row = im->row_pointers[y];
+    const double *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
-        channels[0][x] = rgb_to_lab(row[x], row[x], row[x]).l;
+        channels[0][x] = gamma_lut[row[x]];
     }
 }
 
@@ -374,11 +383,14 @@ dssim_image *dssim_create_image(unsigned char *row_pointers[], dssim_colortype c
 {
     dssim_row_callback *converter;
     int num_channels;
+
     image_data im;
     im.row_pointers = row_pointers;
+    set_gamma(im.gamma_lut, gamma);
 
     switch(color_type) {
         case DSSIM_GRAY:
+            convert_image_row_gray_init(im.gamma_lut);
             converter = convert_image_row_gray;
             num_channels = 1;
             break;
@@ -406,7 +418,6 @@ dssim_image *dssim_create_image(unsigned char *row_pointers[], dssim_colortype c
             return NULL;
     }
 
-    set_gamma(gamma);
     return dssim_create_image_float_callback(num_channels, width, height, converter, (void*)&im);
 }
 
