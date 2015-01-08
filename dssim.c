@@ -87,9 +87,9 @@ inline static laba rgba_to_laba(const dssim_rgba px)
                  b = gamma_lut[px.b];
     const float  a = px.a / 255.f;
 
-    double fx = (r * 0.4124 + g * 0.3576 + b * 0.1805) / D65x;
-    double fy = (r * 0.2126 + g * 0.7152 + b * 0.0722) / D65y;
-    double fz = (r * 0.0193 + g * 0.1192 + b * 0.9505) / D65z;
+    const double fx = (r * 0.4124 + g * 0.3576 + b * 0.1805) / D65x;
+    const double fy = (r * 0.2126 + g * 0.7152 + b * 0.0722) / D65y;
+    const double fz = (r * 0.0193 + g * 0.1192 + b * 0.9505) / D65z;
 
     const double epsilon = 216.0 / 24389.0;
     const double k = (24389.0 / 27.0) / 116.f; // http://www.brucelindbloom.com/LContinuity.html
