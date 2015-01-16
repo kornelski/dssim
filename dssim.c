@@ -23,6 +23,10 @@
 #include <assert.h>
 #include "dssim.h"
 
+#ifdef USE_COCOA
+#import <Accelerate/Accelerate.h>
+#endif
+
 #ifndef MIN
 #define MIN(a,b) ((a)<=(b)?(a):(b))
 #endif
@@ -194,15 +198,6 @@ inline static dssim_lab rgb_to_lab(const double gamma_lut[static 256], const uns
     };
 }
 
-typedef void rowcallback(const float *restrict src, float *restrict dst, const int width);
-
-static void square_row(const float *restrict src, float *restrict dst, const int width)
-{
-    for (int i = 0; i < width; i++) {
-        dst[i] = src[i] * src[i];
-    }
-}
-
 /*
  * Flips x/y (like 90deg rotation)
  */
@@ -230,7 +225,7 @@ static void transpose(float *restrict src, float *restrict dst, const int width,
     }
 }
 
-static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, const int width, const int height, const int runs, rowcallback *const callback)
+static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, const int width, const int height, const int runs)
 {
     // tmp1 is expected to hold at least two lines
     float *restrict tmp2 = tmp1 + width;
@@ -241,11 +236,6 @@ static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, 
             // except first and last run which use src->tmp and tmp->dst
             const float *restrict row = (run == 0   ? src + j*width : (run & 1) ? tmp1 : tmp2);
             float *restrict dstrow = (run == runs-1 ? dst + j*width : (run & 1) ? tmp2 : tmp1);
-
-            if (!run && callback) {
-                callback(row, tmp2, width); // on the first run tmp2 is not used
-                row = tmp2;
-            }
 
             int i=0;
             for(; i < 4; i++) {
@@ -276,18 +266,48 @@ static void regular_1d_blur(const float *src, float *restrict tmp1, float *dst, 
 
 
 /*
- * Filters image with callback and blurs (approximate of gaussian)
+ * blurs (approximate of gaussian)
  */
 static void blur(const float *restrict src, float *restrict tmp, float *restrict dst,
-                 const int width, const int height, int size, rowcallback *const callback)
+                 const int width, const int height, int size)
 {
-    regular_1d_blur(src, tmp, dst, width, height, size, callback);
+#ifdef USE_COCOA
+    vImage_Buffer srcbuf = {
+        .width = width,
+        .height = height,
+        .rowBytes = width * sizeof(float),
+        .data = (void*)src,
+    };
+    vImage_Buffer dstbuf = {
+        .width = width,
+        .height = height,
+        .rowBytes = width * sizeof(float),
+        .data = dst,
+    };
+    vImage_Buffer tmpbuf = {
+        .width = width,
+        .height = height,
+        .rowBytes = width * sizeof(float),
+        .data = tmp,
+    };
+
+    float kernel[9] = {
+       1/16.f, 1/8.f, 1/16.f,
+       1/8.f,  1/4.f, 1/8.f,
+       1/16.f, 1/8.f, 1/16.f,
+    };
+
+    vImageConvolve_PlanarF(&srcbuf, &tmpbuf, NULL, 0, 0, kernel, 3, 3, 0, kvImageEdgeExtend);
+    vImageConvolve_PlanarF(&tmpbuf, &dstbuf, NULL, 0, 0, kernel, 3, 3, 0, kvImageEdgeExtend);
+#else
+    regular_1d_blur(src, tmp, dst, width, height, size);
     transpose(dst, tmp, width, height);
 
     // After transposing buffer is rotated, so height and width are swapped
     // And reuse of buffers made tmp hold the image, and dst used as temporary until the last transpose
-    regular_1d_blur(tmp, dst, tmp, height, width, size, NULL);
+    regular_1d_blur(tmp, dst, tmp, height, width, size);
     transpose(tmp, dst, height, width);
+#endif
 }
 
 /*
@@ -544,14 +564,17 @@ static void dssim_preprocess_channel(dssim_chan *chan, float *tmp, int num_scale
     }
 
     if (chan->is_chroma) {
-        blur(chan->img, tmp, chan->img, width, height, 2, NULL);
+        blur(chan->img, tmp, chan->img, width, height, 2);
     }
 
     chan->mu = malloc(width * height * sizeof(chan->mu[0]));
-    blur(chan->img, tmp, chan->mu, width, height, chan->blur_size, NULL);
+    blur(chan->img, tmp, chan->mu, width, height, chan->blur_size);
 
     chan->img_sq_blur = malloc(width * height * sizeof(chan->img_sq_blur[0]));
-    blur(chan->img, tmp, chan->img_sq_blur, width, height, chan->blur_size, square_row);
+    for(int i=0; i < width*height; i++) {
+        chan->img_sq_blur[i] = chan->img[i] * chan->img[i];
+    }
+    blur(chan->img_sq_blur, tmp, chan->img_sq_blur, width, height, chan->blur_size);
 }
 
 static float *get_img1_img2_blur(const dssim_chan *restrict original, dssim_chan *restrict modified, float *restrict tmp)
@@ -566,7 +589,7 @@ static float *get_img1_img2_blur(const dssim_chan *restrict original, dssim_chan
         img2[j] *= img1[j];
     }
 
-    blur(img2, tmp, img2, width, height, original->blur_size, NULL);
+    blur(img2, tmp, img2, width, height, original->blur_size);
 
     return img2;
 }
