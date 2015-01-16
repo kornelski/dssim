@@ -494,7 +494,7 @@ dssim_image *dssim_create_image_float_callback(dssim_attr *attr, const int num_c
         img->chan[ch] = create_chan(
             subsample_chroma && is_chroma ? width/2 : width,
             subsample_chroma && is_chroma ? height/2 : height,
-            (is_chroma ? 2 : 1) * (attr->detail_size + 1),
+            (attr->detail_size + 1),
             is_chroma);
     }
 

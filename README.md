@@ -46,11 +46,11 @@ TID2008 Category | Spearman correlation
 --- | ---
 Noise   | -0.866
 Noise2  | -0.882
-Safe    | -0.885
-Hard    | -0.899
+Safe    | -0.884
+Hard    | -0.903
 Simple  | -0.920
-Exotic  | -0.455
-Exotic2 | -0.617
+Exotic  | -0.441
+Exotic2 | -0.619
 Full    | -0.804
 
 [1]: http://www.computervisiononline.com/dataset/tid2008-tampere-image-database-2008
