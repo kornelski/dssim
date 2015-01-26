@@ -41,13 +41,15 @@ typedef struct {
     unsigned char r, g, b, a;
 } dssim_rgb;
 
-typedef struct {
+struct dssim_chan;
+typedef struct dssim_chan dssim_chan;
+struct dssim_chan {
     int width, height;
     float *img, *mu, *img_sq_blur;
-    struct dssim_chan *next_half;
+    dssim_chan *next_half;
     int blur_size;
     bool is_chroma;
-} dssim_chan;
+};
 
 struct dssim_image {
     dssim_chan *chan[MAX_CHANS];
