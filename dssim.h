@@ -73,7 +73,7 @@ void dssim_set_color_handling(dssim_attr *, int subsampling, double color_weight
  */
 typedef void dssim_row_callback(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data);
 
-dssim_image *dssim_create_image(dssim_attr *,unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma);
+dssim_image *dssim_create_image(dssim_attr *,const unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma);
 dssim_image *dssim_create_image_float_callback(dssim_attr *, const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
 void dssim_dealloc_image(dssim_image *);
 
