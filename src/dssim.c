@@ -396,13 +396,13 @@ static void convert_image(dssim_image *img, dssim_row_callback cb, void *callbac
 
 typedef struct {
     double gamma_lut[256];
-    unsigned char **row_pointers;
+    const unsigned char **row_pointers;
 } image_data;
 
 static void convert_image_row_rgba(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
     image_data *im = (image_data*)user_data;
-    dssim_rgba *const row = (dssim_rgba *)im->row_pointers[y];
+    const dssim_rgba *const row = (dssim_rgba *)im->row_pointers[y];
     const double *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
@@ -418,7 +418,7 @@ static void convert_image_row_rgba(float *const restrict channels[], const int n
 static void convert_image_row_rgb(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
     image_data *im = (image_data*)user_data;
-    dssim_rgb *const row = (dssim_rgb*)im->row_pointers[y];
+    const dssim_rgb *const row = (dssim_rgb *)im->row_pointers[y];
     const double *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
@@ -440,7 +440,7 @@ static void convert_image_row_gray_init(double gamma_lut[static 256]) {
 static void convert_image_row_gray(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
     image_data *im = (image_data*)user_data;
-    unsigned char *const row = im->row_pointers[y];
+    const unsigned char *row = im->row_pointers[y];
     const double *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
@@ -463,13 +463,14 @@ static void copy_image_row(float *const restrict channels[], const int num_chann
 /*
  Copies the image.
  */
-dssim_image *dssim_create_image(dssim_attr *attr, unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma)
+dssim_image *dssim_create_image(dssim_attr *attr, const unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma)
 {
     dssim_row_callback *converter;
     int num_channels;
 
-    image_data im;
-    im.row_pointers = row_pointers;
+    image_data im = {
+        .row_pointers = row_pointers,
+    };
     set_gamma(im.gamma_lut, gamma);
 
     switch(color_type) {
