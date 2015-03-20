@@ -1,5 +1,8 @@
-LIBOBJS = dssim.o
-OBJS = $(LIBOBJS) rwpng.o main.o
+DESTDIR=bin/
+SRC=src/
+
+LIBOBJS = $(SRC)dssim.o
+OBJS = $(LIBOBJS) $(SRC)rwpng.o $(SRC)main.o
 BIN = $(DESTDIR)$(PREFIX)dssim
 STATICLIB = $(DESTDIR)$(PREFIX)libdssim.a
 
@@ -10,20 +13,21 @@ CFLAGS += -std=c99 `pkg-config libpng --cflags || pkg-config libpng16 --cflags` 
 LDFLAGS += `pkg-config libpng --libs || pkg-config libpng16 --libs` -lm -lz $(LDFLAGSADD)
 
 ifdef USE_COCOA
-OBJS += rwpng_cocoa.m
+OBJS += $(SRC)rwpng_cocoa.m
 CC=clang
 CFLAGS += -DUSE_COCOA=1
 LDFLAGS += -mmacosx-version-min=10.7 -framework Cocoa -framework Accelerate
 endif
 
-%.o: %.c %.h
+$(SRC)%.o: $(SRC)%.c $(SRC)%.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 $(BIN): $(OBJS)
+	-mkdir -p $(DESTDIR)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
 $(STATICLIB): $(LIBOBJS)
 	$(AR) $(ARFLAGS) $@ $^
 
 clean:
-	-rm -f dssim *.o
+	-rm -f $(DESTDIR)dssim  $(OBJS)
