@@ -1,0 +1,11 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: dssim
+Source: https://github.com/pornel/dssim
+
+Files: *
+Copyright: 2015 pornel@pornel.net
+License: GNU AFFERO GENERAL PUBLIC LICENSE
+
+Files: debian/*
+Copyright: 2015 Lars K.W. Gohlke <lkwg82@gmx.de>
+License: GPL-3.0+
