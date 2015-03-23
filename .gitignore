@@ -1,2 +1,2 @@
-dssim
-*.o
+bin
+src/*.o

@@ -1,0 +1,16 @@
+Source: dssim
+Section: misc
+Priority: optional
+Maintainer: Lars K.W. Gohlke <lkwg82@gmx.de>
+Build-Depends: debhelper (>= 8.0.0), libpng12-dev, pkg-config
+Standards-Version: 3.9.4
+Homepage: https://pornel.net/dssim
+Vcs-Browser: https://github.com/pornel/dssim
+Vcs-Git: git@github.com:pornel/dssim.git
+
+Package: dssim
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: This tool computes (dis)similarity between two PNG images
+ This tool computes (dis)similarity between two PNG images using 
+ (my approximation of) algorithms approximating human vision.
