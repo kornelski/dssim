@@ -46,6 +46,8 @@ $ sudo apt-get install dssim
 ```
 (other versions on request)
 
+Plain download from here: https://launchpad.net/~lkwg82/+archive/ubuntu/dssim/+packages
+
 ## Accuracy
 
 Scores for version 0.9 measured against [TID2008][1] database:
