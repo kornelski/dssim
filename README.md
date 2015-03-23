@@ -38,6 +38,14 @@ Will give you `dssim`. On OS X `make USE_COCOA=1` will compile without libpng.
 
 You'll find [downloads on GitHub releases page](https://github.com/pornel/dssim/releases).
 
+Debian packages for i386/amd64 can be installed for ubuntu (14.04 LTS) from ppa: 
+```bash
+$ sudo apt-add-repository ppa:lkwg82/dssim
+$ sudo apt-get update
+$ sudo apt-get install dssim
+```
+(other versions on request)
+
 ## Accuracy
 
 Scores for version 0.9 measured against [TID2008][1] database:
