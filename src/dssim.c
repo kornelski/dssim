@@ -396,7 +396,7 @@ static void convert_image(dssim_image *img, dssim_row_callback cb, void *callbac
 
 typedef struct {
     double gamma_lut[256];
-    const unsigned char **row_pointers;
+    const unsigned char *const *const row_pointers;
 } image_data;
 
 static void convert_image_row_rgba(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
@@ -463,13 +463,13 @@ static void copy_image_row(float *const restrict channels[], const int num_chann
 /*
  Copies the image.
  */
-dssim_image *dssim_create_image(dssim_attr *attr, const unsigned char *row_pointers[], dssim_colortype color_type, const int width, const int height, const double gamma)
+dssim_image *dssim_create_image(dssim_attr *attr, unsigned char *const *const row_pointers, dssim_colortype color_type, const int width, const int height, const double gamma)
 {
     dssim_row_callback *converter;
     int num_channels;
 
     image_data im = {
-        .row_pointers = row_pointers,
+        .row_pointers = (const unsigned char *const *const )row_pointers,
     };
     set_gamma(im.gamma_lut, gamma);
 
