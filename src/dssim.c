@@ -596,7 +596,8 @@ static dssim_px_t *get_img1_img2_blur(const dssim_chan *restrict original, dssim
 }
 
 static double to_dssim(double ssim) {
-    return 1.0 / (ssim) - 1.0;
+    assert(ssim > 0);
+    return 1.0 / MIN(1.0, ssim) - 1.0;
 }
 
 static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, dssim_px_t *restrict tmp, dssim_ssim_map *ssim_map_out, bool save_ssim_map);
