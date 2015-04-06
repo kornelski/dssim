@@ -169,7 +169,7 @@ int main(int argc, char *const argv[])
                 out[i] = (dssim_rgba) {
                     .r = to_byte(max * 3.0),
                     .g = to_byte(maxsq * 6.0),
-                    .b = to_byte(max / ((1.0 - map_meta.ssim) * 4.0)),
+                    .b = to_byte(max / ((1.0 - map_meta.dssim) * 4.0)),
                     .a = 255,
                 };
             }

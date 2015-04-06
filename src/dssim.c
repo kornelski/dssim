@@ -687,7 +687,7 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
     *ssim_map_out = (dssim_ssim_map){
         .width = width,
         .height = height,
-        .ssim = to_dssim(ssim_sum / (width * height)),
+        .dssim = to_dssim(ssim_sum / (width * height)),
         .data = ssimmap,
     };
 

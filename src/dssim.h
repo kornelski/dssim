@@ -36,7 +36,7 @@ typedef enum dssim_colortype {
 
 typedef struct {
     int width, height;
-    double ssim;
+    double dssim;
     dssim_px_t *data;
 } dssim_ssim_map;
 
