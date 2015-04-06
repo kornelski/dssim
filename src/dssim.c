@@ -526,7 +526,7 @@ dssim_image *dssim_create_image_float_callback(dssim_attr *attr, const int num_c
         return NULL;
     }
 
-    const bool subsample_chroma = attr->subsample_chroma;
+    const bool subsample_chroma = (width >= 8 && height >= 8) ? attr->subsample_chroma : false;
 
     dssim_image *img = malloc(sizeof(img[0]));
     *img = (dssim_image){
