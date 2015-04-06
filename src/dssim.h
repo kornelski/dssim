@@ -19,6 +19,7 @@
 
 typedef struct dssim_image dssim_image;
 typedef struct dssim_attr dssim_attr;
+typedef float dssim_px_t;
 
 typedef struct {
     unsigned char r, g, b, a;
@@ -36,7 +37,7 @@ typedef enum dssim_colortype {
 typedef struct {
     int width, height;
     double ssim;
-    float *data;
+    dssim_px_t *data;
 } dssim_ssim_map;
 
 dssim_attr *dssim_create_attr(void);
@@ -71,7 +72,7 @@ void dssim_set_color_handling(dssim_attr *, int subsampling, double color_weight
   if num_channels == 1 write only to channels[0][0..width-1]
   if num_channels == 3 the write luma to channel 0, and chroma to 1 and 2.
  */
-typedef void dssim_row_callback(float *const restrict channels[], const int num_channels, const int y, const int width, void *user_data);
+typedef void dssim_row_callback(dssim_px_t *const restrict channels[], const int num_channels, const int y, const int width, void *user_data);
 
 dssim_image *dssim_create_image(dssim_attr *, unsigned char *const *const row_pointers, dssim_colortype color_type, const int width, const int height, const double gamma);
 dssim_image *dssim_create_image_float_callback(dssim_attr *, const int num_channels, const int width, const int height, dssim_row_callback cb, void *callback_user_data);
