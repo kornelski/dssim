@@ -507,6 +507,8 @@ dssim_image *dssim_create_image(dssim_attr *attr, unsigned char *const *const ro
 }
 
 dssim_chan *create_chan(const int width, const int height, const int blur_size, const bool is_chroma) {
+    assert(width > 0 && height > 0 && blur_size > 0);
+
     dssim_chan *const chan = malloc(sizeof(chan[0]));
     *chan = (dssim_chan){
         .width = width,
@@ -557,7 +559,7 @@ static void dssim_preprocess_channel(dssim_chan *chan, dssim_px_t *tmp, int num_
     const int width = chan->width;
     const int height = chan->height;
 
-    if (num_scales > 1) {
+    if (num_scales > 1 && chan->width >= 8 && chan->height >= 8) {
         dssim_chan *new_chan = create_chan(chan->width/2, chan->height/2, chan->blur_size, chan->is_chroma);
         chan->next_half = new_chan;
         subsampled_copy(new_chan, 0, new_chan->height, chan->img, chan->width);
@@ -671,8 +673,8 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
         const double sigma12 = img1_img2_blur[offset] - mu1_mu2;
 
         const double ssim = (2.0 * mu1_mu2 + c1) * (2.0 * sigma12 + c2)
-                            /
-                            ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
+                      /
+                      ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
 
         ssim_sum += ssim;
 
