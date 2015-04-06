@@ -238,7 +238,7 @@ static void regular_1d_blur(const dssim_px_t *src, dssim_px_t *restrict tmp1, ds
             dssim_px_t *restrict dstrow = (run == runs-1 ? dst + j*width : (run & 1) ? tmp2 : tmp1);
 
             int i=0;
-            for(; i < 4; i++) {
+            for(; i < MIN(4, width); i++) {
                 dstrow[i] = (row[MAX(0, i-1)] + row[i] + row[MIN(width-1, i+1)]) / 3.f;
             }
 
