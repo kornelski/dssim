@@ -43,9 +43,9 @@ static int read_image(const char *filename, png24_image *image)
 }
 
 static int write_image(const char *filename,
-                        const dssim_rgba *pixels,
-                        int width,
-                        int height)
+                       const dssim_rgba *pixels,
+                       int width,
+                       int height)
 {
     FILE *outfile = fopen(filename, "wb");
     if (!outfile) {

@@ -292,9 +292,9 @@ static void blur(const dssim_px_t *restrict src, dssim_px_t *restrict tmp, dssim
     };
 
     dssim_px_t kernel[9] = {
-       1/16.f, 1/8.f, 1/16.f,
-       1/8.f,  1/4.f, 1/8.f,
-       1/16.f, 1/8.f, 1/16.f,
+        1/16.f, 1/8.f, 1/16.f,
+        1/8.f,  1/4.f, 1/8.f,
+        1/16.f, 1/8.f, 1/16.f,
     };
 
     vImageConvolve_PlanarF(&srcbuf, &tmpbuf, NULL, 0, 0, kernel, 3, 3, 0, kvImageEdgeExtend);
@@ -427,8 +427,8 @@ static void convert_image_row_rgb(dssim_px_t *const restrict channels[], const i
         if (num_channels >= 3) {
             channels[1][x] = px.A;
             channels[2][x] = px.b;
+        }
     }
-}
 }
 
 static void convert_image_row_gray_init(double gamma_lut[static 256]) {
