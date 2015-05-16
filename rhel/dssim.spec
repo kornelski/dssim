@@ -1,5 +1,5 @@
 Name:           dssim
-Version:        0.9
+Version:        1.0
 Release:        1
 Summary:        This tool computes (dis)similarity between two (or more) PNG images
 

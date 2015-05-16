@@ -38,7 +38,7 @@ Will give you `dssim`. On OS X `make USE_COCOA=1` will compile without libpng.
 
 You'll find [downloads on GitHub releases page](https://github.com/pornel/dssim/releases).
 
-Debian packages for i386/amd64 can be installed for ubuntu (14.04 LTS) from ppa: 
+Debian packages for i386/amd64 can be installed for ubuntu (14.04 LTS) from ppa:
 ```bash
 $ sudo apt-add-repository ppa:lkwg82/dssim
 $ sudo apt-get update
@@ -50,7 +50,7 @@ Plain download from here: https://launchpad.net/~lkwg82/+archive/ubuntu/dssim/+p
 
 ## Accuracy
 
-Scores for version 0.9 measured against [TID2008][1] database:
+Scores for version 1.0 measured against [TID2008][1] database:
 
 TID2008 Category | Spearman correlation
 --- | ---
@@ -58,9 +58,9 @@ Noise   | -0.866
 Noise2  | -0.882
 Safe    | -0.884
 Hard    | -0.903
-Simple  | -0.920
-Exotic  | -0.441
-Exotic2 | -0.619
+Simple  | -0.921
+Exotic  | -0.449
+Exotic2 | -0.620
 Full    | -0.804
 
 [1]: http://www.computervisiononline.com/dataset/tid2008-tampere-image-database-2008
