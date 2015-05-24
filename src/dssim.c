@@ -359,29 +359,28 @@ static void convert_image_subsampled(dssim_image *img, dssim_row_callback cb, vo
 {
     const int width = img->chan[0]->width;
     const int height = img->chan[0]->height;
-    dssim_px_t *row_tmp[img->channels];
-    dssim_px_t *row_tmp2[img->channels];
+    dssim_px_t *row_tmp0[img->channels];
+    dssim_px_t *row_tmp1[img->channels];
 
     for(int ch = 1; ch < img->channels; ch++) {
-        row_tmp[ch] = calloc(width*2, sizeof(row_tmp[0])); // for the callback all channels have the same width!
-        row_tmp2[ch] = row_tmp[ch] + width;
+        row_tmp0[ch] = calloc(width*2, sizeof(row_tmp0[0])); // for the callback all channels have the same width!
+        row_tmp1[ch] = row_tmp0[ch] + width;
     }
 
-    for(int y = 0; y < height; y++) {
-        row_tmp[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
-        row_tmp2[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
+    for(int y = 0; y < height; y += 2) {
+        row_tmp0[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
+        row_tmp1[0] = &img->chan[0]->img[width * MIN(height-1, y+1)];
 
-        cb(y&1 ? row_tmp2 : row_tmp, img->channels, y, width, callback_user_data);
+        cb(row_tmp0, img->channels, y, width, callback_user_data);
+        cb(row_tmp1, img->channels, MIN(height-1, y+1), width, callback_user_data);
 
-        if (y & 1) {
-            for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
-                subsampled_copy(img->chan[ch], y/2, 1, row_tmp[ch], width);
-            }
+        for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
+            subsampled_copy(img->chan[ch], y/2, 1, row_tmp0[ch], width);
         }
     }
 
     for(int ch = 1; ch < img->channels; ch++) {
-        free(row_tmp[ch]);
+        free(row_tmp0[ch]);
     }
 }
 
