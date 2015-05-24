@@ -355,42 +355,47 @@ static void subsampled_copy(dssim_chan *new_chan, const int dest_y_offset, const
     }
 }
 
-static void convert_image(dssim_image *img, dssim_row_callback cb, void *callback_user_data, const bool subsample_chroma)
+static void convert_image_subsampled(dssim_image *img, dssim_row_callback cb, void *callback_user_data)
 {
     const int width = img->chan[0]->width;
     const int height = img->chan[0]->height;
     dssim_px_t *row_tmp[img->channels];
     dssim_px_t *row_tmp2[img->channels];
 
-    if (subsample_chroma && img->channels > 1) {
-        for(int ch = 1; ch < img->channels; ch++) {
-            row_tmp[ch] = calloc(width*2, sizeof(row_tmp[0])); // for the callback all channels have the same width!
-            row_tmp2[ch] = row_tmp[ch] + width;
-        }
+    for(int ch = 1; ch < img->channels; ch++) {
+        row_tmp[ch] = calloc(width*2, sizeof(row_tmp[0])); // for the callback all channels have the same width!
+        row_tmp2[ch] = row_tmp[ch] + width;
+    }
 
-        for(int y = 0; y < height; y++) {
-            row_tmp[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
-            row_tmp2[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
+    for(int y = 0; y < height; y++) {
+        row_tmp[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
+        row_tmp2[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
 
-            cb(y&1 ? row_tmp2 : row_tmp, img->channels, y, width, callback_user_data);
+        cb(y&1 ? row_tmp2 : row_tmp, img->channels, y, width, callback_user_data);
 
-            if (y & 1) {
-        for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
-                    subsampled_copy(img->chan[ch], y/2, 1, row_tmp[ch], width);
-                }
+        if (y & 1) {
+            for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
+                subsampled_copy(img->chan[ch], y/2, 1, row_tmp[ch], width);
             }
         }
+    }
 
-        for(int ch = 1; ch < img->channels; ch++) {
-            free(row_tmp[ch]);
+    for(int ch = 1; ch < img->channels; ch++) {
+        free(row_tmp[ch]);
+    }
+}
+
+static void convert_image_simple(dssim_image *img, dssim_row_callback cb, void *callback_user_data)
+{
+    const int width = img->chan[0]->width;
+    const int height = img->chan[0]->height;
+    dssim_px_t *row_tmp[img->channels];
+
+    for(int y = 0; y < height; y++) {
+        for(int ch = 0; ch < img->channels; ch++) {
+            row_tmp[ch] = &img->chan[ch]->img[width * y];
         }
-    } else {
-        for(int y = 0; y < height; y++) {
-            for(int ch = 0; ch < img->channels; ch++) {
-                row_tmp[ch] = &img->chan[ch]->img[width * y];
-            }
-            cb(row_tmp, img->channels, y, width, callback_user_data);
-        }
+        cb(row_tmp, img->channels, y, width, callback_user_data);
     }
 }
 
@@ -544,7 +549,11 @@ dssim_image *dssim_create_image_float_callback(dssim_attr *attr, const int num_c
             is_chroma);
     }
 
-    convert_image(img, cb, callback_user_data, subsample_chroma);
+    if (subsample_chroma && img->channels > 1) {
+        convert_image_subsampled(img, cb, callback_user_data);
+    } else {
+        convert_image_simple(img, cb, callback_user_data);
+    }
 
     dssim_px_t *tmp = dssim_get_tmp(attr, width * height * sizeof(tmp[0]));
     for (int ch = 0; ch < img->channels; ch++) {
