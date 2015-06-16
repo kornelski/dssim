@@ -625,8 +625,15 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
  */
 double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_image, dssim_image *restrict modified_image)
 {
+    assert(attr);
+    assert(original_image);
+    assert(modified_image);
+
     const int channels = MIN(original_image->channels, modified_image->channels);
+    assert(channels > 0);
+
     dssim_px_t *tmp = dssim_get_tmp(attr, original_image->chan[0]->width * original_image->chan[0]->height * sizeof(tmp[0]));
+    assert(tmp);
 
     double ssim_sum = 0;
     double total = 0;
@@ -634,6 +641,8 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
 
         const dssim_chan *original = original_image->chan[ch];
         dssim_chan *modified = modified_image->chan[ch];
+        assert(original);
+        assert(modified);
 
         for(int n=0; n < attr->num_scales; n++) {
             const double weight = (original->is_chroma ? attr->color_weight : 1.0) * attr->scale_weights[n];
@@ -643,6 +652,8 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
                 free(attr->ssim_maps[n][ch].data); // prevent a leak, since ssim_map will always be overwritten
                 attr->ssim_maps[n][ch].data = NULL;
             }
+            assert(original);
+            assert(modified);
             ssim_sum += weight * dssim_compare_channel(original, modified, tmp, &attr->ssim_maps[n][ch], save_maps);
             total += weight;
             original = original->next_half;
@@ -670,6 +681,11 @@ static double dssim_compare_channel(const dssim_chan *restrict original, dssim_c
     const dssim_px_t *restrict img1_sq_blur = original->img_sq_blur;
     const dssim_px_t *restrict img2_sq_blur = modified->img_sq_blur;
     dssim_px_t *restrict img1_img2_blur = get_img1_img2_blur(original, modified, tmp);
+
+    assert(mu1);
+    assert(mu2);
+    assert(img1_sq_blur);
+    assert(img2_sq_blur);
 
     const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
     double ssim_sum = 0;
