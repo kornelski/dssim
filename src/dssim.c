@@ -472,6 +472,10 @@ dssim_image *dssim_create_image(dssim_attr *attr, unsigned char *const *const ro
     dssim_row_callback *converter;
     int num_channels;
 
+    if (gamma <= 0 || gamma > 1.0) {
+        return NULL;
+    }
+
     image_data im = {
         .row_pointers = (const unsigned char *const *const )row_pointers,
     };

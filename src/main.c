@@ -88,6 +88,15 @@ inline static unsigned char to_byte(float in) {
     return in * 256.f;
 }
 
+double get_gamma(double gamma) {
+    if (gamma > 0 && gamma <= 1.0) {
+        return gamma;
+    }
+
+    fprintf(stderr, "Warning: invalid gamma ignored: %f\n", gamma);
+    return 0.45455;
+}
+
 int main(int argc, char *const argv[])
 {
     char *map_output_file = NULL;
@@ -127,7 +136,8 @@ int main(int argc, char *const argv[])
     }
 
     dssim_attr *attr = dssim_create_attr();
-    dssim_image *original = dssim_create_image(attr, image1.row_pointers, DSSIM_RGBA, image1.width, image1.height, image1.gamma);
+
+    dssim_image *original = dssim_create_image(attr, image1.row_pointers, DSSIM_RGBA, image1.width, image1.height, get_gamma(image1.gamma));
     free(image1.row_pointers);
     free(image1.rgba_data);
 
@@ -146,7 +156,7 @@ int main(int argc, char *const argv[])
             break;
         }
 
-        dssim_image *modified = dssim_create_image(attr, image2.row_pointers, DSSIM_RGBA, image2.width, image2.height, image2.gamma);
+        dssim_image *modified = dssim_create_image(attr, image2.row_pointers, DSSIM_RGBA, image2.width, image2.height, get_gamma(image2.gamma));
         free(image2.row_pointers);
         free(image2.rgba_data);
 
