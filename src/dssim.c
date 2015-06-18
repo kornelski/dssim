@@ -452,14 +452,14 @@ static void convert_image_row_gray(dssim_px_t *const restrict channels[], const 
     }
 }
 
-static void copy_image_row(dssim_px_t *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
+static void convert_u8_to_float(dssim_px_t *const restrict channels[], const int num_channels, const int y, const int width, void *user_data)
 {
     unsigned char *row = ((unsigned char **)user_data)[y];
     for (int x = 0; x < width; x++) {
-        channels[0][x] = *row++;
+        channels[0][x] = (*row++) / 255.f;
         if (num_channels == 3) {
-            channels[1][x] = *row++;
-            channels[2][x] = *row++;
+            channels[1][x] = (*row++) / 255.f;
+            channels[2][x] = (*row++) / 255.f;
         }
     }
 }
@@ -500,11 +500,11 @@ dssim_image *dssim_create_image(dssim_attr *attr, unsigned char *const *const ro
             num_channels = 1;
             break;
         case DSSIM_LUMA:
-            converter = copy_image_row;
+            converter = convert_u8_to_float;
             num_channels = 1;
             break;
         case DSSIM_LAB:
-            converter = copy_image_row;
+            converter = convert_u8_to_float;
             num_channels = 3;
             break;
         default:
