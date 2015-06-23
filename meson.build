@@ -20,7 +20,7 @@ zlib = find_library('z', required : true)
 
 libdssim = shared_library('dssim-lib',
 			  dssim_lib_sources,
-			  version: '1.0',
+			  version: '1.1',
 			  dependencies: [mathlib, zlib],
 			  c_args: c_args,
 			  install:true)
@@ -31,7 +31,7 @@ pkgconfig_gen(libraries : libdssim,
 	      subdirs : '.',
 	      name : 'libdssim',
 	      filebase : 'dssim',
-	      version : '1.0',
+	      version : '1.1',
 	      description : 'A structural similarity library.')
 
 png_dep = dependency('libpng')

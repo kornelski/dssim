@@ -50,7 +50,7 @@ Plain download from here: https://launchpad.net/~lkwg82/+archive/ubuntu/dssim/+p
 
 ## Accuracy
 
-Scores for version 1.0 measured against [TID2008][1] database:
+Scores for version 1.1 measured against [TID2008][1] database:
 
 TID2008 Category | Spearman correlation
 --- | ---
