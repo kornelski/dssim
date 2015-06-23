@@ -60,6 +60,10 @@ struct dssim_image {
     int channels;
 };
 
+struct dssim_ssim_map_chan {
+    dssim_ssim_map scales[MAX_SCALES];
+};
+
 struct dssim_attr {
     dssim_px_t *tmp;
     size_t tmp_size;
@@ -69,7 +73,7 @@ struct dssim_attr {
     int detail_size;
     bool subsample_chroma;
     int save_maps_scales, save_maps_channels;
-    dssim_ssim_map ssim_maps[MAX_SCALES][MAX_CHANS];
+    struct dssim_ssim_map_chan ssim_maps[MAX_CHANS];
 };
 
 /* Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm */
@@ -91,9 +95,9 @@ dssim_attr *dssim_create_attr(void) {
 }
 
 void dssim_dealloc_attr(dssim_attr *attr) {
-    for(int n = 0; n < MAX_SCALES; n++) {
-        for(int ch = 0; ch < MAX_CHANS; ch++) {
-            free(attr->ssim_maps[n][ch].data);
+    for(int ch = 0; ch < MAX_CHANS; ch++) {
+        for(int n = 0; n < MAX_SCALES; n++) {
+            free(attr->ssim_maps[ch].scales[n].data);
         }
     }
     free(attr->tmp);
@@ -131,8 +135,8 @@ dssim_ssim_map dssim_pop_ssim_map(dssim_attr *attr, unsigned int scale_index, un
     if (scale_index >= MAX_SCALES || channel_index >= MAX_CHANS) {
         return (dssim_ssim_map){};
     }
-    const dssim_ssim_map t = attr->ssim_maps[scale_index][channel_index];
-    attr->ssim_maps[scale_index][channel_index].data = NULL;
+    const dssim_ssim_map t = attr->ssim_maps[channel_index].scales[scale_index];
+    attr->ssim_maps[channel_index].scales[scale_index].data = NULL;
     return t;
 }
 
@@ -648,13 +652,13 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
             const double weight = (original->is_chroma ? attr->color_weight : 1.0) * attr->scale_weights[n];
 
             const bool save_maps = attr->save_maps_scales > n && attr->save_maps_channels > ch;
-            if (attr->ssim_maps[n][ch].data) {
-                free(attr->ssim_maps[n][ch].data); // prevent a leak, since ssim_map will always be overwritten
-                attr->ssim_maps[n][ch].data = NULL;
+            if (attr->ssim_maps[ch].scales[n].data) {
+                free(attr->ssim_maps[ch].scales[n].data); // prevent a leak, since ssim_map will always be overwritten
+                attr->ssim_maps[ch].scales[n].data = NULL;
             }
             assert(original);
             assert(modified);
-            ssim_sum += weight * dssim_compare_channel(original, modified, tmp, &attr->ssim_maps[n][ch], save_maps);
+            ssim_sum += weight * dssim_compare_channel(original, modified, tmp, &attr->ssim_maps[ch].scales[n], save_maps);
             total += weight;
             original = original->next_half;
             modified = modified->next_half;
