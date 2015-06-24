@@ -19,6 +19,8 @@ CFLAGS += -DUSE_COCOA=1
 LDFLAGS += -mmacosx-version-min=10.7 -framework Cocoa -framework Accelerate
 endif
 
+all: $(BIN)
+
 $(SRC)%.o: $(SRC)%.c $(SRC)%.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
@@ -31,3 +33,5 @@ $(STATICLIB): $(LIBOBJS)
 
 clean:
 	-rm -f $(DESTDIR)dssim  $(OBJS)
+
+.PHONY: all clean
