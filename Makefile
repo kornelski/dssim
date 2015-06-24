@@ -3,6 +3,7 @@ SRC=src/
 
 LIBOBJS = $(SRC)dssim.o
 OBJS = $(LIBOBJS) $(SRC)rwpng.o $(SRC)main.o
+COCOASRC =
 BIN = $(DESTDIR)$(PREFIX)dssim
 STATICLIB = $(DESTDIR)$(PREFIX)libdssim.a
 
@@ -13,7 +14,7 @@ CFLAGS += -std=c99 `pkg-config libpng --cflags || pkg-config libpng16 --cflags` 
 LDFLAGS += `pkg-config libpng --libs || pkg-config libpng16 --libs` -lm -lz $(LDFLAGSADD)
 
 ifdef USE_COCOA
-OBJS += $(SRC)rwpng_cocoa.m
+COCOASRC = $(SRC)rwpng_cocoa.m
 CC=clang
 CFLAGS += -DUSE_COCOA=1
 LDFLAGS += -mmacosx-version-min=10.7 -framework Cocoa -framework Accelerate
@@ -24,7 +25,7 @@ all: $(BIN)
 $(SRC)%.o: $(SRC)%.c $(SRC)%.h
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-$(BIN): $(OBJS)
+$(BIN): $(OBJS) $(COCOASRC)
 	-mkdir -p $(DESTDIR)
 	$(CC) -o $@ $^ $(CFLAGS) $(LDFLAGS)
 
@@ -32,6 +33,6 @@ $(STATICLIB): $(LIBOBJS)
 	$(AR) $(ARFLAGS) $@ $^
 
 clean:
-	-rm -f $(DESTDIR)dssim  $(OBJS)
+	-rm -f $(BIN) $(OBJS)
 
 .PHONY: all clean
