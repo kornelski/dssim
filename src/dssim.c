@@ -378,8 +378,10 @@ static void convert_image_subsampled(dssim_image *img, dssim_row_callback cb, vo
         cb(row_tmp0, img->channels, y, width, callback_user_data);
         cb(row_tmp1, img->channels, MIN(height-1, y+1), width, callback_user_data);
 
-        for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
-            subsampled_copy(img->chan[ch], y/2, 1, row_tmp0[ch], width);
+        if (y < height-1) {
+            for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
+                subsampled_copy(img->chan[ch], y/2, 1, row_tmp0[ch], width);
+            }
         }
     }
 
