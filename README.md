@@ -1,10 +1,10 @@
 # RGBA Structural Similarity
 
-This tool computes (dis)similarity between two (or more) PNG images using algorithm approximating human vision.
+This tool computes (dis)similarity between two or more PNG images using an algorithm approximating human vision.
 
 Comparison is done using [the SSIM algorithm](https://ece.uwaterloo.ca/~z70wang/research/ssim/) (based on [Rabah Mehdi's implementation](http://mehdi.rabah.free.fr/SSIM/)) at multiple weighed resolutions.
 
-The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded) is amount of difference. Values are not directly comparable with other tools.
+The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded) is amount of difference. Values are not directly comparable with other tools. [See below](#interpreting-the-values) on interpreting the values.
 
 ## Features
 
@@ -27,6 +27,17 @@ You can save an image visualising the difference between the files:
     dssim -o difference.png file.png file-modified.png
 
 The `dssim.c` file is also usable as a C library.
+
+### Interpreting the values
+
+The amount of difference goes from 0 to infinity. It's not a percentage.
+
+If you're comparing two different image compression codecs, then ensure you either:
+
+* compress images to the same file size, and then use DSSIM to compare which one is closests to the original, or
+* compress images to the same DSSIM value, and compare file sizes to see how much file size gain each option gives.
+
+[More about benchmarking image compression](https://pornel.net/faircomparison).
 
 ## Build or Download
 
