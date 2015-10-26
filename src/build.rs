@@ -20,6 +20,16 @@ fn main() {
         panic!("Script failed");
     }
 
-    println!("cargo:rustc-flags=-L {} -l static=dssim", destdir);
+    println!("cargo:rustc-flags=-L {} {} -l static=dssim", destdir, getframework());
     println!("cargo:root={}", destdir);
+}
+
+#[cfg(target_os = "macos")]
+fn getframework() -> &'static str {
+    "-l framework=Accelerate"
+}
+
+#[cfg(not(target_os = "macos"))]
+fn getframework() -> &'static str {
+    ""
 }
