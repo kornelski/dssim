@@ -16,7 +16,7 @@ LDFLAGS += `pkg-config libpng --libs || pkg-config libpng16 --libs` -lm -lz $(LD
 ifdef USE_COCOA
 COCOASRC = $(SRC)rwpng_cocoa.m
 CC=clang
-CFLAGS += -DUSE_COCOA=1
+CFLAGS += -mmacosx-version-min=10.7 -DUSE_COCOA=1
 LDFLAGS += -mmacosx-version-min=10.7 -framework Cocoa -framework Accelerate
 endif
 
