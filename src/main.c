@@ -88,8 +88,17 @@ inline static unsigned char to_byte(float in) {
     return in * 256.f;
 }
 
-double get_gamma(double gamma) {
+double get_gamma(const png24_image *image) {
+    // Assume unlabelled are sRGB too
+    if (RWPNG_NONE == image->output_color || RWPNG_SRGB == image->output_color) {
+        return dssim_srgb_gamma;
+    }
+    const double gamma = image->gamma;
     if (gamma > 0 && gamma <= 1.0) {
+        // If the gamma chunk states gamma closest to sRGB that PNG can express, then assume sRGB too
+        if (RWPNG_GAMA_ONLY == image->output_color && gamma > 0.4545499 && gamma < 0.4545501) {
+            return dssim_srgb_gamma;
+        }
         return gamma;
     }
 
@@ -137,7 +146,7 @@ int main(int argc, char *const argv[])
 
     dssim_attr *attr = dssim_create_attr();
 
-    dssim_image *original = dssim_create_image(attr, image1.row_pointers, DSSIM_RGBA, image1.width, image1.height, get_gamma(image1.gamma));
+    dssim_image *original = dssim_create_image(attr, image1.row_pointers, DSSIM_RGBA, image1.width, image1.height, get_gamma(&image1));
     free(image1.row_pointers);
     free(image1.rgba_data);
 
@@ -156,7 +165,7 @@ int main(int argc, char *const argv[])
             break;
         }
 
-        dssim_image *modified = dssim_create_image(attr, image2.row_pointers, DSSIM_RGBA, image2.width, image2.height, get_gamma(image2.gamma));
+        dssim_image *modified = dssim_create_image(attr, image2.row_pointers, DSSIM_RGBA, image2.width, image2.height, get_gamma(&image2));
         free(image2.row_pointers);
         free(image2.rgba_data);
 

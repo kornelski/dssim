@@ -43,6 +43,9 @@ typedef struct {
 dssim_attr *dssim_create_attr(void);
 void dssim_dealloc_attr(dssim_attr *);
 
+// Magic number to use in place of gamma for a true sRGB curve
+static const double dssim_srgb_gamma = -47571492;
+
 /*
     Number of scales for multiscale (1 = regular SSIM). Optional weights array contains weight of each scale.
     Set before creating any images.

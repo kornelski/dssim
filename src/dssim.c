@@ -170,10 +170,25 @@ void dssim_dealloc_image(dssim_image *img)
     free(img);
 }
 
-static void set_gamma(double gamma_lut[static 256], const double invgamma)
+static int set_gamma(double gamma_lut[static 256], const double invgamma)
 {
-    for (int i = 0; i < 256; i++) {
-        gamma_lut[i] = pow(i / 255.0, 1.0 / invgamma);
+    if (invgamma == dssim_srgb_gamma) {
+        for (int i = 0; i < 256; i++) {
+            const double s = i / 255.0;
+            if (s <= 0.04045) {
+                gamma_lut[i] = s / 12.92;
+            } else {
+                gamma_lut[i] = pow((s + 0.055) / 1.055, 2.4);
+            }
+        }
+        return 1;
+    } else if (invgamma > 0 && invgamma < 1.0) {
+        for (int i = 0; i < 256; i++) {
+            gamma_lut[i] = pow(i / 255.0, 1.0 / invgamma);
+        }
+        return 1;
+    } else {
+        return 0;
     }
 }
 
@@ -202,6 +217,7 @@ inline static dssim_lab rgb_to_lab(const double gamma_lut[static 256], const uns
     };
 }
 
+#ifndef USE_COCOA
 /*
  * Flips x/y (like 90deg rotation)
  */
@@ -267,7 +283,7 @@ static void regular_1d_blur(const dssim_px_t *src, dssim_px_t *restrict tmp1, ds
         }
     }
 }
-
+#endif
 
 /*
  * blurs (approximate of gaussian)
@@ -478,14 +494,13 @@ dssim_image *dssim_create_image(dssim_attr *attr, unsigned char *const *const ro
     dssim_row_callback *converter;
     int num_channels;
 
-    if (gamma <= 0 || gamma > 1.0) {
-        return NULL;
-    }
-
     image_data im = {
         .row_pointers = (const unsigned char *const *const )row_pointers,
     };
-    set_gamma(im.gamma_lut, gamma);
+
+    if (!set_gamma(im.gamma_lut, gamma)) {
+        return NULL;
+    }
 
     switch(color_type) {
         case DSSIM_GRAY:
