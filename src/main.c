@@ -180,11 +180,11 @@ int main(int argc, char *const argv[])
 
         if (map_output_file) {
             dssim_ssim_map map_meta = dssim_pop_ssim_map(attr, 0, 0);
-            float *map = map_meta.data;
+            dssim_px_t *map = map_meta.data;
             dssim_rgba *out = (dssim_rgba*)map;
             for(int i=0; i < map_meta.width*map_meta.height; i++) {
-                const float max = 1.0 - map[i];
-                const float maxsq = max * max;
+                const dssim_px_t max = 1.0 - map[i];
+                const dssim_px_t maxsq = max * max;
                 out[i] = (dssim_rgba) {
                     .r = to_byte(max * 3.0),
                     .g = to_byte(maxsq * 6.0),
