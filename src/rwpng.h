@@ -5,7 +5,7 @@
   ---------------------------------------------------------------------------
 
    © 1998-2000 by Greg Roelofs.
-   © 2009-2014 by Kornel Lesiński.
+   © 2009-2015 by Kornel Lesiński.
 
    All rights reserved.
 
@@ -53,6 +53,7 @@ typedef enum {
     WRONG_ARCHITECTURE = 18, // Missing SSE
     PNG_OUT_OF_MEMORY_ERROR = 24,
     LIBPNG_FATAL_ERROR = 25,
+    WRONG_INPUT_COLOR_TYPE = 26,
     LIBPNG_INIT_ERROR = 35,
     TOO_LARGE_FILE = 98,
     TOO_LOW_QUALITY = 99,
@@ -66,14 +67,15 @@ struct rwpng_chunk {
     png_byte location;
 };
 
-#if USE_LCMS
 typedef enum {
-  NONE = 0,
-  ICCP = 1, // used ICC profile
-  ICCP_WARN_GRAY = 2, // ignore and warn about GRAY ICC profile
-  GAMA_CHRM = 3, // used gAMA and cHARM
-} lcms_transform;
-#endif
+  RWPNG_NONE,
+  RWPNG_SRGB, // sRGB chunk
+  RWPNG_ICCP, // used ICC profile
+  RWPNG_ICCP_WARN_GRAY, // ignore and warn about GRAY ICC profile
+  RWPNG_GAMA_CHRM, // used gAMA and cHRM
+  RWPNG_GAMA_ONLY, // used gAMA only (i.e. not sRGB)
+  RWPNG_COCOA, // Colors handled by Cocoa reader
+} rwpng_color_transform;
 
 typedef struct {
     jmp_buf jmpbuf;
@@ -84,9 +86,8 @@ typedef struct {
     unsigned char **row_pointers;
     unsigned char *rgba_data;
     struct rwpng_chunk *chunks;
-#if USE_LCMS
-    lcms_transform lcms_status;
-#endif
+    rwpng_color_transform input_color;
+    rwpng_color_transform output_color;
 } png24_image;
 
 typedef struct {
@@ -102,6 +103,7 @@ typedef struct {
     png_color palette[256];
     unsigned char trans[256];
     struct rwpng_chunk *chunks;
+    rwpng_color_transform output_color;
     char fast_compression;
 } png8_image;
 
