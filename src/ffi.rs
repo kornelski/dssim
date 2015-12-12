@@ -1,10 +1,14 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
+
 extern crate libc;
-use libc::{c_void, c_int, c_uint};
+use ::libc::{c_int, c_uint, c_void};
 
 pub enum dssim_image { }
 pub enum dssim_attr { }
+pub type dssim_px_t = f32;
+
+pub const DSSIM_SRGB_GAMMA:f64 = -47571492.0;
 
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -28,16 +32,15 @@ pub enum dssim_colortype {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-#[allow(raw_pointer_derive)]
 pub struct dssim_ssim_map {
     pub width: c_int,
     pub height: c_int,
     pub ssim: f64,
-    pub data: *mut f32,
+    pub data: *mut dssim_px_t,
 }
 
 pub type dssim_row_callback =
-    extern "C" fn(channels: *const *mut f32, num_channels: c_int,
+    extern "C" fn(channels: *const *mut dssim_px_t, num_channels: c_int,
                   y: c_int, width: c_int, user_data: *mut c_void) -> ();
 extern "C" {
     pub fn dssim_create_attr() -> *mut dssim_attr;
