@@ -170,7 +170,7 @@ void dssim_dealloc_image(dssim_image *img)
     free(img);
 }
 
-static int set_gamma(double gamma_lut[static 256], const double invgamma)
+static int set_gamma(dssim_px_t gamma_lut[static 256], const double invgamma)
 {
     if (invgamma == dssim_srgb_gamma) {
         for (int i = 0; i < 256; i++) {
@@ -194,11 +194,11 @@ static int set_gamma(double gamma_lut[static 256], const double invgamma)
 
 static const double D65x = 0.9505, D65y = 1.0, D65z = 1.089;
 
-inline static dssim_lab rgb_to_lab(const double gamma_lut[static 256], const unsigned char pxr, const unsigned char pxg, const unsigned char pxb)
+inline static dssim_lab rgb_to_lab(const dssim_px_t gamma_lut[static 256], const unsigned char pxr, const unsigned char pxg, const unsigned char pxb)
 {
-    const double r = gamma_lut[pxr],
-                 g = gamma_lut[pxg],
-                 b = gamma_lut[pxb];
+    const dssim_px_t r = gamma_lut[pxr],
+                     g = gamma_lut[pxg],
+                     b = gamma_lut[pxb];
 
     const double fx = (r * 0.4124 + g * 0.3576 + b * 0.1805) / D65x;
     const double fy = (r * 0.2126 + g * 0.7152 + b * 0.0722) / D65y;
@@ -333,7 +333,7 @@ static void blur(const dssim_px_t *restrict src, dssim_px_t *restrict tmp, dssim
 /*
  * Conversion is not reversible
  */
-inline static dssim_lab convert_pixel_rgba(const double gamma_lut[static 256], dssim_rgba px, int i, int j)
+inline static dssim_lab convert_pixel_rgba(const dssim_px_t gamma_lut[static 256], dssim_rgba px, int i, int j)
 {
     dssim_lab f1 = rgb_to_lab(gamma_lut, px.r, px.g, px.b);
     assert(f1.l >= 0.f && f1.l <= 1.0f);
@@ -421,7 +421,7 @@ static void convert_image_simple(dssim_image *img, dssim_row_callback cb, void *
 }
 
 typedef struct {
-    double gamma_lut[256];
+    dssim_px_t gamma_lut[256];
     const unsigned char *const *const row_pointers;
 } image_data;
 
@@ -429,7 +429,7 @@ static void convert_image_row_rgba(dssim_px_t *const restrict channels[], const 
 {
     image_data *im = (image_data*)user_data;
     const dssim_rgba *const row = (dssim_rgba *)im->row_pointers[y];
-    const double *const gamma_lut = im->gamma_lut;
+    const dssim_px_t *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
         dssim_lab px = convert_pixel_rgba(gamma_lut, row[x], x, y);
@@ -445,7 +445,7 @@ static void convert_image_row_rgb(dssim_px_t *const restrict channels[], const i
 {
     image_data *im = (image_data*)user_data;
     const dssim_rgb *const row = (dssim_rgb *)im->row_pointers[y];
-    const double *const gamma_lut = im->gamma_lut;
+    const dssim_px_t *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
         dssim_lab px = rgb_to_lab(gamma_lut, row[x].r, row[x].g, row[x].b);
@@ -457,7 +457,7 @@ static void convert_image_row_rgb(dssim_px_t *const restrict channels[], const i
     }
 }
 
-static void convert_image_row_gray_init(double gamma_lut[static 256]) {
+static void convert_image_row_gray_init(dssim_px_t gamma_lut[static 256]) {
     for(int i=0; i < 256; i++) {
         gamma_lut[i] = rgb_to_lab(gamma_lut, i, i, i).l;
     }
@@ -467,10 +467,10 @@ static void convert_image_row_gray(dssim_px_t *const restrict channels[], const 
 {
     image_data *im = (image_data*)user_data;
     const unsigned char *row = im->row_pointers[y];
-    const double *const gamma_lut = im->gamma_lut;
+    const dssim_px_t *const luma_lut = im->gamma_lut; // init converts it
 
     for (int x = 0; x < width; x++) {
-        channels[0][x] = gamma_lut[row[x]];
+        channels[0][x] = luma_lut[row[x]];
     }
 }
 
