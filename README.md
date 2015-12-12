@@ -8,7 +8,7 @@ The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded
 
 ## Features
 
-* Comparison is done in in L\*a\*b\* color space (D65 white point, gamma 2.2) with chroma subsampling. Other implementations use uncorrected sRGB or grayscale.
+* Comparison is done in in L\*a\*b\* color space (D65 white point, sRGB gamma) with chroma subsampling. Other implementations use "RGB" or grayscale without gamma correction.
 * Supports alpha channel.
 * Only needs C (C99) and `libpng` or Cocoa on OS X. No OpenCV or MATLAB needed.
 
