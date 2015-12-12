@@ -42,7 +42,7 @@ typedef struct {
 } dssim_lab;
 
 typedef struct {
-    unsigned char r, g, b, a;
+    unsigned char r, g, b;
 } dssim_rgb;
 
 struct dssim_chan;
