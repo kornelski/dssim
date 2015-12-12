@@ -1,11 +1,24 @@
+#![allow(improper_ctypes)]
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
 extern crate libc;
-use ::libc::{c_int, c_uint, c_void};
+use ::libc::{c_int, c_uint, c_void, c_char};
+use ::dssim::Dssim;
+use ::dssim::DssimImage;
 
-pub enum dssim_image { }
-pub enum dssim_attr { }
+const MAX_SCALES: usize = 5;
+
+#[repr(C)]
+pub struct dssim_chan {
+    pub width: c_int,
+    pub height: c_int,
+    pub img: *mut c_void,// px
+    pub mu: *mut dssim_px_t,
+    pub img_sq_blur: *mut dssim_px_t,
+    pub is_chroma: c_char,
+}
+
 pub type dssim_px_t = f32;
 
 pub const DSSIM_SRGB_GAMMA:f64 = -47571492.0;
@@ -43,32 +56,24 @@ pub type dssim_row_callback =
     extern "C" fn(channels: *const *mut dssim_px_t, num_channels: c_int,
                   y: c_int, width: c_int, user_data: *mut c_void) -> ();
 extern "C" {
-    pub fn dssim_create_attr() -> *mut dssim_attr;
-    pub fn dssim_dealloc_attr(arg1: *mut dssim_attr) -> ();
-    pub fn dssim_set_scales(attr: *mut dssim_attr, num: c_int, weights: *const f64) -> ();
-    pub fn dssim_set_save_ssim_maps(arg1: *mut dssim_attr,
+    pub fn dssim_set_scales(attr: &mut Dssim, num: c_int, weights: *const f64) -> ();
+    pub fn dssim_set_save_ssim_maps(arg1: &mut Dssim,
                                     num_scales: c_uint,
                                     num_channels: c_uint) -> ();
-    pub fn dssim_pop_ssim_map(arg1: *mut dssim_attr,
+    pub fn dssim_pop_ssim_map(arg1: &mut Dssim,
                               scale_index: c_uint,
                               channel_index: c_uint)
                               -> dssim_ssim_map;
-    pub fn dssim_set_color_handling(arg1: *mut dssim_attr,
+    pub fn dssim_set_color_handling(arg1: &mut Dssim,
                                     subsampling: c_int,
                                     color_weight: f64) -> ();
-    pub fn dssim_create_image(arg1: *mut dssim_attr,
+    pub fn dssim_init_image(arg1: &mut Dssim, arg2: &mut DssimImage,
                               row_pointers: *const *const u8,
                               color_type: dssim_colortype,
                               width: c_int, height: c_int,
-                              gamma: f64) -> *mut dssim_image;
-    pub fn dssim_create_image_float_callback(arg1: *mut dssim_attr,
-                                             num_channels: c_int,
-                                             width: c_int,
-                                             height: c_int,
-                                             cb: dssim_row_callback,
-                                             callback_user_data: *mut c_void)
-                                             -> *mut dssim_image;
-    pub fn dssim_dealloc_image(arg1: *mut dssim_image) -> ();
-    pub fn dssim_compare(arg1: *mut dssim_attr, original: *const dssim_image,
-                         modified: *mut dssim_image) -> f64;
+                              gamma: f64) -> c_int;
+
+    pub fn dssim_dealloc_image(arg1: &mut DssimImage) -> ();
+    pub fn dssim_compare_channel(orig: &dssim_chan, modif: &mut dssim_chan, tmp: *mut dssim_px_t,
+      ssim_map_out: *mut dssim_ssim_map, save_ssim_map: c_char) -> f64;
 }

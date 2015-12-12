@@ -13,9 +13,15 @@ build = "src/build.rs"
 [lib]
 name = "dssim"
 
+[[bin]]
+name = "dssim"
+path = "src/main.rs"
+
 [dependencies]
+getopts = "0.2.4"
+lodepng = "0.5.1"
 c_vec = "= 1.0.12"
-libc = "*"
+libc = "0.2.4"
 
 [dev-dependencies]
-lodepng = "*"
+lodepng = "0.5.1"

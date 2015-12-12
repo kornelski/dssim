@@ -2,3 +2,4 @@ bin
 src/*.o
 dssim
 Cargo.lock
+target/

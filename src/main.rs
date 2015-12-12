@@ -17,78 +17,43 @@
  * If not, see <http://www.gnu.org/licenses/agpl.txt>.
  */
 
-#include <stdlib.h>
+extern crate getopts;
+extern crate libc;
+extern crate lodepng;
+extern crate dssim;
 
-#include "dssim.h"
-#include "rwpng.h"
+mod ffi;
+mod val;
 
-#include <getopt.h>
-extern char *optarg;
-extern int optind, opterr;
+use std::io::Write;
+use std::env;
+use std::io;
+use getopts::Options;
 
-/*
- Reads image into png24_image struct. Returns non-zero on error
- */
-static int read_image(const char *filename, png24_image *image)
-{
-    FILE *fp = fopen(filename, "rb");
-    if (!fp) {
-        return 1;
-    }
-
-    int retval = rwpng_read_image24(fp, image, 0);
-
-    fclose(fp);
-    return retval;
+fn usage(argv0: &str) {
+    write!(io::stderr(), "\
+       Usage: {} original.png modified.png [modified.png...]\
+     \n   or: {} -o difference.png original.png modified.png\n\n\
+       Compares first image against subsequent images, and outputs\n\
+       1/SSIM-1 difference for each of them in order (0 = identical).\n\n\
+       Images must have identical size, but may have different gamma & depth.\n\
+       \nVersion 2.0.0 http://pornel.net/dssim\n", argv0, argv0).unwrap();
 }
 
-static int write_image(const char *filename,
-                       const dssim_rgba *pixels,
-                       int width,
-                       int height)
-{
-    FILE *outfile = fopen(filename, "wb");
-    if (!outfile) {
-        return 1;
-    }
-
-    png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING,
-                          NULL, NULL, NULL);
-    png_infop info_ptr = png_create_info_struct(png_ptr);
-    png_init_io(png_ptr, outfile);
-    png_set_IHDR(png_ptr, info_ptr, width, height, 8, PNG_COLOR_TYPE_RGBA,
-                 0, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
-    png_write_info(png_ptr, info_ptr);
-
-    for (int i = 0; i < height; i++) {
-        png_write_row(png_ptr, (png_bytep)(pixels + i * width));
-    }
-
-    png_write_end(png_ptr, info_ptr);
-    png_destroy_write_struct(&png_ptr, &info_ptr);
-
-    return 0;
+fn to_byte(i: f32) -> u8 {
+    if i <= 0.0 {0}
+    else if i >= 255.0/256.0 {255}
+    else {(i * 256.0) as u8}
 }
 
-static void usage(const char *argv0)
-{
-    fprintf(stderr,
-        "Usage: %s original.png modified.png [modified.png...]\n" \
-        "   or: %s -o difference.png original.png modified.png\n\n" \
-        "Compares first image against subsequent images, and outputs\n" \
-        "1/SSIM-1 difference for each of them in order (0 = identical).\n\n" \
-        "Images must have identical size, but may have different gamma & depth.\n" \
-        "\nVersion 1.3.0 http://pornel.net/dssim\n" \
-        , argv0, argv0);
+#[allow(non_camel_case_types)]
+enum Gamma {
+    sRGB,
+    pow(f64),
 }
 
-inline static unsigned char to_byte(float in) {
-    if (in <= 0) return 0;
-    if (in >= 255.f/256.f) return 255;
-    return in * 256.f;
-}
-
-double get_gamma(const png24_image *image) {
+fn get_gamma() -> Gamma {
+    return Gamma::sRGB; /*
     // Assume unlabelled are sRGB too
     if (RWPNG_NONE == image->output_color || RWPNG_SRGB == image->output_color) {
         return dssim_srgb_gamma;
@@ -104,105 +69,94 @@ double get_gamma(const png24_image *image) {
 
     fprintf(stderr, "Warning: invalid gamma ignored: %f\n", gamma);
     return 0.45455;
+    */
 }
 
-int main(int argc, char *const argv[])
-{
-    char *map_output_file = NULL;
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let program = args[0].clone();
 
-    if (argc < 3) {
-        usage(argv[0]);
-        return 1;
+    let mut opts = Options::new();
+    opts.optopt("o", "", "set output file name", "NAME");
+    opts.optflag("h", "help", "print this help menu");
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => {m}
+        Err(err) => {
+            writeln!(io::stderr(), "{}", err).unwrap();
+            std::process::exit(1);
+        }
+    };
+
+    if matches.opt_present("h") {
+        usage(&program);
+        return;
     }
 
-    opterr = 0;
-    int c;
-    while((c = getopt(argc, argv, "ho:")) != -1) {
-        switch (c) {
-            case 'h':
-                usage(argv[0]);
-                return 0;
-            case 'o':
-                map_output_file = optarg;
-                break;
-            default:
-                fprintf(stderr, "Unknown option\n");
-                return 1;
-        }
+    let map_output_file_tmp = matches.opt_str("o");
+    let map_output_file = map_output_file_tmp.as_ref();
+    let mut files = matches.free;
+
+    if files.len() < 2 {
+        writeln!(io::stderr(), "You must specify at least 2 files to compare").unwrap();
+        std::process::exit(1);
     }
 
-    if (optind+1 >= argc) {
-        fprintf(stderr, "You must specify at least 2 files to compare\n");
-        return 1;
-    }
+    let file1 = files.remove(0);
 
-    const char *file1 = argv[optind];
-    png24_image image1 = {};
-    int retval = read_image(file1, &image1);
-    if (retval) {
-        fprintf(stderr, "Can't read %s\n", file1);
-        return retval;
-    }
+    let image1 = match lodepng::decode32_file(&file1) {
+        Ok(img) => {img}
+        Err(err) => {
+            writeln!(io::stderr(), "Can't read {}: {}", file1, err).unwrap();
+            std::process::exit(1);
+        }
+    };
 
-    dssim_attr *attr = dssim_create_attr();
+    let mut attr = dssim::Dssim::new();
+    let original = attr.create_image(image1.buffer.as_ref(), dssim::DSSIM_RGBA, image1.width, image1.width * 4, dssim::SRGB_GAMMA).expect("orig image creation");
 
-    dssim_image *original = dssim_create_image(attr, image1.row_pointers, DSSIM_RGBA, image1.width, image1.height, get_gamma(&image1));
-    free(image1.row_pointers);
-    free(image1.rgba_data);
+    for file2 in files {
 
-    for (int arg = optind+1; arg < argc; arg++) {
-        const char *file2 = argv[arg];
+        let image2 = match lodepng::decode32_file(&file2) {
+            Ok(img) => {img}
+            Err(err) => {
+                writeln!(io::stderr(), "Can't read {}: {}", file2, err).unwrap();
+                std::process::exit(1);
+            }
+        };
 
-        png24_image image2 = {};
-        retval = read_image(file2, &image2);
-        if (retval) {
-            fprintf(stderr, "Can't read %s\n", file2);
-            break;
+        if image1.width != image2.width || image1.height != image2.height {
+            writeln!(io::stderr(), "Image {} has different size than {}\n", file2, file1).unwrap();
+            std::process::exit(1);
         }
 
-        if (image1.width != image2.width || image1.height != image2.height) {
-            fprintf(stderr, "Image %s has different size than %s\n", file2, file1);
-            break;
+        let modified = attr.create_image(image2.buffer.as_ref(), dssim::DSSIM_RGBA, image2.width, image2.width * 4, dssim::SRGB_GAMMA).expect("mod image creation");
+
+        if map_output_file.is_some() {
+            attr.set_save_ssim_maps(1, 1);
         }
 
-        dssim_image *modified = dssim_create_image(attr, image2.row_pointers, DSSIM_RGBA, image2.width, image2.height, get_gamma(&image2));
-        free(image2.row_pointers);
-        free(image2.rgba_data);
+        let dssim = attr.compare(&original, modified);
 
-        if (map_output_file) {
-            dssim_set_save_ssim_maps(attr, 1, 1);
-        }
+        println!("{:.6}\t{}\n", dssim, file2);
 
-        double dssim = dssim_compare(attr, original, modified);
-        dssim_dealloc_image(modified);
-
-        printf("%.6f\t%s\n", dssim, file2);
-
-        if (map_output_file) {
-            dssim_ssim_map map_meta = dssim_pop_ssim_map(attr, 0, 0);
-            dssim_px_t *map = map_meta.data;
-            dssim_rgba *out = (dssim_rgba*)map;
-            for(int i=0; i < map_meta.width*map_meta.height; i++) {
-                const dssim_px_t max = 1.0 - map[i];
-                const dssim_px_t maxsq = max * max;
-                out[i] = (dssim_rgba) {
-                    .r = to_byte(max * 3.0),
-                    .g = to_byte(maxsq * 6.0),
-                    .b = to_byte(max / ((1.0 - map_meta.dssim) * 4.0)),
-                    .a = 255,
+        if map_output_file.is_some() {
+            let map_meta = attr.ssim_map(0, 0).expect("should give ssimmap");
+            let avgssim = map_meta.ssim as f32;
+            let out: Vec<_> = map_meta.data().expect("map should have data").iter().map(|ssim|{
+                let max = 1_f32 - ssim;
+                let maxsq = max * max;
+                return dssim::rgba {
+                    r: to_byte(max * 3.0),
+                    g: to_byte(maxsq * 6.0),
+                    b: to_byte(max / ((1_f32 - avgssim) * 4_f32)),
+                    a: 255,
                 };
+            }).collect();
+            let write_res = lodepng::encode32_file(map_output_file.unwrap(), &out, map_meta.width as usize, map_meta.height as usize);
+            if write_res.is_err() {
+                writeln!(io::stderr(), "Can't write {}: {:?}", map_output_file.unwrap(), write_res).ok();
+                std::process::exit(1);
             }
-            if (write_image(map_output_file, out, map_meta.width, map_meta.height)) {
-                fprintf(stderr, "Can't write %s\n", map_output_file);
-                free(map);
-                return 1;
-            }
-            free(map);
         }
     }
-
-    dssim_dealloc_image(original);
-    dssim_dealloc_attr(attr);
-
-    return retval;
 }
