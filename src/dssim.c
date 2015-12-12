@@ -45,6 +45,10 @@ typedef struct {
     unsigned char r, g, b;
 } dssim_rgb;
 
+typedef struct {
+    dssim_px_t r, g, b, a; // premultiplied
+} linear_rgba;
+
 struct dssim_chan;
 typedef struct dssim_chan dssim_chan;
 struct dssim_chan {
@@ -194,12 +198,22 @@ static int set_gamma(dssim_px_t gamma_lut[static 256], const double invgamma)
 
 static const double D65x = 0.9505, D65y = 1.0, D65z = 1.089;
 
-inline static dssim_lab rgb_to_lab(const dssim_px_t gamma_lut[static 256], const unsigned char pxr, const unsigned char pxg, const unsigned char pxb)
-{
+inline static linear_rgba rgb_to_linear(const dssim_px_t gamma_lut[static 256], const unsigned char pxr, const unsigned char pxg, const unsigned char pxb, const unsigned char pxa) {
     const dssim_px_t r = gamma_lut[pxr],
                      g = gamma_lut[pxg],
-                     b = gamma_lut[pxb];
+                     b = gamma_lut[pxb],
+                     a = pxa / 255.0;
 
+    return (linear_rgba){
+        .r = r * a,
+        .g = g * a,
+        .b = b * a,
+        .a = a,
+    };
+}
+
+inline static dssim_lab rgb_to_lab(const dssim_px_t r, const dssim_px_t g, const dssim_px_t b)
+{
     const double fx = (r * 0.4124 + g * 0.3576 + b * 0.1805) / D65x;
     const double fy = (r * 0.2126 + g * 0.7152 + b * 0.0722) / D65y;
     const double fz = (r * 0.0193 + g * 0.1192 + b * 0.9505) / D65z;
@@ -333,31 +347,26 @@ static void blur(const dssim_px_t *restrict src, dssim_px_t *restrict tmp, dssim
 /*
  * Conversion is not reversible
  */
-inline static dssim_lab convert_pixel_rgba(const dssim_px_t gamma_lut[static 256], dssim_rgba px, int i, int j)
+inline static dssim_lab convert_pixel_rgba(linear_rgba px, int i, int j)
 {
-    dssim_lab f1 = rgb_to_lab(gamma_lut, px.r, px.g, px.b);
+    // Compose image on coloured background to better judge dissimilarity with various backgrounds
+    if (px.a < 255) {
+        int n = i ^ j;
+        if (n & 4) {
+            px.r += 1.0 - px.a; // assumes premultiplied alpha
+        }
+        if (n & 8) {
+            px.g += 1.0 - px.a;
+        }
+        if (n & 16) {
+            px.b += 1.0 - px.a;
+        }
+    }
+
+    dssim_lab f1 = rgb_to_lab(px.r, px.g, px.b);
     assert(f1.l >= 0.f && f1.l <= 1.0f);
     assert(f1.A >= 0.f && f1.A <= 1.0f);
     assert(f1.b >= 0.f && f1.b <= 1.0f);
-
-    // Compose image on coloured background to better judge dissimilarity with various backgrounds
-    if (px.a < 255) {
-        const dssim_px_t a = px.a / 255.f;
-        f1.l *= a; // using premultiplied alpha
-        f1.A *= a;
-        f1.b *= a;
-
-        int n = i ^ j;
-        if (n & 4) {
-            f1.l += 1.0 - a;
-        }
-        if (n & 8) {
-            f1.A += 1.0 - a;
-        }
-        if (n & 16) {
-            f1.b += 1.0 - a;
-        }
-    }
 
     return f1;
 }
@@ -432,7 +441,8 @@ static void convert_image_row_rgba(dssim_px_t *const restrict channels[], const 
     const dssim_px_t *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
-        dssim_lab px = convert_pixel_rgba(gamma_lut, row[x], x, y);
+        const linear_rgba rgba = rgb_to_linear(gamma_lut, row[x].r, row[x].g, row[x].b, row[x].a);
+        const dssim_lab px = convert_pixel_rgba(rgba, x, y);
         channels[0][x] = px.l;
         if (num_channels >= 3) {
             channels[1][x] = px.A;
@@ -448,7 +458,7 @@ static void convert_image_row_rgb(dssim_px_t *const restrict channels[], const i
     const dssim_px_t *const gamma_lut = im->gamma_lut;
 
     for (int x = 0; x < width; x++) {
-        dssim_lab px = rgb_to_lab(gamma_lut, row[x].r, row[x].g, row[x].b);
+        dssim_lab px = rgb_to_lab(gamma_lut[row[x].r], gamma_lut[row[x].g], gamma_lut[row[x].b]);
         channels[0][x] = px.l;
         if (num_channels >= 3) {
             channels[1][x] = px.A;
@@ -459,7 +469,7 @@ static void convert_image_row_rgb(dssim_px_t *const restrict channels[], const i
 
 static void convert_image_row_gray_init(dssim_px_t gamma_lut[static 256]) {
     for(int i=0; i < 256; i++) {
-        gamma_lut[i] = rgb_to_lab(gamma_lut, i, i, i).l;
+        gamma_lut[i] = rgb_to_lab(gamma_lut[i], gamma_lut[i], gamma_lut[i]).l;
     }
 }
 
