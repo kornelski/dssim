@@ -114,14 +114,8 @@ void dssim_set_scales(dssim_attr *attr, const int num, const double *weights) {
         weights = default_weights;
     }
 
-    double sum = 0;
     for(int i=0; i < attr->num_scales; i++) {
         attr->scale_weights[i] = weights[i];
-        sum += weights[i];
-    }
-    // Weights must add up to 1
-    for(int i=0; i < attr->num_scales; i++) {
-        attr->scale_weights[i] /= sum;
     }
 }
 
@@ -667,7 +661,7 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
     assert(tmp);
 
     double ssim_sum = 0;
-    double total = 0;
+    double weight_sum = 0;
     for (int ch = 0; ch < channels; ch++) {
 
         const dssim_chan *original = original_image->chan[ch];
@@ -686,7 +680,7 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
             assert(original);
             assert(modified);
             ssim_sum += weight * dssim_compare_channel(original, modified, tmp, &attr->ssim_maps[ch].scales[n], save_maps);
-            total += weight;
+            weight_sum += weight;
             original = original->next_half;
             modified = modified->next_half;
             if (!original || !modified) {
@@ -695,7 +689,7 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
         }
     }
 
-    return to_dssim(ssim_sum / total);
+    return to_dssim(ssim_sum / weight_sum);
 }
 
 static double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, dssim_px_t *restrict tmp, dssim_ssim_map *ssim_map_out, bool save_ssim_map)
