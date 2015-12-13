@@ -59,8 +59,8 @@ struct dssim_chan {
 };
 
 struct dssim_image {
-    dssim_chan *chan[MAX_CHANS];
-    int channels;
+    dssim_chan chan[MAX_CHANS];
+    int num_channels;
 };
 
 struct dssim_ssim_map_chan {
@@ -152,14 +152,14 @@ static void dealloc_chan(dssim_chan *chan) {
     free(chan->img_sq_blur);
     if (chan->next_half) {
         dealloc_chan(chan->next_half);
+        free(chan->next_half);
     }
-    free(chan);
 }
 
 void dssim_dealloc_image(dssim_image *img)
 {
-    for (int ch = 0; ch < img->channels; ch++) {
-        dealloc_chan(img->chan[ch]);
+    for (int ch = 0; ch < img->num_channels; ch++) {
+        dealloc_chan(&img->chan[ch]);
     }
     free(img);
 }
@@ -378,46 +378,46 @@ static void subsampled_copy(dssim_chan *new_chan, const int dest_y_offset, const
 
 static void convert_image_subsampled(dssim_image *img, dssim_row_callback cb, void *callback_user_data)
 {
-    const int width = img->chan[0]->width;
-    const int height = img->chan[0]->height;
-    dssim_px_t *row_tmp0[img->channels];
-    dssim_px_t *row_tmp1[img->channels];
+    const int width = img->chan[0].width;
+    const int height = img->chan[0].height;
+    dssim_px_t *row_tmp0[img->num_channels];
+    dssim_px_t *row_tmp1[img->num_channels];
 
-    for(int ch = 1; ch < img->channels; ch++) {
+    for(int ch = 1; ch < img->num_channels; ch++) {
         row_tmp0[ch] = calloc(width*2, sizeof(row_tmp0[0])); // for the callback all channels have the same width!
         row_tmp1[ch] = row_tmp0[ch] + width;
     }
 
     for(int y = 0; y < height; y += 2) {
-        row_tmp0[0] = &img->chan[0]->img[width * y]; // Luma can be written directly (it's unscaled)
-        row_tmp1[0] = &img->chan[0]->img[width * MIN(height-1, y+1)];
+        row_tmp0[0] = &img->chan[0].img[width * y]; // Luma can be written directly (it's unscaled)
+        row_tmp1[0] = &img->chan[0].img[width * MIN(height-1, y+1)];
 
-        cb(row_tmp0, img->channels, y, width, callback_user_data);
-        cb(row_tmp1, img->channels, MIN(height-1, y+1), width, callback_user_data);
+        cb(row_tmp0, img->num_channels, y, width, callback_user_data);
+        cb(row_tmp1, img->num_channels, MIN(height-1, y+1), width, callback_user_data);
 
         if (y < height-1) {
-            for(int ch = 1; ch < img->channels; ch++) { // Chroma is downsampled
-                subsampled_copy(img->chan[ch], y/2, 1, row_tmp0[ch], width);
+            for(int ch = 1; ch < img->num_channels; ch++) { // Chroma is downsampled
+                subsampled_copy(&img->chan[ch], y/2, 1, row_tmp0[ch], width);
             }
         }
     }
 
-    for(int ch = 1; ch < img->channels; ch++) {
+    for(int ch = 1; ch < img->num_channels; ch++) {
         free(row_tmp0[ch]);
     }
 }
 
 static void convert_image_simple(dssim_image *img, dssim_row_callback cb, void *callback_user_data)
 {
-    const int width = img->chan[0]->width;
-    const int height = img->chan[0]->height;
-    dssim_px_t *row_tmp[img->channels];
+    const int width = img->chan[0].width;
+    const int height = img->chan[0].height;
+    dssim_px_t *row_tmp[img->num_channels];
 
     for(int y = 0; y < height; y++) {
-        for(int ch = 0; ch < img->channels; ch++) {
-            row_tmp[ch] = &img->chan[ch]->img[width * y];
+        for(int ch = 0; ch < img->num_channels; ch++) {
+            row_tmp[ch] = &img->chan[ch].img[width * y];
         }
-        cb(row_tmp, img->channels, y, width, callback_user_data);
+        cb(row_tmp, img->num_channels, y, width, callback_user_data);
     }
 }
 
@@ -562,26 +562,26 @@ dssim_image *dssim_create_image_float_callback(dssim_attr *attr, const int num_c
 
     dssim_image *img = malloc(sizeof(img[0]));
     *img = (dssim_image){
-        .channels = num_channels,
+        .num_channels = num_channels,
     };
 
-    for (int ch = 0; ch < img->channels; ch++) {
+    for (int ch = 0; ch < img->num_channels; ch++) {
         const bool is_chroma = ch > 0;
-        img->chan[ch] = create_chan(
+        img->chan[ch] = *create_chan(
             subsample_chroma && is_chroma ? width/2 : width,
             subsample_chroma && is_chroma ? height/2 : height,
             is_chroma);
     }
 
-    if (subsample_chroma && img->channels > 1) {
+    if (subsample_chroma && img->num_channels > 1) {
         convert_image_subsampled(img, cb, callback_user_data);
     } else {
         convert_image_simple(img, cb, callback_user_data);
     }
 
     dssim_px_t *tmp = dssim_get_tmp(attr, width * height * sizeof(tmp[0]));
-    for (int ch = 0; ch < img->channels; ch++) {
-        dssim_preprocess_channel(img->chan[ch], tmp, attr->num_scales);
+    for (int ch = 0; ch < img->num_channels; ch++) {
+        dssim_preprocess_channel(&img->chan[ch], tmp, attr->num_scales);
     }
 
     return img;
@@ -596,7 +596,7 @@ static void dssim_preprocess_channel(dssim_chan *chan, dssim_px_t *tmp, int num_
         dssim_chan *new_chan = create_chan(chan->width/2, chan->height/2, chan->is_chroma);
         chan->next_half = new_chan;
         subsampled_copy(new_chan, 0, new_chan->height, chan->img, chan->width);
-        dssim_preprocess_channel(chan->next_half, tmp, num_scales-1);
+        dssim_preprocess_channel(new_chan, tmp, num_scales-1);
     }
 
     if (chan->is_chroma) {
@@ -650,18 +650,18 @@ double dssim_compare(dssim_attr *attr, const dssim_image *restrict original_imag
     assert(original_image);
     assert(modified_image);
 
-    const int channels = MIN(original_image->channels, modified_image->channels);
+    const int channels = MIN(original_image->num_channels, modified_image->num_channels);
     assert(channels > 0);
 
-    dssim_px_t *tmp = dssim_get_tmp(attr, original_image->chan[0]->width * original_image->chan[0]->height * sizeof(tmp[0]));
+    dssim_px_t *tmp = dssim_get_tmp(attr, original_image->chan[0].width * original_image->chan[0].height * sizeof(tmp[0]));
     assert(tmp);
 
     double ssim_sum = 0;
     double weight_sum = 0;
     for (int ch = 0; ch < channels; ch++) {
 
-        const dssim_chan *original = original_image->chan[ch];
-        dssim_chan *modified = modified_image->chan[ch];
+        const dssim_chan *original = &original_image->chan[ch];
+        dssim_chan *modified = &modified_image->chan[ch];
         assert(original);
         assert(modified);
 
