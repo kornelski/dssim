@@ -481,76 +481,16 @@ int dssim_init_image_float_callback(dssim_attr *attr, dssim_image *img, const in
             dssim_chan *chan = dssim_image_get_channel(img, ch, s);
             subsampled_copy(chan, 0, dssim_get_chan_height(chan), dssim_get_chan_img(prev), dssim_get_chan_width(prev));
             prev = chan;
-        }
     }
+}
     for (int ch = 0; ch < dssim_image_get_num_channels(img); ch++) {
         for (int s = 0; s < dssim_image_get_num_channel_scales(img, ch); s++) {
             dssim_chan *chan = dssim_image_get_channel(img, ch, s);
             dssim_preprocess_channel(chan, tmp);
-        }
+    }
     }
     return 1;
-}
+    }
 
 extern void dssim_preprocess_channel(dssim_chan *chan, dssim_px_t *tmp);
 
-static double to_dssim(double ssim) {
-    assert(ssim > 0);
-    return 1.0 / MIN(1.0, ssim) - 1.0;
-}
-
-double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, dssim_px_t *restrict tmp, dssim_ssim_map *ssim_map_out, char save_ssim_map)
-{
-    const int width = dssim_get_chan_width(original);
-    const int height = dssim_get_chan_height(original);
-
-    if (width != dssim_get_chan_width(modified) || height != dssim_get_chan_height(modified)) {
-        return 0;
-    }
-
-    const dssim_px_t *restrict mu1 = dssim_get_chan_mu_const(original);
-    dssim_px_t *const mu2 = dssim_get_chan_mu_const(modified);
-    const dssim_px_t *restrict img1_sq_blur = dssim_get_chan_img_sq_blur_const(original);
-    const dssim_px_t *restrict img2_sq_blur = dssim_get_chan_img_sq_blur_const(modified);
-    dssim_px_t *restrict img1_img2_blur = get_img1_img2_blur(original, modified, tmp);
-
-    assert(mu1);
-    assert(mu2);
-    assert(img1_sq_blur);
-    assert(img2_sq_blur);
-
-    const double c1 = 0.01 * 0.01, c2 = 0.03 * 0.03;
-    double ssim_sum = 0;
-
-    dssim_px_t *const ssimmap = save_ssim_map ? mu2 : NULL;
-
-    for (int offset = 0; offset < width * height; offset++) {
-        const double mu1_sq = mu1[offset]*mu1[offset];
-        const double mu2_sq = mu2[offset]*mu2[offset];
-        const double mu1_mu2 = mu1[offset]*mu2[offset];
-        const double sigma1_sq = img1_sq_blur[offset] - mu1_sq;
-        const double sigma2_sq = img2_sq_blur[offset] - mu2_sq;
-        const double sigma12 = img1_img2_blur[offset] - mu1_mu2;
-
-        const double ssim = (2.0 * mu1_mu2 + c1) * (2.0 * sigma12 + c2)
-                      /
-                      ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
-
-        ssim_sum += ssim;
-
-        if (ssimmap) {
-            ssimmap[offset] = ssim;
-        }
-    }
-
-    if (ssim_map_out) {
-        *ssim_map_out = (dssim_ssim_map){
-            .width = width,
-            .height = height,
-            .dssim = to_dssim(ssim_sum / (width * height)),
-            .data = ssimmap,
-        };
-    }
-
-    return ssim_sum / (width * height);
-}

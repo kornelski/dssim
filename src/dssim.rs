@@ -1,8 +1,9 @@
 extern crate libc;
+extern crate itertools;
 
+use self::itertools::Zip;
 use ffi;
 use std;
-pub use ffi::dssim_ssim_map;
 pub use ffi::dssim_colortype::*;
 pub use ffi::dssim_rgba as rgba;
 pub use ffi::DSSIM_SRGB_GAMMA as SRGB_GAMMA;
@@ -48,7 +49,12 @@ const DEFAULT_WEIGHTS: [f64; 5] = [0.0448, 0.2856, 0.3001, 0.2363, 0.1333];
 
 pub type ColorType = ffi::dssim_colortype;
 
-pub type SsimMap = ffi::dssim_ssim_map;
+pub struct SsimMap {
+    pub width: usize,
+    pub height: usize,
+    pub dssim: f64,
+    pub data: Vec<ffi::dssim_px_t>,
+}
 
 pub fn new() -> Dssim {
     Dssim::new()
@@ -133,30 +139,101 @@ impl Dssim {
      @return DSSIM value or NaN on error.
      */
     pub fn compare(&mut self, original_image: &DssimImage, mut modified_image: DssimImage) -> Val {
-
-        let channels = std::cmp::min(original_image.chan.len(), modified_image.chan.len());
-
         let tmp = dssim_get_tmp(self, (original_image.chan[0].scales[0].width as usize * original_image.chan[0].scales[0].height as usize * std::mem::size_of::<ffi::dssim_px_t>()));
 
         let mut ssim_sum = 0.0;
         let mut weight_sum = 0.0;
-        for ch in 0 .. channels as usize {
-            let w = self.scale_weights.clone();
-            for (n, scale_weight) in w.iter().cloned().enumerate() {
-                let original = &original_image.chan[ch].scales[n];
-                let mut modified = &mut modified_image.chan[ch].scales[n];
+        for ((ch, original), mut modified) in original_image.chan.iter().enumerate().zip(modified_image.chan.drain(..)) {
+
+            let save_channel = self.save_maps_channels as usize > ch;
+            while save_channel && self.ssim_maps.len() <= ch {
+                self.ssim_maps.push(DssimMapChan{scales:Vec::with_capacity(self.save_maps_scales.into())});
+            }
+
+            for ((n, scale_weight), original, mut modified) in Zip::new((self.scale_weights.iter().cloned().enumerate(), original.scales.iter(), modified.scales.drain(..))) {
 
                 let weight = if original.is_chroma {self.color_weight} else {1.0} * scale_weight;
 
-                let save_maps = self.save_maps_scales as usize > n && self.save_maps_channels as usize > ch;
-                let score = weight * unsafe{ffi::dssim_compare_channel(original, modified, tmp, dssim_create_ssim_map(self, ch, n), if save_maps {1} else {0})};
-                ssim_sum += score;
+                let save_maps = save_channel && self.save_maps_scales as usize > n;
+                let (score, ssim_map) = Self::compare_channel(original, modified, tmp, save_maps).unwrap();
+                ssim_sum += weight * score;
                 weight_sum += weight;
-                println!("chan {} wei {} {}x{} = {}", ch, n, original.width, original.height, score);
+
+                if let Some(ssim_map) = ssim_map {
+                    {let chan = &mut self.ssim_maps[ch];
+                    while chan.scales.len() <= n {
+                        chan.scales.push(SsimMap::new());
+                    }}
+                    self.ssim_maps[ch].scales[n] = ssim_map;
+                }
             }
         }
 
         return to_dssim(ssim_sum / weight_sum).into();
+    }
+
+    fn compare_channel(original: &DssimChan, mut modified: DssimChan, tmp: *mut f32, save_ssim_map: bool) -> Option<(f64, Option<SsimMap>)> {
+        if original.width != modified.width || original.height != modified.height {
+            return None;
+        }
+
+        let width = original.width;
+        let height = original.height;
+
+        let img1_img2_blur = get_img1_img2_blur(original, &mut modified.img, tmp);
+
+        let c1 = 0.01 * 0.01;
+        let c2 = 0.03 * 0.03;
+        let mut ssim_sum: f64 = 0.0;
+
+        // FIXME: slice https://users.rust-lang.org/t/how-to-zip-two-slices-efficiently/2048
+        for (img1_img2_blur, mu1, mut mu2_in_map_out, img1_sq_blur, img2_sq_blur)
+            in Zip::new((
+                img1_img2_blur.iter().cloned(),
+                original.mu.iter().cloned(),
+                modified.mu.iter_mut(),
+                original.img_sq_blur.iter().cloned(),
+                modified.img_sq_blur.iter().cloned(),
+            )) {
+            let mu1: f64 = mu1.into();
+            let mu2: f64 = (*mu2_in_map_out).into();
+            let img1_sq_blur: f64 = img1_sq_blur.into();
+            let img2_sq_blur: f64 = img2_sq_blur.into();
+            let img1_img2_blur: f64 = img1_img2_blur.into();
+
+            let mu1_sq = mu1*mu1;
+            let mu2_sq = mu2*mu2;
+            let mu1_mu2 = mu1*mu2;
+            let sigma1_sq = img1_sq_blur - mu1_sq;
+            let sigma2_sq = img2_sq_blur - mu2_sq;
+            let sigma12 = img1_img2_blur - mu1_mu2;
+
+            let ssim = (2.0 * mu1_mu2 + c1) * (2.0 * sigma12 + c2)
+                          /
+                          ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
+
+            ssim_sum += ssim;
+
+            if save_ssim_map {
+                *mu2_in_map_out = ssim as ffi::dssim_px_t;
+            }
+        }
+
+        let ssim_avg = ssim_sum / (width * height) as f64;
+
+        let ssim_map = if save_ssim_map {
+            let ssimmap = modified.mu;
+            Some(SsimMap{
+                width: width,
+                height: height,
+                dssim: to_dssim(ssim_avg),
+                data: ssimmap,
+            })
+        } else {
+            None
+        };
+
+        return Some((ssim_avg, ssim_map));
     }
 }
 
@@ -170,23 +247,21 @@ impl SsimMap {
         SsimMap {
             width: 0,
             height: 0,
-            data: std::ptr::null_mut(),
-            ssim: 0.,
+            data: Vec::new(),
+            dssim: 0.,
         }
     }
 
     pub fn data(&self) -> Option<&[ffi::dssim_px_t]> {
-        if self.data.is_null() {return None;}
-        unsafe {
-            Some(std::slice::from_raw_parts(self.data, self.width as usize * self.height as usize))
-        }
+        if self.width == 0 {return None;}
+        return Some(&self.data[..]);
     }
 }
 
 #[no_mangle]
 pub extern "C" fn dssim_get_tmp(attr: &mut Dssim, size: size_t) -> *mut ffi::dssim_px_t {
     attr.tmp.reserve((size as usize + 3) / 4);
-    (&mut attr.tmp[..]).as_mut_ptr()
+    (&mut attr.tmp[..]).as_mut_ptr() // FIXME: super hacky
 }
 
 #[no_mangle]
@@ -237,16 +312,17 @@ pub extern "C" fn dssim_get_chan_img(ch: &mut DssimChan) -> *mut ffi::dssim_px_t
     ch.img[..].as_mut_ptr()
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn get_img1_img2_blur(original: &DssimChan, modified: &mut DssimChan, tmp: *mut ffi::dssim_px_t) -> *const ffi::dssim_px_t
+fn get_img1_img2_blur<'a>(original: &DssimChan, modified_img: &'a mut Vec<ffi::dssim_px_t>, tmp: *mut ffi::dssim_px_t) -> &'a mut [ffi::dssim_px_t]
 {
-    for (mut img2, img1) in modified.img.iter_mut().zip(original.img.iter()) {
+    for (mut img2, img1) in modified_img.iter_mut().zip(original.img.iter()) {
         *img2 *= *img1;
     }
 
-    ffi::blur_in_place(modified.img[..].as_mut_ptr(), tmp, modified.width as c_int, modified.height as c_int);
+    unsafe {
+        ffi::blur_in_place(modified_img[..].as_mut_ptr(), tmp, original.width as c_int, original.height as c_int);
+    }
 
-    return modified.img[..].as_ptr();
+    return &mut modified_img[..];
 }
 
 #[no_mangle]
@@ -328,26 +404,11 @@ fn create_chan(width: c_int, height: c_int, is_chroma: bool, num_scales: usize) 
     }
 }
 
-
-fn dssim_create_ssim_map(attr: &mut Dssim, channel_index: usize, scale_index: usize) -> &mut SsimMap {
-    while attr.ssim_maps.len() <= channel_index {
-        let mut chan = DssimMapChan{scales:Vec::new()};
-        chan.scales.reserve(attr.save_maps_scales.into());
-        attr.ssim_maps.push(chan);
-    }
-    let chan = &mut attr.ssim_maps[channel_index];
-    while chan.scales.len() <= scale_index {
-        chan.scales.push(SsimMap::new());
-    }
-
-    (&mut chan.scales[scale_index])
-}
-
 #[cfg(test)]
 extern crate lodepng;
 
 #[test]
-fn test() {
+fn png_compare() {
     let mut d = new();
     let file1 = lodepng::decode32_file("test1.png").unwrap();
     let file2 = lodepng::decode32_file("test2.png").unwrap();

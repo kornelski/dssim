@@ -137,11 +137,11 @@ fn main() {
 
         let dssim = attr.compare(&original, modified);
 
-        println!("{:.6}\t{}\n", dssim, file2);
+        println!("{:.6}\t{}", dssim, file2);
 
         if map_output_file.is_some() {
             let map_meta = attr.ssim_map(0, 0).expect("should give ssimmap");
-            let avgssim = map_meta.ssim as f32;
+            let avgssim = map_meta.dssim as f32;
             let out: Vec<_> = map_meta.data().expect("map should have data").iter().map(|ssim|{
                 let max = 1_f32 - ssim;
                 let maxsq = max * max;
