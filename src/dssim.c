@@ -50,36 +50,23 @@ typedef struct {
 
 struct dssim_chan;
 typedef struct dssim_chan dssim_chan;
-struct dssim_chan {
-    int width, height;
-    dssim_px_t *img, *mu, *img_sq_blur;
-    char is_chroma;
-};
 
 int dssim_get_subsample_chroma(dssim_attr *attr);
 double dssim_get_color_weight(dssim_attr *attr);
 double dssim_get_scale_weights(dssim_attr *attr, unsigned int i);
 void dssim_image_set_channels(const dssim_attr *attr, dssim_image *, int, int, int, int);
 int dssim_image_get_num_channels(dssim_image *);
+int dssim_get_chan_width(const dssim_chan *);
+int dssim_get_chan_height(const dssim_chan *);
+float *dssim_get_chan_img(dssim_chan *);
+const float *dssim_get_chan_img_const(const dssim_chan *);
+const float *dssim_get_chan_img_sq_blur_const(const dssim_chan *);
+float *dssim_get_chan_img_sq_blur(dssim_chan *);
+const float *dssim_get_chan_mu_const(const dssim_chan *);
 int dssim_image_get_num_channel_scales(dssim_image *, int);
 dssim_chan *dssim_image_get_channel(dssim_image *, int, int);
 
 dssim_px_t *dssim_get_tmp(dssim_attr *attr, size_t size);
-
-static void dealloc_chan(dssim_chan *chan) {
-    free(chan->img);
-    free(chan->mu);
-    free(chan->img_sq_blur);
-}
-
-void dssim_dealloc_image(dssim_image *img)
-{
-    for (int ch = 0; ch < dssim_image_get_num_channels(img); ch++) {
-        for (int s = 0; s < dssim_image_get_num_channel_scales(img, ch); s++) {
-            dealloc_chan(dssim_image_get_channel(img, ch, s));
-        }
-    }
-}
 
 static int set_gamma(dssim_px_t gamma_lut[static 256], const double invgamma)
 {
@@ -211,7 +198,7 @@ static void regular_1d_blur(const dssim_px_t *src, dssim_px_t *restrict tmp1, ds
 /*
  * blurs (approximate of gaussian)
  */
-static void blur(const dssim_px_t *restrict src, dssim_px_t *restrict tmp, dssim_px_t *restrict dst,
+void blur(const dssim_px_t *src, dssim_px_t *restrict tmp, dssim_px_t *restrict dst,
                  const int width, const int height)
 {
 #ifdef USE_COCOA
@@ -253,6 +240,12 @@ static void blur(const dssim_px_t *restrict src, dssim_px_t *restrict tmp, dssim
 #endif
 }
 
+
+void blur_in_place(dssim_px_t *restrict srcdst, dssim_px_t *restrict tmp,
+                 const int width, const int height) {
+    blur(srcdst, tmp, srcdst, width, height);
+}
+
 /*
  * Conversion is not reversible
  */
@@ -283,9 +276,12 @@ inline static dssim_lab convert_pixel_rgba(linear_rgba px, int i, int j)
 /* copy number of rows from a 2x larger image */
 static void subsampled_copy(dssim_chan *new_chan, const int dest_y_offset, const int rows, const dssim_px_t *src_img, const int src_width)
 {
+    const int width = dssim_get_chan_width(new_chan);
+    // const int height = dssim_get_chan_height(new_chan);
+    dssim_px_t *img = dssim_get_chan_img(new_chan);
     for(int y = 0; y < rows; y++) {
-        for(int x = 0; x < new_chan->width; x++) {
-            new_chan->img[x + (y + dest_y_offset) * new_chan->width] = 0.25 * (
+        for(int x = 0; x < width; x++) {
+            img[x + (y + dest_y_offset) * width] = 0.25 * (
                 src_img[x*2 + y*2 * src_width] + src_img[x*2+1 + y*2 * src_width] +
                 src_img[x*2 + (y*2+1) * src_width] + src_img[x*2+1 + (y*2+1) * src_width]
             );
@@ -296,8 +292,8 @@ static void subsampled_copy(dssim_chan *new_chan, const int dest_y_offset, const
 static void convert_image_subsampled(dssim_image *img, dssim_row_callback cb, void *callback_user_data)
 {
     dssim_chan *chan = dssim_image_get_channel(img, 0, 0);
-    const int width = chan->width;
-    const int height = chan->height;
+    const int width = dssim_get_chan_width(chan);
+    const int height = dssim_get_chan_height(chan);
     dssim_px_t *row_tmp0[dssim_image_get_num_channels(img)];
     dssim_px_t *row_tmp1[dssim_image_get_num_channels(img)];
 
@@ -306,9 +302,10 @@ static void convert_image_subsampled(dssim_image *img, dssim_row_callback cb, vo
         row_tmp1[ch] = row_tmp0[ch] + width;
     }
 
+    dssim_px_t *chan_img = dssim_get_chan_img(chan);
     for(int y = 0; y < height; y += 2) {
-        row_tmp0[0] = &chan->img[width * y]; // Luma can be written directly (it's unscaled)
-        row_tmp1[0] = &chan->img[width * MIN(height-1, y+1)];
+        row_tmp0[0] = &chan_img[width * y]; // Luma can be written directly (it's unscaled)
+        row_tmp1[0] = &chan_img[width * MIN(height-1, y+1)];
 
         cb(row_tmp0, dssim_image_get_num_channels(img), y, width, callback_user_data);
         cb(row_tmp1, dssim_image_get_num_channels(img), MIN(height-1, y+1), width, callback_user_data);
@@ -328,13 +325,15 @@ static void convert_image_subsampled(dssim_image *img, dssim_row_callback cb, vo
 static void convert_image_simple(dssim_image *img, dssim_row_callback cb, void *callback_user_data)
 {
     dssim_chan *chan = dssim_image_get_channel(img, 0, 0);
-    const int width = chan->width;
-    const int height = chan->height;
+    const int width = dssim_get_chan_width(chan);
+    const int height = dssim_get_chan_height(chan);
     dssim_px_t *row_tmp[dssim_image_get_num_channels(img)];
 
     for(int y = 0; y < height; y++) {
         for(int ch = 0; ch < dssim_image_get_num_channels(img); ch++) {
-            row_tmp[ch] = &dssim_image_get_channel(img, ch, 0)->img[width * y];
+            dssim_chan *chan = dssim_image_get_channel(img, ch, 0);
+            dssim_px_t *chan_img = dssim_get_chan_img(chan);
+            row_tmp[ch] = &chan_img[width * y];
         }
         cb(row_tmp, dssim_image_get_num_channels(img), y, width, callback_user_data);
     }
@@ -480,7 +479,7 @@ int dssim_init_image_float_callback(dssim_attr *attr, dssim_image *img, const in
         dssim_chan *prev = dssim_image_get_channel(img, ch, 0);
         for (int s = 1; s < dssim_image_get_num_channel_scales(img, ch); s++) {
             dssim_chan *chan = dssim_image_get_channel(img, ch, s);
-            subsampled_copy(chan, 0, chan->height, prev->img, prev->width);
+            subsampled_copy(chan, 0, dssim_get_chan_height(chan), dssim_get_chan_img(prev), dssim_get_chan_width(prev));
             prev = chan;
         }
     }
@@ -493,41 +492,7 @@ int dssim_init_image_float_callback(dssim_attr *attr, dssim_image *img, const in
     return 1;
 }
 
-static void dssim_preprocess_channel(dssim_chan *chan, dssim_px_t *tmp)
-{
-    const int width = chan->width;
-    const int height = chan->height;
-
-    if (chan->is_chroma) {
-        blur(chan->img, tmp, chan->img, width, height);
-    }
-
-    chan->mu = malloc(width * height * sizeof(chan->mu[0]));
-    blur(chan->img, tmp, chan->mu, width, height);
-
-    chan->img_sq_blur = malloc(width * height * sizeof(chan->img_sq_blur[0]));
-    for(int i=0; i < width*height; i++) {
-        chan->img_sq_blur[i] = chan->img[i] * chan->img[i];
-    }
-    blur(chan->img_sq_blur, tmp, chan->img_sq_blur, width, height);
-}
-
-static dssim_px_t *get_img1_img2_blur(const dssim_chan *restrict original, dssim_chan *restrict modified, dssim_px_t *restrict tmp)
-{
-    const int width = original->width;
-    const int height = original->height;
-
-    dssim_px_t *restrict img1 = original->img;
-    dssim_px_t *restrict img2 = modified->img; modified->img = NULL; // img2 is turned in-place into blur(img1*img2)
-
-    for (int j = 0; j < width*height; j++) {
-        img2[j] *= img1[j];
-    }
-
-    blur(img2, tmp, img2, width, height);
-
-    return img2;
-}
+extern void dssim_preprocess_channel(dssim_chan *chan, dssim_px_t *tmp);
 
 static double to_dssim(double ssim) {
     assert(ssim > 0);
@@ -536,17 +501,17 @@ static double to_dssim(double ssim) {
 
 double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *restrict modified, dssim_px_t *restrict tmp, dssim_ssim_map *ssim_map_out, char save_ssim_map)
 {
-    if (original->width != modified->width || original->height != modified->height) {
+    const int width = dssim_get_chan_width(original);
+    const int height = dssim_get_chan_height(original);
+
+    if (width != dssim_get_chan_width(modified) || height != dssim_get_chan_height(modified)) {
         return 0;
     }
 
-    const int width = original->width;
-    const int height = original->height;
-
-    const dssim_px_t *restrict mu1 = original->mu;
-    dssim_px_t *const mu2 = modified->mu;
-    const dssim_px_t *restrict img1_sq_blur = original->img_sq_blur;
-    const dssim_px_t *restrict img2_sq_blur = modified->img_sq_blur;
+    const dssim_px_t *restrict mu1 = dssim_get_chan_mu_const(original);
+    dssim_px_t *const mu2 = dssim_get_chan_mu_const(modified);
+    const dssim_px_t *restrict img1_sq_blur = dssim_get_chan_img_sq_blur_const(original);
+    const dssim_px_t *restrict img2_sq_blur = dssim_get_chan_img_sq_blur_const(modified);
     dssim_px_t *restrict img1_img2_blur = get_img1_img2_blur(original, modified, tmp);
 
     assert(mu1);
@@ -578,10 +543,6 @@ double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *re
         }
     }
 
-    if (!save_ssim_map) { // reuses mu2 memory
-        free(modified->mu);
-    }
-
     if (ssim_map_out) {
         *ssim_map_out = (dssim_ssim_map){
             .width = width,
@@ -590,11 +551,6 @@ double dssim_compare_channel(const dssim_chan *restrict original, dssim_chan *re
             .data = ssimmap,
         };
     }
-
-    modified->mu = NULL;
-
-    free(modified->img_sq_blur); modified->img_sq_blur = NULL;
-    free(img1_img2_blur);
 
     return ssim_sum / (width * height);
 }

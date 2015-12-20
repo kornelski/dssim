@@ -10,14 +10,22 @@ pub use ffi::DSSIM_SRGB_GAMMA as SRGB_GAMMA;
 use ::self::libc::{c_int, c_uint, size_t};
 
 pub use val::Dssim as Val;
-type DssimChan = ffi::dssim_chan;
+
+pub struct DssimChan {
+    pub width: usize,
+    pub height: usize,
+    pub img: Vec<ffi::dssim_px_t>,
+    pub mu: Vec<ffi::dssim_px_t>,
+    pub img_sq_blur: Vec<ffi::dssim_px_t>,
+    pub is_chroma: bool,
+}
 
 struct DssimMapChan {
     scales: Vec<SsimMap>,
 }
 
 pub struct Dssim {
-    tmp: Vec<f32>,
+    tmp: Vec<ffi::dssim_px_t>,
     color_weight: f64,
     scale_weights: Vec<f64>,
     subsample_chroma: bool,
@@ -27,7 +35,7 @@ pub struct Dssim {
 }
 
 pub struct DssimChanScale {
-    scales: Vec<ffi::dssim_chan>,
+    scales: Vec<DssimChan>,
 }
 
 pub struct DssimImage<'mem_src> {
@@ -138,7 +146,7 @@ impl Dssim {
                 let original = &original_image.chan[ch].scales[n];
                 let mut modified = &mut modified_image.chan[ch].scales[n];
 
-                let weight = if original.is_chroma != 0 {self.color_weight} else {1.0} * scale_weight;
+                let weight = if original.is_chroma {self.color_weight} else {1.0} * scale_weight;
 
                 let save_maps = self.save_maps_scales as usize > n && self.save_maps_channels as usize > ch;
                 let score = weight * unsafe{ffi::dssim_compare_channel(original, modified, tmp, dssim_create_ssim_map(self, ch, n), if save_maps {1} else {0})};
@@ -157,15 +165,6 @@ fn to_dssim(ssim: f64) -> f64 {
     return 1.0 / ssim.min(1.0) - 1.0;
 }
 
-
-impl<'a> Drop for DssimImage<'a> {
-    fn drop(&mut self) {
-        unsafe {
-            ffi::dssim_dealloc_image(self);
-        }
-    }
-}
-
 impl SsimMap {
     pub fn new() -> SsimMap {
         SsimMap {
@@ -176,7 +175,7 @@ impl SsimMap {
         }
     }
 
-    pub fn data(&self) -> Option<&[f32]> {
+    pub fn data(&self) -> Option<&[ffi::dssim_px_t]> {
         if self.data.is_null() {return None;}
         unsafe {
             Some(std::slice::from_raw_parts(self.data, self.width as usize * self.height as usize))
@@ -185,7 +184,7 @@ impl SsimMap {
 }
 
 #[no_mangle]
-pub extern "C" fn dssim_get_tmp(attr: &mut Dssim, size: size_t) -> *mut f32 {
+pub extern "C" fn dssim_get_tmp(attr: &mut Dssim, size: size_t) -> *mut ffi::dssim_px_t {
     attr.tmp.reserve((size as usize + 3) / 4);
     (&mut attr.tmp[..]).as_mut_ptr()
 }
@@ -216,7 +215,52 @@ pub extern "C" fn dssim_image_get_num_channel_scales(img: &DssimImage, ch: c_uin
 }
 
 #[no_mangle]
-pub extern "C" fn dssim_image_get_channel<'a>(img: &'a mut DssimImage, ch: c_uint, s: c_uint) -> &'a mut ffi::dssim_chan {
+pub extern "C" fn dssim_get_chan_width(ch: &DssimChan) -> c_int {
+    ch.width as c_int
+}
+#[no_mangle]
+pub extern "C" fn dssim_get_chan_height(ch: &DssimChan) -> c_int {
+    ch.height as c_int
+}
+#[no_mangle]
+pub extern "C" fn dssim_get_chan_mu_const(ch: &DssimChan) -> *const ffi::dssim_px_t {
+    ch.mu[..].as_ptr()
+}
+
+#[no_mangle]
+pub extern "C" fn dssim_get_chan_img_const(ch: &DssimChan) -> *const ffi::dssim_px_t {
+    ch.img[..].as_ptr()
+}
+
+#[no_mangle]
+pub extern "C" fn dssim_get_chan_img(ch: &mut DssimChan) -> *mut ffi::dssim_px_t {
+    ch.img[..].as_mut_ptr()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn get_img1_img2_blur(original: &DssimChan, modified: &mut DssimChan, tmp: *mut ffi::dssim_px_t) -> *const ffi::dssim_px_t
+{
+    for (mut img2, img1) in modified.img.iter_mut().zip(original.img.iter()) {
+        *img2 *= *img1;
+    }
+
+    ffi::blur_in_place(modified.img[..].as_mut_ptr(), tmp, modified.width as c_int, modified.height as c_int);
+
+    return modified.img[..].as_ptr();
+}
+
+#[no_mangle]
+pub extern "C" fn dssim_get_chan_img_sq_blur_const(ch: &DssimChan) -> *const ffi::dssim_px_t {
+    ch.img_sq_blur[..].as_ptr()
+}
+
+#[no_mangle]
+pub extern "C" fn dssim_get_chan_img_sq_blur(ch: &mut DssimChan) -> *mut ffi::dssim_px_t {
+    ch.img_sq_blur[..].as_mut_ptr()
+}
+
+#[no_mangle]
+pub extern "C" fn dssim_image_get_channel<'a>(img: &'a mut DssimImage, ch: c_uint, s: c_uint) -> &'a mut DssimChan {
     &mut img.chan[ch as usize].scales[s as usize]
 }
 
@@ -229,6 +273,22 @@ pub extern "C" fn dssim_get_scale_weights(attr: &Dssim, i: c_uint) -> f64 {
 pub extern "C" fn dssim_get_color_weight(attr: &Dssim) -> f64 {
     attr.color_weight
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn dssim_preprocess_channel(chan: &mut DssimChan, tmp: *mut ffi::dssim_px_t) {
+    let width = chan.width as c_int;
+    let height = chan.height as c_int;
+
+    if chan.is_chroma {
+        ffi::blur_in_place(chan.img[..].as_mut_ptr(), tmp, width, height);
+    }
+
+    ffi::blur(chan.img[..].as_ptr(), tmp, chan.mu[..].as_mut_ptr(), width, height);
+
+    chan.img_sq_blur = chan.img.iter().cloned().map(|i|i*i).collect();
+    ffi::blur_in_place(chan.img_sq_blur[..].as_mut_ptr(), tmp, width, height);
+}
+
 
 #[no_mangle]
 pub extern "C" fn dssim_image_set_channels(attr: &Dssim, img: &mut DssimImage, width: c_int, height: c_int, num_channels: c_int, subsample_chroma: c_int) {
@@ -248,13 +308,13 @@ fn create_chan(width: c_int, height: c_int, is_chroma: bool, num_scales: usize) 
 
     let mut scales = Vec::with_capacity(num_scales);
     for _ in 0..num_scales {
-        scales.push(ffi::dssim_chan{
-            width: width as c_int,
-            height: height as c_int,
-            is_chroma: if is_chroma {1} else {0},
-            img: unsafe { libc::malloc((width * height * std::mem::size_of::<f32>()).into()) },
-            mu: std::ptr::null_mut(),
-            img_sq_blur: std::ptr::null_mut(),
+        scales.push(DssimChan{
+            width: width,
+            height: height,
+            is_chroma: is_chroma,
+            img: vec![0.0; width * height],
+            mu: vec![0.0; width * height],
+            img_sq_blur: Vec::new(), // keep empty
         });
         width /= 2;
         height /= 2;

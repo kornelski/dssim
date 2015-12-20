@@ -6,18 +6,10 @@ extern crate libc;
 use ::libc::{c_int, c_uint, c_void, c_char};
 use ::dssim::Dssim;
 use ::dssim::DssimImage;
+use ::dssim::DssimChan;
 
 const MAX_SCALES: usize = 5;
 
-#[repr(C)]
-pub struct dssim_chan {
-    pub width: c_int,
-    pub height: c_int,
-    pub img: *mut c_void,// px
-    pub mu: *mut dssim_px_t,
-    pub img_sq_blur: *mut dssim_px_t,
-    pub is_chroma: c_char,
-}
 
 pub type dssim_px_t = f32;
 
@@ -73,7 +65,12 @@ extern "C" {
                               width: c_int, height: c_int,
                               gamma: f64) -> c_int;
 
-    pub fn dssim_dealloc_image(arg1: &mut DssimImage) -> ();
-    pub fn dssim_compare_channel(orig: &dssim_chan, modif: &mut dssim_chan, tmp: *mut dssim_px_t,
+    pub fn dssim_compare_channel(orig: &DssimChan, modif: &mut DssimChan, tmp: *mut dssim_px_t,
       ssim_map_out: *mut dssim_ssim_map, save_ssim_map: c_char) -> f64;
+
+    pub fn blur_in_place(srcdst:  *mut dssim_px_t, tmp:  *mut dssim_px_t,
+                 width: c_int, height: c_int);
+    pub fn blur(src:  *const dssim_px_t, tmp:  *mut dssim_px_t, dst:  *mut dssim_px_t,
+                 width: c_int, height: c_int);
+
 }

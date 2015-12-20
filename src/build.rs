@@ -11,6 +11,7 @@ fn main() {
 
     cmd.arg(format!("DESTDIR={}/", destdir));
     cmd.arg(format!("SRC={}/src/", cargo_manifest));
+    cmd.arg("CFLAGSOPT=-g");
 
     if let Some(j) = getenv("NUM_JOBS").ok() {
         cmd.arg(format!("-j{}", j));
