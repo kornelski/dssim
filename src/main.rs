@@ -29,6 +29,7 @@ use std::io::Write;
 use std::env;
 use std::io;
 use getopts::Options;
+use dssim::RGBAPLU;
 
 fn usage(argv0: &str) {
     write!(io::stderr(), "\
@@ -46,30 +47,31 @@ fn to_byte(i: f32) -> u8 {
     else {(i * 256.0) as u8}
 }
 
-#[allow(non_camel_case_types)]
-enum Gamma {
-    sRGB,
-    pow(f64),
+struct rgba {
+    r:u8,g:u8,b:u8,a:u8,
 }
 
-fn get_gamma() -> Gamma {
-    return Gamma::sRGB; /*
-    // Assume unlabelled are sRGB too
-    if (RWPNG_NONE == image->output_color || RWPNG_SRGB == image->output_color) {
-        return dssim_srgb_gamma;
-    }
-    const double gamma = image->gamma;
-    if (gamma > 0 && gamma <= 1.0) {
-        // If the gamma chunk states gamma closest to sRGB that PNG can express, then assume sRGB too
-        if (RWPNG_GAMA_ONLY == image->output_color && gamma > 0.4545499 && gamma < 0.4545501) {
-            return dssim_srgb_gamma;
-        }
-        return gamma;
+fn to_rgbaplu(bitmap: &[lodepng::RGBA<u8>]) -> Vec<RGBAPLU> {
+    let mut gamma_lut = [0f32; 256];
+
+    for i in 0..256 {
+        let s: f64 = i as f64 / 255.0;
+        gamma_lut[i] = if s <= 0.04045 {
+            s / 12.92
+        } else {
+            ((s + 0.055) / 1.055).powf(2.4)
+        } as f32
     }
 
-    fprintf(stderr, "Warning: invalid gamma ignored: %f\n", gamma);
-    return 0.45455;
-    */
+    bitmap.iter().map(|px|{
+        let a_unit = px.a as f32 / 255.0;
+        RGBAPLU {
+            r: gamma_lut[px.r as usize] * a_unit,
+            g: gamma_lut[px.g as usize] * a_unit,
+            b: gamma_lut[px.b as usize] * a_unit,
+            a: a_unit,
+        }
+    }).collect()
 }
 
 fn main() {
@@ -112,7 +114,8 @@ fn main() {
     };
 
     let mut attr = dssim::Dssim::new();
-    let original = attr.create_image(image1.buffer.as_ref(), dssim::DSSIM_RGBA, image1.width, image1.width * 4, dssim::SRGB_GAMMA).expect("orig image creation");
+    let orig_rgba = to_rgbaplu(image1.buffer.as_ref());
+    let original = attr.create_image(&orig_rgba, image1.width, image1.height).expect("orig image creation");
 
     for file2 in files {
 
@@ -129,7 +132,8 @@ fn main() {
             std::process::exit(1);
         }
 
-        let modified = attr.create_image(image2.buffer.as_ref(), dssim::DSSIM_RGBA, image2.width, image2.width * 4, dssim::SRGB_GAMMA).expect("mod image creation");
+        let mod_rgba = to_rgbaplu(image2.buffer.as_ref());
+        let modified = attr.create_image(&mod_rgba, image2.width, image2.height).expect("mod image creation");
 
         if map_output_file.is_some() {
             attr.set_save_ssim_maps(1, 1);
@@ -145,7 +149,7 @@ fn main() {
             let out: Vec<_> = map_meta.data().expect("map should have data").iter().map(|ssim|{
                 let max = 1_f32 - ssim;
                 let maxsq = max * max;
-                return dssim::rgba {
+                return rgba {
                     r: to_byte(max * 3.0),
                     g: to_byte(maxsq * 6.0),
                     b: to_byte(max / ((1_f32 - avgssim) * 4_f32)),
