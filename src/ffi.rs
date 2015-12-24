@@ -2,7 +2,7 @@
 #![allow(non_camel_case_types)]
 
 extern crate libc;
-use ::libc::{c_int, c_uint, c_void, c_char};
+use ::libc::{c_int, c_void};
 
 pub type dssim_px_t = f32;
 

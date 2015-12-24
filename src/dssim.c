@@ -34,96 +34,8 @@
 #define MAX(a,b) ((a)>=(b)?(a):(b))
 #endif
 
-#define MAX_SCALES 5
 
-typedef struct {
-    dssim_px_t l, A, b;
-} dssim_lab;
 
-typedef struct {
-    unsigned char r, g, b;
-} dssim_rgb;
-
-typedef struct {
-    dssim_px_t r, g, b, a; // premultiplied
-} linear_rgba;
-
-struct dssim_chan;
-typedef struct dssim_chan dssim_chan;
-
-int dssim_get_subsample_chroma(dssim_attr *attr);
-double dssim_get_color_weight(dssim_attr *attr);
-double dssim_get_scale_weights(dssim_attr *attr, unsigned int i);
-void dssim_image_set_channels(const dssim_attr *attr, dssim_image *, int, int, int, int);
-int dssim_image_get_num_channels(dssim_image *);
-int dssim_get_chan_width(const dssim_chan *);
-int dssim_get_chan_height(const dssim_chan *);
-float *dssim_get_chan_img(dssim_chan *);
-const float *dssim_get_chan_img_const(const dssim_chan *);
-const float *dssim_get_chan_img_sq_blur_const(const dssim_chan *);
-float *dssim_get_chan_img_sq_blur(dssim_chan *);
-const float *dssim_get_chan_mu_const(const dssim_chan *);
-int dssim_image_get_num_channel_scales(dssim_image *, int);
-dssim_chan *dssim_image_get_channel(dssim_image *, int, int);
-
-dssim_px_t *dssim_get_tmp(dssim_attr *attr, size_t size);
-
-static int set_gamma(dssim_px_t gamma_lut[static 256], const double invgamma)
-{
-    if (invgamma == dssim_srgb_gamma) {
-        for (int i = 0; i < 256; i++) {
-            const double s = i / 255.0;
-            if (s <= 0.04045) {
-                gamma_lut[i] = s / 12.92;
-            } else {
-                gamma_lut[i] = pow((s + 0.055) / 1.055, 2.4);
-            }
-        }
-        return 1;
-    } else if (invgamma > 0 && invgamma < 1.0) {
-        for (int i = 0; i < 256; i++) {
-            gamma_lut[i] = pow(i / 255.0, 1.0 / invgamma);
-        }
-        return 1;
-    } else {
-        return 0;
-    }
-}
-
-static const double D65x = 0.9505, D65y = 1.0, D65z = 1.089;
-
-inline static linear_rgba rgb_to_linear(const dssim_px_t gamma_lut[static 256], const unsigned char pxr, const unsigned char pxg, const unsigned char pxb, const unsigned char pxa) {
-    const dssim_px_t r = gamma_lut[pxr],
-                     g = gamma_lut[pxg],
-                     b = gamma_lut[pxb],
-                     a = pxa / 255.0;
-
-    return (linear_rgba){
-        .r = r * a,
-        .g = g * a,
-        .b = b * a,
-        .a = a,
-    };
-}
-
-inline static dssim_lab rgb_to_lab(const dssim_px_t r, const dssim_px_t g, const dssim_px_t b)
-{
-    const double fx = (r * 0.4124 + g * 0.3576 + b * 0.1805) / D65x;
-    const double fy = (r * 0.2126 + g * 0.7152 + b * 0.0722) / D65y;
-    const double fz = (r * 0.0193 + g * 0.1192 + b * 0.9505) / D65z;
-
-    const double epsilon = 216.0 / 24389.0;
-    const double k = (24389.0 / 27.0) / 116.f; // http://www.brucelindbloom.com/LContinuity.html
-    const dssim_px_t X = (fx > epsilon) ? powf(fx, 1.f / 3.f) - 16.f/116.f : k * fx;
-    const dssim_px_t Y = (fy > epsilon) ? powf(fy, 1.f / 3.f) - 16.f/116.f : k * fy;
-    const dssim_px_t Z = (fz > epsilon) ? powf(fz, 1.f / 3.f) - 16.f/116.f : k * fz;
-
-    return (dssim_lab) {
-        Y * 1.16f,
-        (86.2f/ 220.0f + 500.0f/ 220.0f * (X - Y)), /* 86 is a fudge to make the value positive */
-        (107.9f/ 220.0f + 200.0f/ 220.0f * (Y - Z)), /* 107 is a fudge to make the value positive */
-    };
-}
 
 #ifndef USE_COCOA
 /*
@@ -251,32 +163,5 @@ void blur_in_place(dssim_px_t *restrict srcdst, dssim_px_t *restrict tmp,
     assert((intptr_r)srcdst > 1);
     assert(tmp);
     blur(srcdst, tmp, srcdst, width, height);
-}
-
-/*
- * Conversion is not reversible
- */
-inline static dssim_lab convert_pixel_rgba(linear_rgba px, int i, int j)
-{
-    // Compose image on coloured background to better judge dissimilarity with various backgrounds
-    if (px.a < 255) {
-        int n = i ^ j;
-        if (n & 4) {
-            px.r += 1.0 - px.a; // assumes premultiplied alpha
-        }
-        if (n & 8) {
-            px.g += 1.0 - px.a;
-        }
-        if (n & 16) {
-            px.b += 1.0 - px.a;
-        }
-    }
-
-    dssim_lab f1 = rgb_to_lab(px.r, px.g, px.b);
-    assert(f1.l >= 0.f && f1.l <= 1.0f);
-    assert(f1.A >= 0.f && f1.A <= 1.0f);
-    assert(f1.b >= 0.f && f1.b <= 1.0f);
-
-    return f1;
 }
 

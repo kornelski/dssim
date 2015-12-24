@@ -1,3 +1,6 @@
+#![allow(non_upper_case_globals)]
+#![allow(non_snake_case)]
+
 extern crate libc;
 extern crate itertools;
 extern crate lodepng;
@@ -9,15 +12,16 @@ use image::*;
 use std::marker;
 
 use ::self::libc::{c_int, c_uint, size_t};
+pub type Px = f32;
 
 pub use val::Dssim as Val;
 
 pub struct DssimChan {
     pub width: usize,
     pub height: usize,
-    pub img: Vec<ffi::dssim_px_t>,
-    pub mu: Vec<ffi::dssim_px_t>,
-    pub img_sq_blur: Vec<ffi::dssim_px_t>,
+    pub img: Vec<Px>,
+    pub mu: Vec<Px>,
+    pub img_sq_blur: Vec<Px>,
     pub is_chroma: bool,
 }
 
@@ -26,7 +30,6 @@ struct DssimMapChan {
 }
 
 pub struct Dssim {
-    tmp: Vec<ffi::dssim_px_t>,
     color_weight: f64,
     scale_weights: Vec<f64>,
     subsample_chroma: bool,
@@ -41,6 +44,12 @@ struct rgba {
     r:u8,g:u8,b:u8,a:u8,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct rgb {
+    r:u8,g:u8,b:u8,
+}
+
 struct DssimChanScale {
     scales: Vec<DssimChan>,
 }
@@ -49,17 +58,13 @@ pub struct DssimImage {
     chan: Vec<DssimChanScale>,
 }
 
-struct RGBAPLUBitmap {
-    bitmap: Vec<RGBAPLU>,
+struct Bitmap<T> {
+    bitmap: Vec<T>,
     width: usize,
     height: usize,
 }
-
-struct GBitmap {
-    bitmap: Vec<f32>,
-    width: usize,
-    height: usize,
-}
+type GBitmap = Bitmap<f32>;
+type RGBAPLUBitmap = Bitmap<RGBAPLU>;
 
 enum Converted {
     Gray(GBitmap),
@@ -83,7 +88,7 @@ pub struct SsimMap {
     pub width: usize,
     pub height: usize,
     pub dssim: f64,
-    pub data: Vec<ffi::dssim_px_t>,
+    pub data: Vec<Px>,
 }
 
 pub fn new() -> Dssim {
@@ -111,7 +116,6 @@ impl Dssim {
             subsample_chroma: true,
             save_maps_scales: 0,
             save_maps_channels: 0,
-            tmp: Vec::new(),
             ssim_maps: Vec::new(),
         }
     }
@@ -171,21 +175,6 @@ impl Dssim {
         }).collect();
 
         assert_eq!(half_width * half_height, scaled.len());
-// {
-//         let wat:Vec<_> = scaled.iter().map(|px|{
-//             let a = if px.a < 0.0/256.0 {1.0} else {px.a};
-//             rgba{
-//                 r:(255.49*(px.r/a).powf(1.0/2.2)) as u8,
-//                 g:(255.49*(px.g/a).powf(1.0/2.2)) as u8,
-//                 b:(255.49*(px.b/a).powf(1.0/2.2)) as u8,
-//                 a:(255.49*px.a) as u8,
-//             }
-//         }).collect();
-
-//         self::lodepng::encode32_file(
-//             format!("/tmp/scaled-{}.png",half_width),
-//             &wat, half_width, half_height).unwrap();
-// }
         return Some(RGBAPLUBitmap{bitmap:scaled, width:half_width, height:half_height});
     }
 
@@ -224,9 +213,45 @@ impl Dssim {
     }
 
 
-    fn to_luma(rgba: &[RGBAPLU], width: usize, height: usize) -> GBitmap {
+    fn to_rgb(rgba: &[RGBAPLU], width: usize, _: usize) -> Vec<RGBLU> {
+        let mut x=11; // offset so that block-based compressors don't align
+        let mut y=11;
+        let rgb:Vec<_> = rgba.iter().map(|px|{
+            let n = x ^ y;
+            if x >= width {
+                x=0;
+                y+=1;
+            }
+            x += 1;
+            let mut r = px.r;
+            let mut g = px.g;
+            let mut b = px.b;
+            let a = px.a;
+            if a < 255.0 {
+                if (n & 16) != 0 {
+                    r += 1.0 - a;
+                }
+                if (n & 8) != 0 {
+                    g += 1.0 - a; // assumes premultiplied alpha
+                }
+                if (n & 32) != 0 {
+                    b += 1.0 - a;
+                }
+            }
+
+            RGBLU {
+                r: r,
+                g: g,
+                b: b,
+            }
+        }).collect();
+
+        return rgb;
+    }
+
+    fn to_luma(rgb: &[RGBLU], width: usize, height: usize) -> GBitmap {
         GBitmap{
-            bitmap: rgba.iter().map(|px| {
+            bitmap: rgb.iter().map(|px| {
                 let fy = ((px.r as f64 * 0.2126 + px.g as f64 * 0.7152 + px.b as f64 * 0.0722) / D65y) as f32;
 
                 let epsilon: f32 = 216.0 / 24389.0;
@@ -240,8 +265,8 @@ impl Dssim {
         }
     }
 
-    fn to_lab(rgba: &[RGBAPLU], width: usize, height: usize) -> (GBitmap, GBitmap, GBitmap) {
-        let (l,a,b) = Self::unzip3(rgba.iter().map(|px| {
+    fn to_lab(rgb: &[RGBLU], width: usize, height: usize) -> (GBitmap, GBitmap, GBitmap) {
+        let (l,a,b) = Self::unzip3(rgb.iter().map(|px| {
 
             let fx = ((px.r as f64 * 0.4124 + px.g as f64 * 0.3576 + px.b as f64 * 0.1805) / D65x) as f32;
             let fy = ((px.r as f64 * 0.2126 + px.g as f64 * 0.7152 + px.b as f64 * 0.0722) / D65y) as f32;
@@ -257,7 +282,7 @@ impl Dssim {
                 Y * 1.16,
                 (86.2/ 220.0 + 500.0/ 220.0 * (X - Y)), /* 86 is a fudge to make the value positive */
                 (107.9/ 220.0 + 200.0/ 220.0 * (Y - Z)), /* 107 is a fudge to make the value positive */
-            )
+            );
         }));
 
         return (
@@ -273,7 +298,7 @@ impl Dssim {
         let num_scales = self.scale_weights.len() + if self.subsample_chroma {1} else {0};
 
         let mut img = DssimImage {
-            chan: (0..3).map(|ch|DssimChanScale{
+            chan: (0..3).map(|_|DssimChanScale{
                 scales: Vec::with_capacity(num_scales),
             }).collect(),
         };
@@ -295,14 +320,15 @@ impl Dssim {
             }
         }
 
-        if !self.subsample_chroma {
-            return None; // FIXME
-        }
 
         let mut converted = Vec::with_capacity(num_scales);
-        converted.push(Converted::Gray(Self::to_luma(bitmap, width, height)));
+        if self.subsample_chroma {
+            converted.push(Converted::Gray(Self::to_luma(&Self::to_rgb(bitmap, width, height), width, height)));
+        } else {
+            converted.push(Converted::LAB(Self::to_lab(&Self::to_rgb(bitmap, width, height), width, height)));
+        }
         converted.extend(scales.drain(..).map(|s|{
-            Converted::LAB(Self::to_lab(&s.bitmap[..], s.width, s.height))
+            Converted::LAB(Self::to_lab(&Self::to_rgb(&s.bitmap[..], s.width, s.height), s.width, s.height))
         }));
 
         for c in converted.drain(..) {
@@ -318,35 +344,38 @@ impl Dssim {
             }
         }
 
+        let mut tmp = Vec::with_capacity(width*height);
+        unsafe {tmp.set_len(width*height)};
+
         for mut ch in img.chan.iter_mut() {
             for mut s in ch.scales.iter_mut() {
-                Self::preprocess_channel(self, s);
+                Self::preprocess_channel(s, &mut tmp[..]);
             }
         }
 
         return Some(img);
     }
 
-    fn preprocess_channel(attr: &mut Dssim, chan: &mut DssimChan) {
-        let width = chan.width as c_int;
-        let height = chan.height as c_int;
+    fn preprocess_channel(chan: &mut DssimChan, tmp: &mut [Px]) {
+        let width = chan.width;
+        let height = chan.height;
+        let tmp = &mut tmp[0..width*height];
 
         assert_eq!(chan.img.len(), chan.width * chan.height);
         assert!(width > 1);
         assert!(height > 1);
 
         unsafe {
-            let tmp = dssim_get_tmp(attr, chan.width*chan.height*4);
             if chan.is_chroma {
-                ffi::blur_in_place(chan.img[..].as_mut_ptr(), tmp, width, height);
+                ffi::blur_in_place(chan.img[..].as_mut_ptr(), tmp.as_mut_ptr(), width as c_int, height as c_int);
             }
 
             chan.mu.reserve(chan.width * chan.height);
             chan.mu.set_len(chan.width * chan.height);
-            ffi::blur(chan.img[..].as_ptr(), tmp, chan.mu[..].as_mut_ptr(), width, height);
+            ffi::blur(chan.img[..].as_ptr(), tmp.as_mut_ptr(), chan.mu[..].as_mut_ptr(), width as c_int, height as c_int);
 
             chan.img_sq_blur = chan.img.iter().cloned().map(|i|i*i).collect();
-            ffi::blur_in_place(chan.img_sq_blur[..].as_mut_ptr(), tmp, width, height);
+            ffi::blur_in_place(chan.img_sq_blur[..].as_mut_ptr(), tmp.as_mut_ptr(), width as c_int, height as c_int);
         }
     }
 
@@ -354,7 +383,11 @@ impl Dssim {
      Algorithm based on Rabah Mehdi's C++ implementation
      */
     pub fn compare(&mut self, original_image: &DssimImage, mut modified_image: DssimImage) -> Val {
-        let tmp = dssim_get_tmp(self, (original_image.chan[0].scales[0].width * original_image.chan[0].scales[0].height * std::mem::size_of::<ffi::dssim_px_t>()));
+        let width = original_image.chan[0].scales[0].width;
+        let height = original_image.chan[0].scales[0].height;
+
+        let mut tmp = Vec::with_capacity(width*height);
+        unsafe {tmp.set_len(width*height)};
 
         let mut ssim_sum = 0.0;
         let mut weight_sum = 0.0;
@@ -365,12 +398,13 @@ impl Dssim {
                 self.ssim_maps.push(DssimMapChan{scales:Vec::with_capacity(self.save_maps_scales.into())});
             }
 
-            for ((n, scale_weight), original, mut modified) in Zip::new((self.scale_weights.iter().cloned().enumerate(), original.scales.iter(), modified.scales.drain(..))) {
+            for ((n, scale_weight), original, modified) in Zip::new((self.scale_weights.iter().cloned().enumerate(), original.scales.iter(), modified.scales.drain(..))) {
 
                 let weight = if original.is_chroma {self.color_weight} else {1.0} * scale_weight;
 
                 let save_maps = save_channel && self.save_maps_scales as usize > n;
-                let (score, ssim_map) = Self::compare_channel(original, modified, tmp, save_maps).unwrap();
+
+                let (score, ssim_map) = Self::compare_channel(original, modified, &mut tmp[..], save_maps).unwrap();
                 ssim_sum += weight * score;
                 weight_sum += weight;
 
@@ -387,7 +421,7 @@ impl Dssim {
         return to_dssim(ssim_sum / weight_sum).into();
     }
 
-    fn compare_channel(original: &DssimChan, mut modified: DssimChan, tmp: *mut f32, save_ssim_map: bool) -> Option<(f64, Option<SsimMap>)> {
+    fn compare_channel(original: &DssimChan, mut modified: DssimChan, tmp: &mut [f32], save_ssim_map: bool) -> Option<(f64, Option<SsimMap>)> {
         if original.width != modified.width || original.height != modified.height {
             return None;
         }
@@ -430,7 +464,7 @@ impl Dssim {
             ssim_sum += ssim;
 
             if save_ssim_map {
-                *mu2_in_map_out = ssim as ffi::dssim_px_t;
+                *mu2_in_map_out = ssim as Px;
             }
         }
 
@@ -467,18 +501,10 @@ impl SsimMap {
         }
     }
 
-    pub fn data(&self) -> Option<&[ffi::dssim_px_t]> {
+    pub fn data(&self) -> Option<&[Px]> {
         if self.width == 0 {return None;}
         return Some(&self.data[..]);
     }
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_tmp(attr: &mut Dssim, size: size_t) -> *mut ffi::dssim_px_t {
-    let size = (size as usize + 3) / 4;
-    attr.tmp.reserve(size);
-    unsafe {attr.tmp.set_len(size);}
-    (&mut attr.tmp[..]).as_mut_ptr() // FIXME: super hacky
 }
 
 #[no_mangle]
@@ -515,40 +541,40 @@ pub extern "C" fn dssim_get_chan_height(ch: &DssimChan) -> c_int {
     ch.height as c_int
 }
 #[no_mangle]
-pub extern "C" fn dssim_get_chan_mu_const(ch: &DssimChan) -> *const ffi::dssim_px_t {
+pub extern "C" fn dssim_get_chan_mu_const(ch: &DssimChan) -> *const Px {
     ch.mu[..].as_ptr()
 }
 
 #[no_mangle]
-pub extern "C" fn dssim_get_chan_img_const(ch: &DssimChan) -> *const ffi::dssim_px_t {
+pub extern "C" fn dssim_get_chan_img_const(ch: &DssimChan) -> *const Px {
     ch.img[..].as_ptr()
 }
 
 #[no_mangle]
-pub extern "C" fn dssim_get_chan_img(ch: &mut DssimChan) -> *mut ffi::dssim_px_t {
+pub extern "C" fn dssim_get_chan_img(ch: &mut DssimChan) -> *mut Px {
     ch.img[..].as_mut_ptr()
 }
 
-fn get_img1_img2_blur<'a>(original: &DssimChan, modified_img: &'a mut Vec<ffi::dssim_px_t>, tmp: *mut ffi::dssim_px_t) -> &'a mut [ffi::dssim_px_t]
+fn get_img1_img2_blur<'a>(original: &DssimChan, modified_img: &'a mut Vec<Px>, tmp: &mut [Px]) -> &'a mut [Px]
 {
     for (mut img2, img1) in modified_img.iter_mut().zip(original.img.iter()) {
         *img2 *= *img1;
     }
 
     unsafe {
-        ffi::blur_in_place(modified_img[..].as_mut_ptr(), tmp, original.width as c_int, original.height as c_int);
+        ffi::blur_in_place(modified_img[..].as_mut_ptr(), tmp.as_mut_ptr(), original.width as c_int, original.height as c_int);
     }
 
     return &mut modified_img[..];
 }
 
 #[no_mangle]
-pub extern "C" fn dssim_get_chan_img_sq_blur_const(ch: &DssimChan) -> *const ffi::dssim_px_t {
+pub extern "C" fn dssim_get_chan_img_sq_blur_const(ch: &DssimChan) -> *const Px {
     ch.img_sq_blur[..].as_ptr()
 }
 
 #[no_mangle]
-pub extern "C" fn dssim_get_chan_img_sq_blur(ch: &mut DssimChan) -> *mut ffi::dssim_px_t {
+pub extern "C" fn dssim_get_chan_img_sq_blur(ch: &mut DssimChan) -> *mut Px {
     ch.img_sq_blur[..].as_mut_ptr()
 }
 

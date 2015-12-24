@@ -1,5 +1,5 @@
 
-/// RGBA, but: premultiplied alpha, linear, f32
+/// RGBA, but: premultiplied alpha, linear, f32 unit
 #[derive(Debug)]
 pub struct RGBAPLU {
     pub r: f32,
@@ -8,9 +8,11 @@ pub struct RGBAPLU {
     pub a: f32,
 }
 
-// Linear gray
-pub struct GL {
-    g: f32,
+#[derive(Debug)]
+pub struct RGBLU {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
 }
 
 // trait IntoRGBAPF32 {

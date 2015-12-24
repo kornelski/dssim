@@ -47,10 +47,6 @@ fn to_byte(i: f32) -> u8 {
     else {(i * 256.0) as u8}
 }
 
-struct rgba {
-    r:u8,g:u8,b:u8,a:u8,
-}
-
 fn to_rgbaplu(bitmap: &[lodepng::RGBA<u8>]) -> Vec<RGBAPLU> {
     let mut gamma_lut = [0f32; 256];
 
@@ -149,7 +145,7 @@ fn main() {
             let out: Vec<_> = map_meta.data().expect("map should have data").iter().map(|ssim|{
                 let max = 1_f32 - ssim;
                 let maxsq = max * max;
-                return rgba {
+                return lodepng::RGBA::<u8> {
                     r: to_byte(max * 3.0),
                     g: to_byte(maxsq * 6.0),
                     b: to_byte(max / ((1_f32 - avgssim) * 4_f32)),
