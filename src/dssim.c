@@ -23,7 +23,7 @@
 #include <assert.h>
 #include "dssim.h"
 
-#ifdef USE_COCOA
+#if 1
 #import <Accelerate/Accelerate.h>
 #endif
 
@@ -118,7 +118,10 @@ void blur(const dssim_px_t *src, dssim_px_t *restrict tmp, dssim_px_t *restrict 
     assert(tmp);
     assert(width > 2);
     assert(height > 2);
-#ifdef USE_COCOA
+    assert(src != tmp);
+    assert(dst != tmp);
+
+#if 1
     vImage_Buffer srcbuf = {
         .width = width,
         .height = height,
@@ -139,9 +142,9 @@ void blur(const dssim_px_t *src, dssim_px_t *restrict tmp, dssim_px_t *restrict 
     };
 
     dssim_px_t kernel[9] = {
-        1/16.f, 1/8.f, 1/16.f,
-        1/8.f,  1/4.f, 1/8.f,
-        1/16.f, 1/8.f, 1/16.f,
+        1.f/16.f, 2.f/16.f, 1.f/16.f,
+        2.f/16.f, 4.f/16.f, 2.f/16.f,
+        1.f/16.f, 2.f/16.f, 1.f/16.f,
     };
 
     vImageConvolve_PlanarF(&srcbuf, &tmpbuf, NULL, 0, 0, kernel, 3, 3, 0, kvImageEdgeExtend);
@@ -160,8 +163,8 @@ void blur(const dssim_px_t *src, dssim_px_t *restrict tmp, dssim_px_t *restrict 
 
 void blur_in_place(dssim_px_t *restrict srcdst, dssim_px_t *restrict tmp,
                  const int width, const int height) {
-    assert((intptr_r)srcdst > 1);
     assert(tmp);
+    assert(tmp != srcdst);
     blur(srcdst, tmp, srcdst, width, height);
 }
 

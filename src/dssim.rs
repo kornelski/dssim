@@ -24,8 +24,7 @@ extern crate itertools;
 extern crate lodepng;
 
 use self::itertools::Zip;
-use ffi;
-use std;
+use blur;
 use image::*;
 use std::marker;
 
@@ -385,15 +384,15 @@ impl Dssim {
 
         unsafe {
             if chan.is_chroma {
-                ffi::blur_in_place(chan.img[..].as_mut_ptr(), tmp.as_mut_ptr(), width as c_int, height as c_int);
+                blur::blur_in_place(&mut chan.img[..], tmp, width, height);
             }
 
             chan.mu.reserve(chan.width * chan.height);
             chan.mu.set_len(chan.width * chan.height);
-            ffi::blur(chan.img[..].as_ptr(), tmp.as_mut_ptr(), chan.mu[..].as_mut_ptr(), width as c_int, height as c_int);
+            blur::blur(&chan.img[..], tmp, &mut chan.mu[..], width, height);
 
             chan.img_sq_blur = chan.img.iter().cloned().map(|i|i*i).collect();
-            ffi::blur_in_place(chan.img_sq_blur[..].as_mut_ptr(), tmp.as_mut_ptr(), width as c_int, height as c_int);
+            blur::blur_in_place(&mut chan.img_sq_blur[..], tmp, width, height);
         }
     }
 
@@ -579,9 +578,7 @@ fn get_img1_img2_blur<'a>(original: &DssimChan, modified_img: &'a mut Vec<Px>, t
         *img2 *= *img1;
     }
 
-    unsafe {
-        ffi::blur_in_place(modified_img[..].as_mut_ptr(), tmp.as_mut_ptr(), original.width as c_int, original.height as c_int);
-    }
+    blur::blur_in_place(&mut modified_img[..], &mut tmp[0..original.width * original.height], original.width, original.height);
 
     return &mut modified_img[..];
 }
@@ -650,8 +647,8 @@ fn create_chan(width: c_int, height: c_int, is_chroma: bool, num_scales: usize) 
     }
 }
 
-#[cfg(test)]
-extern crate lodepng;
+
+/*
 
 #[test]
 fn png_compare() {
@@ -674,3 +671,5 @@ fn png_compare() {
     assert!(res < 0.000000000000001);
     assert_eq!(res, res);
 }
+
+*/
