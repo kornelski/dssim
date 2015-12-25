@@ -26,19 +26,15 @@ extern crate lodepng;
 use self::itertools::Zip;
 use blur;
 use image::*;
-use std::marker;
-
-use ::self::libc::{c_int, c_uint, size_t};
-pub type Px = f32;
 
 pub use val::Dssim as Val;
 
-pub struct DssimChan {
+pub struct DssimChan<T> {
     pub width: usize,
     pub height: usize,
-    pub img: Vec<Px>,
-    pub mu: Vec<Px>,
-    pub img_sq_blur: Vec<Px>,
+    pub img: Vec<T>,
+    pub mu: Vec<T>,
+    pub img_sq_blur: Vec<T>,
     pub is_chroma: bool,
 }
 
@@ -67,30 +63,13 @@ struct rgb {
     r:u8,g:u8,b:u8,
 }
 
-struct DssimChanScale {
-    scales: Vec<DssimChan>,
+struct DssimChanScale<T> {
+    scales: Vec<DssimChan<T>>,
 }
 
-pub struct DssimImage {
-    chan: Vec<DssimChanScale>,
+pub struct DssimImage<T> {
+    chan: Vec<DssimChanScale<T>>,
 }
-
-struct Bitmap<T> {
-    bitmap: Vec<T>,
-    width: usize,
-    height: usize,
-}
-type GBitmap = Bitmap<f32>;
-type RGBAPLUBitmap = Bitmap<RGBAPLU>;
-
-enum Converted {
-    Gray(GBitmap),
-    LAB((GBitmap, GBitmap, GBitmap)),
-}
-
-const D65x: f64 = 0.9505;
-const D65y: f64 = 1.0;
-const D65z: f64 = 1.089;
 
 // #[allow(non_camel_case_types)]
 // pub enum Gamma {
@@ -105,15 +84,15 @@ pub struct SsimMap {
     pub width: usize,
     pub height: usize,
     pub dssim: f64,
-    pub data: Vec<Px>,
+    pub data: Vec<f32>,
 }
 
 pub fn new() -> Dssim {
     Dssim::new()
 }
 
-impl DssimChan {
-    pub fn new(bitmap: Vec<f32>, width: usize, height: usize, is_chroma: bool) -> DssimChan {
+impl<T> DssimChan<T> {
+    pub fn new(bitmap: Vec<T>, width: usize, height: usize, is_chroma: bool) -> DssimChan<T> {
         DssimChan{
             img: bitmap,
             mu: Vec::with_capacity(width * height),
@@ -123,6 +102,42 @@ impl DssimChan {
             is_chroma: is_chroma,
         }
     }
+}
+
+impl DssimChan<f32> {
+    fn preprocess(&mut self, tmp: &mut [f32]) {
+        let width = self.width;
+        let height = self.height;
+        let tmp = &mut tmp[0..width*height];
+
+        assert_eq!(self.img.len(), self.width * self.height);
+        assert!(width > 1);
+        assert!(height > 1);
+
+        unsafe {
+            if self.is_chroma {
+                blur::blur_in_place(&mut self.img[..], tmp, width, height);
+            }
+
+            self.mu.reserve(self.width * self.height);
+            self.mu.set_len(self.width * self.height);
+            blur::blur(&self.img[..], tmp, &mut self.mu[..], width, height);
+
+            self.img_sq_blur = self.img.iter().cloned().map(|i|i*i).collect();
+            blur::blur_in_place(&mut self.img_sq_blur[..], tmp, width, height);
+        }
+    }
+
+    fn img1_img2_blur<'a>(&self, modified_img: &'a mut Vec<f32>, tmp: &mut [f32]) -> &'a mut [f32] {
+        for (mut img2, img1) in modified_img.iter_mut().zip(self.img.iter()) {
+            *img2 *= *img1;
+        }
+
+        blur::blur_in_place(&mut modified_img[..], &mut tmp[0..self.width * self.height], self.width, self.height);
+
+        return &mut modified_img[..];
+    }
+
 }
 
 impl Dssim {
@@ -166,152 +181,9 @@ impl Dssim {
         return Some(&chan.scales[scale_index]);
     }
 
-    fn downsample(bitmap: &[RGBAPLU], width: usize, height: usize) -> Option<RGBAPLUBitmap> {
-        if width < 8 || height < 8 {
-            return None;
-        }
-
-        assert_eq!(width * height, bitmap.len());
-
-        let half_height = height/2;
-        let half_width = width/2;
-
-        // crop odd pixels
-        let bitmap = &bitmap[0..width * half_height * 2];
-
-        let scaled:Vec<_> = bitmap.chunks(width * 2).flat_map(|pair|{
-            let (top, bot) = pair.split_at(half_width * 2);
-            let bot = &bot[0..half_width * 2];
-
-            return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| RGBAPLU {
-                r: (a[0].r + a[1].r + b[0].r + b[1].r) * 0.25,
-                g: (a[0].g + a[1].g + b[0].g + b[1].g) * 0.25,
-                b: (a[0].b + a[1].b + b[0].b + b[1].b) * 0.25,
-                a: (a[0].a + a[1].a + b[0].a + b[1].a) * 0.25,
-            })
-        }).collect();
-
-        assert_eq!(half_width * half_height, scaled.len());
-        return Some(RGBAPLUBitmap{bitmap:scaled, width:half_width, height:half_height});
-    }
-
-    fn unzip3<A, B, C, I, FromA, FromB, FromC>(iter: I) -> (FromA, FromB, FromC) where
-        FromA: Default + Extend<A>,
-        FromB: Default + Extend<B>,
-        FromC: Default + Extend<C>,
-        I: Sized + Iterator<Item=(A, B, C)>,
+    pub fn create_image<T>(&mut self, bitmap: &[T], width: usize, height: usize) -> Option<DssimImage<f32>>
+        where [T]: ToLABBitmap + Downsample<T>
     {
-        struct SizeHint<A>(usize, Option<usize>, marker::PhantomData<A>);
-        impl<A> Iterator for SizeHint<A> {
-            type Item = A;
-
-            fn next(&mut self) -> Option<A> { None }
-            fn size_hint(&self) -> (usize, Option<usize>) {
-                (self.0, self.1)
-            }
-        }
-
-        let (lo, hi) = iter.size_hint();
-        let mut ts: FromA = Default::default();
-        let mut us: FromB = Default::default();
-        let mut vs: FromC = Default::default();
-
-        ts.extend(SizeHint(lo, hi, marker::PhantomData));
-        us.extend(SizeHint(lo, hi, marker::PhantomData));
-        vs.extend(SizeHint(lo, hi, marker::PhantomData));
-
-        for (t, u, v) in iter {
-            ts.extend(Some(t));
-            us.extend(Some(u));
-            vs.extend(Some(v));
-        }
-
-        (ts, us, vs)
-    }
-
-
-    fn to_rgb(rgba: &[RGBAPLU], width: usize, _: usize) -> Vec<RGBLU> {
-        let mut x=11; // offset so that block-based compressors don't align
-        let mut y=11;
-        let rgb:Vec<_> = rgba.iter().map(|px|{
-            let n = x ^ y;
-            if x >= width {
-                x=0;
-                y+=1;
-            }
-            x += 1;
-            let mut r = px.r;
-            let mut g = px.g;
-            let mut b = px.b;
-            let a = px.a;
-            if a < 255.0 {
-                if (n & 16) != 0 {
-                    r += 1.0 - a;
-                }
-                if (n & 8) != 0 {
-                    g += 1.0 - a; // assumes premultiplied alpha
-                }
-                if (n & 32) != 0 {
-                    b += 1.0 - a;
-                }
-            }
-
-            RGBLU {
-                r: r,
-                g: g,
-                b: b,
-            }
-        }).collect();
-
-        return rgb;
-    }
-
-    fn to_luma(rgb: &[RGBLU], width: usize, height: usize) -> GBitmap {
-        GBitmap{
-            bitmap: rgb.iter().map(|px| {
-                let fy = ((px.r as f64 * 0.2126 + px.g as f64 * 0.7152 + px.b as f64 * 0.0722) / D65y) as f32;
-
-                let epsilon: f32 = 216.0 / 24389.0;
-                // http://www.brucelindbloom.com/LContinuity.html
-                let Y = if fy > epsilon {fy.powf(1.0f32 / 3.0f32) - 16.0f32/116.0f32} else {((24389.0 / 27.0) / 116.0) * fy};
-
-                return Y * 1.16;
-            }).collect(),
-            width: width,
-            height: height,
-        }
-    }
-
-    fn to_lab(rgb: &[RGBLU], width: usize, height: usize) -> (GBitmap, GBitmap, GBitmap) {
-        let (l,a,b) = Self::unzip3(rgb.iter().map(|px| {
-
-            let fx = ((px.r as f64 * 0.4124 + px.g as f64 * 0.3576 + px.b as f64 * 0.1805) / D65x) as f32;
-            let fy = ((px.r as f64 * 0.2126 + px.g as f64 * 0.7152 + px.b as f64 * 0.0722) / D65y) as f32;
-            let fz = ((px.r as f64 * 0.0193 + px.g as f64 * 0.1192 + px.b as f64 * 0.9505) / D65z) as f32;
-
-            let epsilon: f32 = 216.0 / 24389.0;
-            let k = ((24389.0 / 27.0) / 116.0) as f32; // http://www.brucelindbloom.com/LContinuity.html
-            let X = if fx > epsilon {fx.powf(1.0f32 / 3.0f32) - 16.0f32/116.0f32} else {k * fx};
-            let Y = if fy > epsilon {fy.powf(1.0f32 / 3.0f32) - 16.0f32/116.0f32} else {k * fy};
-            let Z = if fz > epsilon {fz.powf(1.0f32 / 3.0f32) - 16.0f32/116.0f32} else {k * fz};
-
-            return (
-                Y * 1.16,
-                (86.2/ 220.0 + 500.0/ 220.0 * (X - Y)), /* 86 is a fudge to make the value positive */
-                (107.9/ 220.0 + 200.0/ 220.0 * (Y - Z)), /* 107 is a fudge to make the value positive */
-            );
-        }));
-
-        return (
-            GBitmap{bitmap:l, width:width, height:height},
-            GBitmap{bitmap:a, width:width, height:height},
-            GBitmap{bitmap:b, width:width, height:height},
-        );
-    }
-
-    pub fn create_image(&mut self, bitmap: &[RGBAPLU], width: usize, height: usize) -> Option<DssimImage> {
-        assert!(bitmap.len() >= width * height);
-
         let num_scales = self.scale_weights.len() + if self.subsample_chroma {1} else {0};
 
         let mut img = DssimImage {
@@ -320,16 +192,13 @@ impl Dssim {
             }).collect(),
         };
 
-        let mut scales: Vec<RGBAPLUBitmap> = Vec::with_capacity(num_scales);
+        let mut scales: Vec<Bitmap<T>> = Vec::with_capacity(num_scales);
         for _ in 0..num_scales {
-            let s = {
-                let (b, w, h) = if let Some(l) = scales.last() {
-                    (&l.bitmap[..], l.width, l.height)
+            let s = if let Some(l) = scales.last() {
+                    (&l.bitmap[..]).downsample(l.width, l.height)
                 } else {
-                    (bitmap, width, height)
+                    bitmap.downsample(width, height)
                 };
-                Self::downsample(b, w, h)
-            };
             if let Some(s) = s {
                 scales.push(s);
             } else {
@@ -340,12 +209,12 @@ impl Dssim {
 
         let mut converted = Vec::with_capacity(num_scales);
         if self.subsample_chroma {
-            converted.push(Converted::Gray(Self::to_luma(&Self::to_rgb(bitmap, width, height), width, height)));
+            converted.push(Converted::Gray(bitmap.to_luma(width, height)));
         } else {
-            converted.push(Converted::LAB(Self::to_lab(&Self::to_rgb(bitmap, width, height), width, height)));
+            converted.push(Converted::LAB(bitmap.to_lab(width, height)));
         }
         converted.extend(scales.drain(..).map(|s|{
-            Converted::LAB(Self::to_lab(&Self::to_rgb(&s.bitmap[..], s.width, s.height), s.width, s.height))
+            Converted::LAB((&s.bitmap[..]).to_lab(s.width, s.height))
         }));
 
         for c in converted.drain(..) {
@@ -366,40 +235,17 @@ impl Dssim {
 
         for mut ch in img.chan.iter_mut() {
             for mut s in ch.scales.iter_mut() {
-                Self::preprocess_channel(s, &mut tmp[..]);
+                s.preprocess(&mut tmp[..]);
             }
         }
 
         return Some(img);
     }
 
-    fn preprocess_channel(chan: &mut DssimChan, tmp: &mut [Px]) {
-        let width = chan.width;
-        let height = chan.height;
-        let tmp = &mut tmp[0..width*height];
-
-        assert_eq!(chan.img.len(), chan.width * chan.height);
-        assert!(width > 1);
-        assert!(height > 1);
-
-        unsafe {
-            if chan.is_chroma {
-                blur::blur_in_place(&mut chan.img[..], tmp, width, height);
-            }
-
-            chan.mu.reserve(chan.width * chan.height);
-            chan.mu.set_len(chan.width * chan.height);
-            blur::blur(&chan.img[..], tmp, &mut chan.mu[..], width, height);
-
-            chan.img_sq_blur = chan.img.iter().cloned().map(|i|i*i).collect();
-            blur::blur_in_place(&mut chan.img_sq_blur[..], tmp, width, height);
-        }
-    }
-
     /**
      Algorithm based on Rabah Mehdi's C++ implementation
      */
-    pub fn compare(&mut self, original_image: &DssimImage, mut modified_image: DssimImage) -> Val {
+    pub fn compare(&mut self, original_image: &DssimImage<f32>, mut modified_image: DssimImage<f32>) -> Val {
         let width = original_image.chan[0].scales[0].width;
         let height = original_image.chan[0].scales[0].height;
 
@@ -438,7 +284,7 @@ impl Dssim {
         return to_dssim(ssim_sum / weight_sum).into();
     }
 
-    fn compare_channel(original: &DssimChan, mut modified: DssimChan, tmp: &mut [f32], save_ssim_map: bool) -> Option<(f64, Option<SsimMap>)> {
+    fn compare_channel(original: &DssimChan<f32>, mut modified: DssimChan<f32>, tmp: &mut [f32], save_ssim_map: bool) -> Option<(f64, Option<SsimMap>)> {
         if original.width != modified.width || original.height != modified.height {
             return None;
         }
@@ -446,7 +292,7 @@ impl Dssim {
         let width = original.width;
         let height = original.height;
 
-        let img1_img2_blur = get_img1_img2_blur(original, &mut modified.img, tmp);
+        let img1_img2_blur = original.img1_img2_blur(&mut modified.img, tmp);
 
         let c1 = 0.01 * 0.01;
         let c2 = 0.03 * 0.03;
@@ -481,7 +327,7 @@ impl Dssim {
             ssim_sum += ssim;
 
             if save_ssim_map {
-                *mu2_in_map_out = ssim as Px;
+                *mu2_in_map_out = ssim as f32;
             }
         }
 
@@ -518,135 +364,11 @@ impl SsimMap {
         }
     }
 
-    pub fn data(&self) -> Option<&[Px]> {
+    pub fn data(&self) -> Option<&[f32]> {
         if self.width == 0 {return None;}
         return Some(&self.data[..]);
     }
 }
-
-#[no_mangle]
-pub extern "C" fn dssim_get_subsample_chroma(attr: &Dssim) -> c_int {
-    attr.subsample_chroma as c_int
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_save_maps_scales(attr: &Dssim) -> c_int {
-    attr.save_maps_scales.into()
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_save_maps_channels(attr: &Dssim) -> c_int {
-    attr.save_maps_channels.into()
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_image_get_num_channels(img: &DssimImage) -> c_int {
-    img.chan.len() as c_int
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_image_get_num_channel_scales(img: &DssimImage, ch: c_uint) -> c_int {
-    img.chan[ch as usize].scales.len() as c_int
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_chan_width(ch: &DssimChan) -> c_int {
-    ch.width as c_int
-}
-#[no_mangle]
-pub extern "C" fn dssim_get_chan_height(ch: &DssimChan) -> c_int {
-    ch.height as c_int
-}
-#[no_mangle]
-pub extern "C" fn dssim_get_chan_mu_const(ch: &DssimChan) -> *const Px {
-    ch.mu[..].as_ptr()
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_chan_img_const(ch: &DssimChan) -> *const Px {
-    ch.img[..].as_ptr()
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_chan_img(ch: &mut DssimChan) -> *mut Px {
-    ch.img[..].as_mut_ptr()
-}
-
-fn get_img1_img2_blur<'a>(original: &DssimChan, modified_img: &'a mut Vec<Px>, tmp: &mut [Px]) -> &'a mut [Px]
-{
-    for (mut img2, img1) in modified_img.iter_mut().zip(original.img.iter()) {
-        *img2 *= *img1;
-    }
-
-    blur::blur_in_place(&mut modified_img[..], &mut tmp[0..original.width * original.height], original.width, original.height);
-
-    return &mut modified_img[..];
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_chan_img_sq_blur_const(ch: &DssimChan) -> *const Px {
-    ch.img_sq_blur[..].as_ptr()
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_chan_img_sq_blur(ch: &mut DssimChan) -> *mut Px {
-    ch.img_sq_blur[..].as_mut_ptr()
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_image_get_channel<'a>(img: &'a mut DssimImage, ch: c_uint, s: c_uint) -> &'a mut DssimChan {
-    &mut img.chan[ch as usize].scales[s as usize]
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_scale_weights(attr: &Dssim, i: c_uint) -> f64 {
-    attr.scale_weights[i as usize]
-}
-
-#[no_mangle]
-pub extern "C" fn dssim_get_color_weight(attr: &Dssim) -> f64 {
-    attr.color_weight
-}
-
-
-#[no_mangle]
-pub extern "C" fn dssim_image_set_channels(attr: &Dssim, img: &mut DssimImage, width: c_int, height: c_int, num_channels: c_int, subsample_chroma: c_int) {
-    let subsample_chroma = subsample_chroma != 0;
-
-    for ch in 0..num_channels {
-        let is_chroma = ch > 0;
-        let width = if is_chroma && subsample_chroma {width/2} else {width};
-        let height = if is_chroma && subsample_chroma {height/2} else {height};
-        img.chan.push(create_chan(width, height, is_chroma, attr.scale_weights.len()));
-    }
-}
-
-fn create_chan(width: c_int, height: c_int, is_chroma: bool, num_scales: usize) -> DssimChanScale {
-    let mut width = width as usize;
-    let mut height = height as usize;
-
-    let mut scales = Vec::with_capacity(num_scales);
-    for _ in 0..num_scales {
-        scales.push(DssimChan{
-            width: width,
-            height: height,
-            is_chroma: is_chroma,
-            img: vec![0.0; width * height],
-            mu: vec![0.0; width * height],
-            img_sq_blur: Vec::new(), // keep empty
-        });
-        width /= 2;
-        height /= 2;
-        if width < 8 || height < 8 {
-            break;
-        }
-    }
-
-    DssimChanScale {
-        scales: scales,
-    }
-}
-
 
 /*
 

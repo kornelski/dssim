@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use ::std::fmt;
 use ::std::cmp::Ordering;
 use ::std::ops::Sub;

@@ -45,7 +45,6 @@ pub fn blur_in_place(srcdst: &mut [f32], tmp: &mut [f32], width: usize, height: 
 pub fn do_blur(srcbuf: &vImage_Buffer<*const f32>, tmp: &mut [f32], dstbuf: &mut vImage_Buffer<*mut f32>, width: usize, height: usize) {
     assert_eq!(tmp.len(), width * height);
 
-    let mut t2 = vec![0.; width*height];
     let kernel: [f32; 9] = [
         1./16., 2./16., 1./16.,
         2./16., 4./16., 2./16.,

@@ -19,6 +19,7 @@ getopts = "0.2.4"
 itertools = "0.4.4"
 libc = "0.2.4"
 lodepng = "0.5.1"
+unzip3 = "0.1.0"
 
 [dev-dependencies]
 lodepng = "0.5.1"
