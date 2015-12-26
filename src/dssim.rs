@@ -282,9 +282,19 @@ impl Dssim {
             let original_lab = Self::lab_chan(&original_image.chan[0].scales[n], &original_image.chan[1].scales[n], &original_image.chan[2].scales[n]);
             let mut modified_lab = Self::lab_chan(&modified_image.chan[0].scales[n], &modified_image.chan[1].scales[n], &modified_image.chan[2].scales[n]);
 
-            let ssim_map = Self::compare_channel(&original_lab, &mut modified_lab, &mut tmp[..]);
-            let sum = ssim_map.data.iter().fold(0.,|sum,i|sum+ *i as f64);
-            let score = sum / (ssim_map.data.len() as f64);
+            let mut ssim_map = Self::compare_channel(&original_lab, &mut modified_lab, &mut tmp[..]);
+
+            let half = avgworst(&ssim_map.data[..], ssim_map.width, ssim_map.height);
+            let half = avg(&half.bitmap[..], half.width, half.height);
+            let half = worst(&half.bitmap[..], half.width, half.height);
+
+            let sum = half.bitmap.iter().fold(0.,|sum,i|sum+ *i as f64);
+            let score = sum / (half.bitmap.len() as f64);
+
+            ssim_map.data = half.bitmap;
+            ssim_map.width = half.width;
+            ssim_map.height = half.height;
+
             ssim_sum += weight * score;
             weight_sum += weight;
 
