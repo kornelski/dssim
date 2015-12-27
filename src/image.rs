@@ -3,6 +3,7 @@
 
 extern crate unzip3;
 use self::unzip3::Unzip3;
+use std;
 
 /// RGBA, but: premultiplied alpha, linear, f32 unit
 #[derive(Debug, Copy, Clone)]
@@ -18,6 +19,100 @@ pub struct RGBLU {
     pub r: f32,
     pub g: f32,
     pub b: f32,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct LAB {
+    pub l: f32,
+    pub a: f32,
+    pub b: f32,
+}
+
+impl std::ops::Mul<LAB> for LAB {
+    type Output = LAB;
+    fn mul(self, other: LAB) -> Self::Output {
+        LAB {
+            l: self.l * other.l,
+            a: self.a * other.a,
+            b: self.b * other.b,
+        }
+    }
+}
+
+impl std::ops::Mul<LAB> for f32 {
+    type Output = LAB;
+    fn mul(self, other: LAB) -> Self::Output {
+        LAB {
+            l: self * other.l,
+            a: self * other.a,
+            b: self * other.b,
+        }
+    }
+}
+
+impl std::ops::Mul<f32> for LAB {
+    type Output = LAB;
+    fn mul(self, other: f32) -> Self::Output {
+        LAB {
+            l: self.l * other,
+            a: self.a * other,
+            b: self.b * other,
+        }
+    }
+}
+
+impl std::ops::Add<LAB> for LAB {
+    type Output = LAB;
+    fn add(self, other: Self::Output) -> Self::Output {
+        LAB {
+            l: self.l + other.l,
+            a: self.a + other.a,
+            b: self.b + other.b,
+        }
+    }
+}
+
+impl std::ops::Add<f32> for LAB {
+    type Output = LAB;
+    fn add(self, other: f32) -> Self::Output {
+        LAB {
+            l: self.l + other,
+            a: self.a + other,
+            b: self.b + other,
+        }
+    }
+}
+
+impl std::ops::Sub<LAB> for LAB {
+    type Output = f32;
+    fn sub(self, other: LAB) -> Self::Output {
+        let l = self.l - other.l;
+        let a = self.a - other.a;
+        let b = self.b - other.b;
+        (l+a+b)/3.0
+    }
+}
+impl LAB {
+    pub fn avg(&self) -> f32 {
+        (self.l + self.a + self.b) / 3.0
+    }
+}
+
+impl From<LAB> for f64 {
+    fn from(other: LAB) -> f64 {
+        other.avg() as f64
+    }
+}
+
+impl std::ops::Div<LAB> for LAB {
+    type Output = LAB;
+    fn div(self, other: Self::Output) -> Self::Output {
+        LAB {
+            l: self.l / other.l,
+            a: self.a / other.a,
+            b: self.b / other.b,
+        }
+    }
 }
 
 trait Sum4 {
