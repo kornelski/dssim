@@ -1,5 +1,5 @@
 Name:           dssim
-Version:        1.0
+Version:        1.3.0
 Release:        1
 Summary:        This tool computes (dis)similarity between two (or more) PNG images
 
@@ -29,7 +29,7 @@ make
 %install
 rm -rf $RPM_BUILD_ROOT
 mkdir -p $RPM_BUILD_ROOT%{_bindir}
-install -m 0755 dssim $RPM_BUILD_ROOT%{_bindir}/dssim
+install -m 0755 bin/dssim $RPM_BUILD_ROOT%{_bindir}/dssim
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -39,5 +39,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/dssim
 
 %changelog
+* Fri Jan 13 2016 Frank van Boven <frank@cenotaph.nl> - 1.3.0-1
+- Updated the version 1.3.0
+
 * Mon Apr 13 2015 Harry Danes <harry@danes.eu> - 0.9-1
 - Initial release.
