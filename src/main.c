@@ -54,7 +54,6 @@ static int read_image_jpeg(const char *filename, png24_image *image)
     unsigned int width,height,row_stride;
     unsigned int bpp;
     unsigned int x,y,i;
-
     struct jpeg_decompress_struct cinfo;
     struct jpeg_error_mgr jerr;
     cinfo.err = jpeg_std_error(&jerr);
@@ -80,7 +79,7 @@ static int read_image_jpeg(const char *filename, png24_image *image)
     row_stride=width*bpp;
 
     // allocate buffer size (always use RGBA)
-    unsigned char* buffer = (unsigned char*)malloc(width*height*bpp);
+    unsigned char* buffer = malloc(width*height*bpp);
     memset(buffer,0x0,width*height*bpp);
 
     while(cinfo.output_scanline < height)
@@ -91,9 +90,8 @@ static int read_image_jpeg(const char *filename, png24_image *image)
     }
 
     //convert to RGBA
-    image->rgba_data = (unsigned char*)malloc(width*height*4);
-    memset(image->rgba_data,0x0,width*height*4);
-    image->row_pointers = (unsigned char**) malloc(height*sizeof(unsigned char*));
+    image->rgba_data = calloc(width*height*4,1);
+    image->row_pointers = calloc(height,sizeof(unsigned char*));
 
     for(y=0;y<height;y++)
     {
@@ -120,19 +118,19 @@ static int read_image_jpeg(const char *filename, png24_image *image)
 static int read_image(const char *filename, png24_image *image)
 {
     int retval=1;
+    unsigned char *header;
     // read first 4 byte to determine filetype by magical number
     FILE *fp = fopen(filename,"rb");
     if(!fp)
     {
         return 1;
     }
-    unsigned char *header = (unsigned char*)malloc(4*sizeof(unsigned char));
-    memset(header,0x0,4*sizeof(unsigned char));
+    header = calloc(4,1);
     if(!header)
     {
         return 1;
     }
-    fread(header,sizeof(unsigned char),4,fp);
+    fread(header,1,4,fp);
     fclose(fp);
 
     // the png number is not really precise but I guess the situation where this would falsely pass is almost equal to 0
