@@ -70,7 +70,6 @@ static int read_image_jpeg(const char *filename, png24_image *image)
     retval=jpeg_read_header(&cinfo,TRUE);
     if(retval != 1)
     {
-        printf("invalid jpeg header\n");
         return 1;
     }
     jpeg_start_decompress(&cinfo);
@@ -143,7 +142,6 @@ static int read_image(const char *filename, png24_image *image)
     }
 #ifdef USE_LIBJPEG
     else
-    if(header[0]==0xff && header[1]==0xd8 && header[2]==0xff && (header[3]==0xdb || header[3]==0xe0 || header[3]==0xe1))
     {
         retval=read_image_jpeg(filename,image);
     }
