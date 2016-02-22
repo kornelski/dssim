@@ -11,6 +11,13 @@ CFLAGSOPT ?= -DNDEBUG -O3 -fstrict-aliasing -ffast-math -funroll-loops -fomit-fr
 CFLAGS ?= -Wall -I. $(CFLAGSOPT)
 CFLAGS += -std=c99 `pkg-config libpng --cflags || pkg-config libpng16 --cflags` $(CFLAGSADD)
 
+
+
+ifdef USE_LIBJPEG
+LDFLAGS += -ljpeg
+CFLAGS += -DUSE_LIBJPEG
+endif
+ 
 LDFLAGS += `pkg-config libpng --libs || pkg-config libpng16 --libs` -lm -lz $(LDFLAGSADD)
 
 ifdef USE_COCOA
