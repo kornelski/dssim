@@ -44,6 +44,8 @@ static int read_image_png(const char *filename, png24_image *image)
     return retval;
 }
 
+
+
 #ifdef USE_LIBJPEG
 #include <jpeglib.h>
 static int read_image_jpeg(const char *filename, png24_image *image)
@@ -116,29 +118,38 @@ static int read_image_jpeg(const char *filename, png24_image *image)
 }
 #endif // #ifdef USE_LIBJPEG
 
-const char *get_filename_ext(const char *filename) {
-    const char *dot = strrchr(filename, '.');
-    if(!dot || dot == filename) return "";
-    return dot + 1;
-}
-
 static int read_image(const char *filename, png24_image *image)
 {
-    if(!strcmp(get_filename_ext(filename),"png"))
+    int retval=1;
+    // read first 4 byte to determine filetype by magical number
+    FILE *fp = fopen(filename,"rb");
+    if(!fp)
     {
-        return read_image_png(filename,image);
+        return 1;
+    }
+    unsigned char *header = (unsigned char*)malloc(4*sizeof(unsigned char));
+    memset(header,0x0,4*sizeof(unsigned char));
+    if(!header)
+    {
+        return 1;
+    }
+    fread(header,sizeof(unsigned char),4,fp);
+    fclose(fp);
+
+    // the png number is not really precise but I guess the situation where this would falsely pass is almost equal to 0
+    if(header[0]==0x89 && header[1]==0x50 && header[2]==0x4e && header[3]==0x47)
+    {
+        retval=read_image_png(filename,image);
     }
 #ifdef USE_LIBJPEG
     else
-    if(!strcmp(get_filename_ext(filename),"jpg"))
+    if(header[0]==0xff && header[1]==0xd8 && header[2]==0xff && (header[3]==0xdb || header[3]==0xe0 || header[3]==0xe1))
     {
-        return read_image_jpeg(filename,image);
+        retval=read_image_jpeg(filename,image);
     }
 #endif
-    else {
-        printf("unrecognized file format (%s)\n",get_filename_ext(filename));
-    }
-    return 1;
+    free(header);
+    return retval;
 }
 
 /*
