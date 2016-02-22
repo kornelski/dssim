@@ -79,8 +79,7 @@ static int read_image_jpeg(const char *filename, png24_image *image)
     row_stride=width*bpp;
 
     // allocate buffer size (always use RGBA)
-    unsigned char* buffer = malloc(width*height*bpp);
-    memset(buffer,0x0,width*height*bpp);
+    unsigned char* buffer = calloc(width*height*bpp,1);
 
     while(cinfo.output_scanline < height)
     {
