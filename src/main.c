@@ -19,6 +19,7 @@
 
 #include <stdlib.h>
 
+
 #include "dssim.h"
 #include "rwpng.h"
 
@@ -26,10 +27,11 @@
 extern char *optarg;
 extern int optind, opterr;
 
+
 /*
  Reads image into png24_image struct. Returns non-zero on error
  */
-static int read_image(const char *filename, png24_image *image)
+static int read_image_png(const char *filename, png24_image *image)
 {
     FILE *fp = fopen(filename, "rb");
     if (!fp) {
@@ -41,6 +43,108 @@ static int read_image(const char *filename, png24_image *image)
     fclose(fp);
     return retval;
 }
+
+#ifdef USE_LIBJPEG
+#include <jpeglib.h>
+static int read_image_jpeg(const char *filename, png24_image *image)
+{
+    int retval;
+    unsigned int width,height,row_stride;
+    unsigned int bpp;
+    unsigned int x,y,i;
+
+    struct jpeg_decompress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    cinfo.err = jpeg_std_error(&jerr);
+    jpeg_create_decompress(&cinfo);
+
+    // decompress
+    FILE *file = fopen(filename,"rb");
+    if(!file)
+    {
+        return 1;
+    }
+    jpeg_stdio_src(&cinfo,file);
+    retval=jpeg_read_header(&cinfo,TRUE);
+    if(retval != 1)
+    {
+        printf("invalid jpeg header\n");
+        return 1;
+    }
+    jpeg_start_decompress(&cinfo);
+
+    width=cinfo.output_width;
+    height=cinfo.output_height;
+    bpp=cinfo.output_components;
+    row_stride=width*bpp;
+
+    // allocate buffer size (always use RGBA)
+    unsigned char* buffer = (unsigned char*)malloc(width*height*bpp);
+    memset(buffer,0x0,width*height*bpp);
+
+    while(cinfo.output_scanline < height)
+    {
+        unsigned char *buffer_array[1];
+        buffer_array[0] = buffer + cinfo.output_scanline*row_stride;
+        jpeg_read_scanlines(&cinfo,buffer_array,1);
+    }
+
+    //convert to RGBA
+    image->rgba_data = (unsigned char*)malloc(width*height*4);
+    memset(image->rgba_data,0x0,width*height*4);
+    image->row_pointers = (unsigned char**) malloc(height*sizeof(unsigned char*));
+
+    for(y=0;y<height;y++)
+    {
+        for(x=0;x<width;x++)
+        {
+            for(i=0;i<bpp;i++)
+            {
+                image->rgba_data[(y*width*4)+(x*4)+i] = buffer[(y*width*bpp)+(x*bpp)+i];
+            }
+            // default alpha 255
+            image->rgba_data[(y*width*4) + (x*4) + 3] = 0xae;
+        }
+        image->row_pointers[y] = &image->rgba_data[y*width*4];
+    }
+    image->width=width;
+    image->height=height;
+    jpeg_destroy_decompress(&cinfo);
+    fclose(file);
+    free(buffer);
+    return 0;
+}
+#endif // #ifdef USE_LIBJPEG
+
+const char *get_filename_ext(const char *filename) {
+    const char *dot = strrchr(filename, '.');
+    if(!dot || dot == filename) return "";
+    return dot + 1;
+}
+
+static int read_image(const char *filename, png24_image *image)
+{
+    if(!strcmp(get_filename_ext(filename),"png"))
+    {
+        return read_image_png(filename,image);
+    }
+#ifdef USE_LIBJPEG
+    else
+    if(!strcmp(get_filename_ext(filename),"jpg"))
+    {
+        return read_image_jpeg(filename,image);
+    }
+#endif
+    else {
+        printf("unrecognized file format (%s)\n",get_filename_ext(filename));
+    }
+    return 1;
+}
+
+/*
+    Reads JPG image into png24_image struct
+    ( this is used for compatiblity purposes )
+*/
 
 static int write_image(const char *filename,
                        const dssim_rgba *pixels,
@@ -139,6 +243,7 @@ int main(int argc, char *const argv[])
     const char *file1 = argv[optind];
     png24_image image1 = {};
     int retval = read_image(file1, &image1);
+
     if (retval) {
         fprintf(stderr, "Can't read %s\n", file1);
         return retval;
@@ -149,6 +254,7 @@ int main(int argc, char *const argv[])
     dssim_image *original = dssim_create_image(attr, image1.row_pointers, DSSIM_RGBA, image1.width, image1.height, get_gamma(&image1));
     free(image1.row_pointers);
     free(image1.rgba_data);
+
 
     for (int arg = optind+1; arg < argc; arg++) {
         const char *file2 = argv[arg];
@@ -177,6 +283,7 @@ int main(int argc, char *const argv[])
         dssim_dealloc_image(modified);
 
         printf("%.6f\t%s\n", dssim, file2);
+
 
         if (map_output_file) {
             dssim_ssim_map map_meta = dssim_pop_ssim_map(attr, 0, 0);
