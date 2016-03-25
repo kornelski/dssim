@@ -78,7 +78,7 @@ static void usage(const char *argv0)
         "Compares first image against subsequent images, and outputs\n" \
         "1/SSIM-1 difference for each of them in order (0 = identical).\n\n" \
         "Images must have identical size, but may have different gamma & depth.\n" \
-        "\nVersion 1.3.0 http://pornel.net/dssim\n" \
+        "\nVersion 1.3.1 https://kornel.ski/dssim\n" \
         , argv0, argv0);
 }
 
@@ -176,7 +176,7 @@ int main(int argc, char *const argv[])
         double dssim = dssim_compare(attr, original, modified);
         dssim_dealloc_image(modified);
 
-        printf("%.6f\t%s\n", dssim, file2);
+        printf("%.8f\t%s\n", dssim, file2);
 
         if (map_output_file) {
             dssim_ssim_map map_meta = dssim_pop_ssim_map(attr, 0, 0);
