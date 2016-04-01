@@ -18,6 +18,8 @@
  */
 
 #include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
 
 #include "dssim.h"
 #include "rwpng.h"
@@ -31,14 +33,23 @@ extern int optind, opterr;
  */
 static int read_image(const char *filename, png24_image *image)
 {
-    FILE *fp = fopen(filename, "rb");
-    if (!fp) {
-        return 1;
+    bool using_stdin = false;
+    FILE *fp;
+    if (0 == strcmp("-", filename)) {
+        using_stdin = true;
+        fp = stdin;
+    } else {
+        fp = fopen(filename, "rb");
+        if (!fp) {
+            return 1;
+        }
     }
 
     int retval = rwpng_read_image24(fp, image, 0);
 
-    fclose(fp);
+    if (!using_stdin) {
+        fclose(fp);
+    }
     return retval;
 }
 
