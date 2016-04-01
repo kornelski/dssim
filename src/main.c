@@ -173,6 +173,7 @@ int main(int argc, char *const argv[])
 
         if (image1.width != image2.width || image1.height != image2.height) {
             fprintf(stderr, "Image %s has different size than %s\n", file2, file1);
+            retval = 4;
             break;
         }
 
@@ -182,6 +183,7 @@ int main(int argc, char *const argv[])
 
         if (!modified) {
             fprintf(stderr, "Unable to process image %s\n", file2);
+            retval = 4;
             break;
         }
 
