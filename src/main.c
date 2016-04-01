@@ -94,7 +94,7 @@ double get_gamma(const png24_image *image) {
         return dssim_srgb_gamma;
     }
     const double gamma = image->gamma;
-    if (gamma > 0 && gamma <= 1.0) {
+    if (gamma > 0 && gamma < 1.0) {
         // If the gamma chunk states gamma closest to sRGB that PNG can express, then assume sRGB too
         if (RWPNG_GAMA_ONLY == image->output_color && gamma > 0.4545499 && gamma < 0.4545501) {
             return dssim_srgb_gamma;
@@ -102,7 +102,7 @@ double get_gamma(const png24_image *image) {
         return gamma;
     }
 
-    fprintf(stderr, "Warning: invalid gamma ignored: %f\n", gamma);
+    fprintf(stderr, "Warning: invalid/unsupported gamma ignored: %f\n", gamma);
     return 0.45455;
 }
 
