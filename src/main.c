@@ -169,6 +169,11 @@ int main(int argc, char *const argv[])
         free(image2.row_pointers);
         free(image2.rgba_data);
 
+        if (!modified) {
+            fprintf(stderr, "Unable to process image %s\n", file2);
+            break;
+        }
+
         if (map_output_file) {
             dssim_set_save_ssim_maps(attr, 1, 1);
         }
