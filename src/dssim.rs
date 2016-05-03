@@ -44,9 +44,7 @@ struct DssimMapChan {
 }
 
 pub struct Dssim {
-    color_weight: f64,
     scale_weights: Vec<f64>,
-    subsample_chroma: bool,
     save_maps_scales: u8,
     save_maps_channels: u8,
     ssim_maps: Vec<DssimMapChan>,
@@ -159,9 +157,7 @@ impl DssimChan<LAB> {
 impl Dssim {
     pub fn new() -> Dssim {
         Dssim {
-            color_weight: 0.95,
             scale_weights: DEFAULT_WEIGHTS.iter().cloned().take(4).collect(),
-            subsample_chroma: false,
             save_maps_scales: 0,
             save_maps_channels: 0,
             ssim_maps: Vec::new(),
@@ -177,11 +173,6 @@ impl Dssim {
         self.save_maps_channels = num_channels;
 
         self.ssim_maps.reserve(num_channels.into());
-    }
-
-    pub fn set_color_handling(&mut self, subsample_chroma: bool, color_weight: f64) {
-        self.subsample_chroma = subsample_chroma;
-        self.color_weight = color_weight;
     }
 
     pub fn ssim_map(&mut self, scale_index: usize, channel_index: usize) -> Option<&SsimMap> {
@@ -200,7 +191,7 @@ impl Dssim {
     pub fn create_image<T>(&mut self, bitmap: &[T], width: usize, height: usize) -> Option<DssimImage<f32>>
         where [T]: ToLABBitmap + Downsample<T>
     {
-        let num_scales = self.scale_weights.len() + if self.subsample_chroma {1} else {0};
+        let num_scales = self.scale_weights.len();
 
         let mut img = DssimImage {
             chan: (0..3).map(|_|DssimChanScale{
@@ -222,13 +213,8 @@ impl Dssim {
             }
         }
 
-
         let mut converted = Vec::with_capacity(num_scales);
-        if self.subsample_chroma {
-            converted.push(Converted::Gray(bitmap.to_luma(width, height)));
-        } else {
-            converted.push(Converted::LAB(bitmap.to_lab(width, height)));
-        }
+        converted.push(Converted::LAB(bitmap.to_lab(width, height)));
         converted.extend(scales.drain(..).map(|s|{
             Converted::LAB((&s.bitmap[..]).to_lab(s.width, s.height))
         }));
