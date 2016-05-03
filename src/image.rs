@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-extern crate unzip3;
+pub extern crate unzip3;
 use self::unzip3::Unzip3;
 use std;
 
@@ -115,7 +115,7 @@ impl std::ops::Div<LAB> for LAB {
     }
 }
 
-trait Sum4 {
+pub trait Sum4 {
     fn sum4(a: Self, b: Self, c: Self, d: Self) -> Self;
 }
 
