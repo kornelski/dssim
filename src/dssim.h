@@ -17,6 +17,10 @@
  * If not, see <http://www.gnu.org/licenses/agpl.txt>.
  */
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct dssim_image dssim_image;
 typedef struct dssim_attr dssim_attr;
 typedef float dssim_px_t;
@@ -86,3 +90,6 @@ Returns DSSIM between two images.
 Original image can be reused. Modified image is destroyed (but still needs to be freed using dssim_dealloc_image).
  */
 double dssim_compare(dssim_attr *, const dssim_image *restrict original, dssim_image *restrict modified);
+#ifdef __cplusplus
+}
+#endif
