@@ -89,7 +89,7 @@ static void usage(const char *argv0)
         "Compares first image against subsequent images, and outputs\n" \
         "1/SSIM-1 difference for each of them in order (0 = identical).\n\n" \
         "Images must have identical size, but may have different gamma & depth.\n" \
-        "\nVersion 1.3.1 https://kornel.ski/dssim\n" \
+        "\nVersion 1.3.2 https://kornel.ski/dssim\n" \
         , argv0, argv0);
 }
 
