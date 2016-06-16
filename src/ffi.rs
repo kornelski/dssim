@@ -28,7 +28,6 @@ pub enum dssim_colortype {
 
 #[repr(C)]
 #[derive(Copy, Clone)]
-#[allow(raw_pointer_derive)]
 pub struct dssim_ssim_map {
     pub width: c_int,
     pub height: c_int,
