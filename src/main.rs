@@ -70,6 +70,13 @@ fn to_rgbaplu(bitmap: &[lodepng::RGBA<u8>]) -> Vec<RGBAPLU> {
     }).collect()
 }
 
+fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
+    let image = try!(lodepng::decode32_file(path));
+
+    let orig_rgba = to_rgbaplu(image.buffer.as_ref());
+    Ok((orig_rgba, image.width, image.height))
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     let program = args[0].clone();
@@ -101,8 +108,8 @@ fn main() {
 
     let file1 = files.remove(0);
 
-    let image1 = match lodepng::decode32_file(&file1) {
-        Ok(img) => {img}
+    let (orig_rgba, width1, height1) = match load_image(&file1) {
+        Ok((orig_rgba, width, height)) => {(orig_rgba, width, height)}
         Err(err) => {
             writeln!(io::stderr(), "Can't read {}: {}", file1, err).unwrap();
             std::process::exit(1);
@@ -110,26 +117,24 @@ fn main() {
     };
 
     let mut attr = dssim::Dssim::new();
-    let orig_rgba = to_rgbaplu(image1.buffer.as_ref());
-    let original = attr.create_image(&orig_rgba, image1.width, image1.height).expect("orig image creation");
+    let original = attr.create_image(&orig_rgba, width1, height1).expect("orig image creation");
 
     for file2 in files {
 
-        let image2 = match lodepng::decode32_file(&file2) {
-            Ok(img) => {img}
+        let (mod_rgba, width2, height2) = match load_image(&file2) {
+            Ok((mod_rgba, width2, height2)) => {(mod_rgba, width2, height2)}
             Err(err) => {
                 writeln!(io::stderr(), "Can't read {}: {}", file2, err).unwrap();
                 std::process::exit(1);
             }
         };
 
-        if image1.width != image2.width || image1.height != image2.height {
+        if width1 != width2 || height1 != height2 {
             writeln!(io::stderr(), "Image {} has different size than {}\n", file2, file1).unwrap();
             std::process::exit(1);
         }
 
-        let mod_rgba = to_rgbaplu(image2.buffer.as_ref());
-        let modified = attr.create_image(&mod_rgba, image2.width, image2.height).expect("mod image creation");
+        let modified = attr.create_image(&mod_rgba, width2, height2).expect("mod image creation");
 
         if map_output_file.is_some() {
             attr.set_save_ssim_maps(1, 1);
