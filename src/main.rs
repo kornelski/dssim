@@ -22,6 +22,7 @@ extern crate libc;
 extern crate lodepng;
 extern crate mozjpeg;
 extern crate dssim;
+extern crate rgb;
 
 mod ffi;
 mod val;
@@ -33,6 +34,7 @@ use std::io::Read;
 use std::fs;
 use getopts::Options;
 use dssim::RGBAPLU;
+use rgb::*;
 
 fn usage(argv0: &str) {
     write!(io::stderr(), "\
@@ -50,27 +52,57 @@ fn to_byte(i: f32) -> u8 {
     else {(i * 256.0) as u8}
 }
 
-fn to_rgbaplu(bitmap: &[lodepng::RGBA<u8>]) -> Vec<RGBAPLU> {
-    let mut gamma_lut = [0f32; 256];
+trait ToRGBAPLU {
+    fn to_rgbaplu(&self) -> Vec<RGBAPLU>;
+}
 
-    for i in 0..256 {
-        let s: f64 = i as f64 / 255.0;
-        gamma_lut[i] = if s <= 0.04045 {
-            s / 12.92
-        } else {
-            ((s + 0.055) / 1.055).powf(2.4)
-        } as f32
-    }
+impl ToRGBAPLU for [RGBA<u8>] {
+    fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
+        let mut gamma_lut = [0f32; 256];
 
-    bitmap.iter().map(|px|{
-        let a_unit = px.a as f32 / 255.0;
-        RGBAPLU {
-            r: gamma_lut[px.r as usize] * a_unit,
-            g: gamma_lut[px.g as usize] * a_unit,
-            b: gamma_lut[px.b as usize] * a_unit,
-            a: a_unit,
+        for i in 0..256 {
+            let s: f64 = i as f64 / 255.0;
+            gamma_lut[i] = if s <= 0.04045 {
+                s / 12.92
+            } else {
+                ((s + 0.055) / 1.055).powf(2.4)
+            } as f32
         }
-    }).collect()
+
+        self.iter().map(|px|{
+            let a_unit = px.a as f32 / 255.0;
+            RGBAPLU {
+                r: gamma_lut[px.r as usize] * a_unit,
+                g: gamma_lut[px.g as usize] * a_unit,
+                b: gamma_lut[px.b as usize] * a_unit,
+                a: a_unit,
+            }
+        }).collect()
+    }
+}
+
+impl ToRGBAPLU for [RGB<u8>] {
+    fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
+        let mut gamma_lut = [0f32; 256];
+
+        for i in 0..256 {
+            let s: f64 = i as f64 / 255.0;
+            gamma_lut[i] = if s <= 0.04045 {
+                s / 12.92
+            } else {
+                ((s + 0.055) / 1.055).powf(2.4)
+            } as f32
+        }
+
+        self.iter().map(|px|{
+            RGBAPLU {
+                r: gamma_lut[px.r as usize],
+                g: gamma_lut[px.g as usize],
+                b: gamma_lut[px.b as usize],
+                a: 1.0,
+            }
+        }).collect()
+    }
 }
 
 fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
@@ -80,11 +112,23 @@ fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error
 
     match lodepng::decode32(&data) {
         Ok(image) => {
-            let orig_rgba = to_rgbaplu(image.buffer.as_ref());
+            let orig_rgba = image.buffer.as_ref().to_rgbaplu();
             Ok((orig_rgba, image.width, image.height))
         },
-        Err(err) => {
-            return Err(err);
+        _ => {
+            let mut dinfo = mozjpeg::Decompress::new();
+            dinfo.set_mem_src(&data[..]);
+
+            assert!(dinfo.read_header(true));
+            assert!(dinfo.start_decompress());
+            let width = dinfo.output_width();
+            let height = dinfo.output_height();
+            let bitmap = dinfo.read_scanlines().unwrap();
+
+            let rgb:Vec<_> = bitmap.chunks(3).map(|x|RGB{r:x[0],g:x[1],b:x[2]}).collect();
+            let rgba = rgb.to_rgbaplu();
+            assert_eq!(rgba.len(), width*height);
+            Ok((rgba, width, height))
         },
     }
 }
@@ -162,7 +206,7 @@ fn main() {
             let out: Vec<_> = map_meta.data().expect("map should have data").iter().map(|ssim|{
                 let max = 1_f32 - ssim;
                 let maxsq = max * max;
-                return lodepng::RGBA::<u8> {
+                return RGBA::<u8> {
                     r: to_byte(max * 3.0),
                     g: to_byte(maxsq * 6.0),
                     b: to_byte(max / ((1_f32 - avgssim) * 4_f32)),
