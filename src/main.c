@@ -23,6 +23,7 @@
 
 #include "dssim.h"
 #include "rwpng.h"
+#include "png.h"
 
 #include <getopt.h>
 extern char *optarg;
