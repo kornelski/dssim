@@ -20,6 +20,7 @@
 extern crate getopts;
 extern crate libc;
 extern crate lodepng;
+extern crate mozjpeg;
 extern crate dssim;
 
 mod ffi;
@@ -28,6 +29,8 @@ mod val;
 use std::io::Write;
 use std::env;
 use std::io;
+use std::io::Read;
+use std::fs;
 use getopts::Options;
 use dssim::RGBAPLU;
 
@@ -71,10 +74,19 @@ fn to_rgbaplu(bitmap: &[lodepng::RGBA<u8>]) -> Vec<RGBAPLU> {
 }
 
 fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
-    let image = try!(lodepng::decode32_file(path));
+    let mut file = try!(fs::File::open(path));
+    let mut data = Vec::new();
+    try!(file.read_to_end(&mut data));
 
-    let orig_rgba = to_rgbaplu(image.buffer.as_ref());
-    Ok((orig_rgba, image.width, image.height))
+    match lodepng::decode32(&data) {
+        Ok(image) => {
+            let orig_rgba = to_rgbaplu(image.buffer.as_ref());
+            Ok((orig_rgba, image.width, image.height))
+        },
+        Err(err) => {
+            return Err(err);
+        },
+    }
 }
 
 fn main() {
