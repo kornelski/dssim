@@ -79,7 +79,7 @@ impl std::ops::Sub<LAB> for LAB {
         let l = self.l - other.l;
         let a = self.a - other.a;
         let b = self.b - other.b;
-        (l+a+b)/3.0
+        (l + a + b) / 3.0
     }
 }
 impl LAB {
@@ -187,7 +187,7 @@ impl ToLAB for RGBLU {
 
         let epsilon: f32 = 216. / 24389.;
         // http://www.brucelindbloom.com/LContinuity.html
-        let Y = if fy > epsilon {fy.powf(1. / 3.) - 16./116.} else {((24389. / 27.) / 116.) * fy};
+        let Y = if fy > epsilon { fy.powf(1. / 3.) - 16. / 116. } else { ((24389. / 27.) / 116.) * fy };
 
         return Y * 1.16;
     }
@@ -260,7 +260,7 @@ impl ToLABBitmap for [RGBAPLU] {
 
 impl ToLABBitmap for [RGBLU] {
     fn to_luma(&self, width: usize, height: usize) -> GBitmap {
-        GBitmap{
+        GBitmap {
             bitmap: self.iter().map(|px| px.to_luma()).collect(),
             width: width,
             height: height,
@@ -268,7 +268,7 @@ impl ToLABBitmap for [RGBLU] {
     }
 
     fn to_lab(&self, width: usize, height: usize) -> (GBitmap, GBitmap, GBitmap) {
-        let (l,a,b) = self.iter().map(|px| px.to_lab()).unzip3();
+        let (l, a, b) = self.iter().map(|px| px.to_lab()).unzip3();
 
         return (
             GBitmap{bitmap:l, width:width, height:height},
@@ -293,8 +293,8 @@ impl<T> Downsample<T> for [T] where T: Sum4 + Copy {
 
         assert_eq!(width * height, self.len());
 
-        let half_height = height/2;
-        let half_width = width/2;
+        let half_height = height / 2;
+        let half_width = width / 2;
 
         // crop odd pixels
         let bitmap = &self[0..width * half_height * 2];
@@ -312,8 +312,8 @@ impl<T> Downsample<T> for [T] where T: Sum4 + Copy {
 }
 
 pub fn worst(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
-    let half_height = height/2;
-    let half_width = width/2;
+    let half_height = height / 2;
+    let half_width = width / 2;
 
     if half_height < 4 || half_width < 4 {
         return Bitmap{bitmap:input.iter().cloned().collect(), width:width, height:height};
@@ -332,15 +332,23 @@ pub fn worst(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
     }).collect();
 
     assert_eq!(half_width * half_height, scaled.len());
-    return Bitmap{bitmap:scaled, width:half_width, height:half_height};
+    return Bitmap {
+        bitmap: scaled,
+        width: half_width,
+        height: half_height,
+    };
 }
 
 pub fn avgworst(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
-    let half_height = height/2;
-    let half_width = width/2;
+    let half_height = height / 2;
+    let half_width = width / 2;
 
     if half_height < 4 || half_width < 4 {
-        return Bitmap{bitmap:input.iter().cloned().collect(), width:width, height:height};
+        return Bitmap {
+            bitmap: input.iter().cloned().collect(),
+            width: width,
+            height: height,
+        };
     }
 
     // crop odd pixels
@@ -356,15 +364,23 @@ pub fn avgworst(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
     }).collect();
 
     assert_eq!(half_width * half_height, scaled.len());
-    return Bitmap{bitmap:scaled, width:half_width, height:half_height};
+    return Bitmap {
+        bitmap: scaled,
+        width: half_width,
+        height: half_height,
+    };
 }
 
 pub fn avg(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
-    let half_height = height/2;
-    let half_width = width/2;
+    let half_height = height / 2;
+    let half_width = width / 2;
 
     if half_height < 4 || half_width < 4 {
-        return Bitmap{bitmap:input.iter().cloned().collect(), width:width, height:height};
+        return Bitmap {
+            bitmap: input.iter().cloned().collect(),
+            width: width,
+            height: height,
+        };
     }
 
     // crop odd pixels
@@ -380,5 +396,9 @@ pub fn avg(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
     }).collect();
 
     assert_eq!(half_width * half_height, scaled.len());
-    return Bitmap{bitmap:scaled, width:half_width, height:half_height};
+    return Bitmap {
+        bitmap: scaled,
+        width: half_width,
+        height: half_height,
+    };
 }

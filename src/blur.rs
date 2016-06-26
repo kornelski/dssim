@@ -134,7 +134,7 @@ fn blur_two() {
               z10*1./16. + z10*2./16. + z11*1./16.;
 
     assert_eq!(1., dst[3]);
-    assert_eq!(1., dst[3*4]);
-    assert_eq!(1., dst[4*4-1]);
+    assert_eq!(1., dst[3 * 4]);
+    assert_eq!(1., dst[4 * 4 - 1]);
     assert_eq!(exp, dst[0]);
 }

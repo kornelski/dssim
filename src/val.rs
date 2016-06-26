@@ -59,7 +59,7 @@ impl From<f64> for Dssim {
     }
 }
 
-impl <RHS: Into<f64>> Sub<RHS> for Dssim {
+impl<RHS: Into<f64>> Sub<RHS> for Dssim {
     type Output = f64;
     fn sub(self, r: RHS) -> Self::Output {
         let rval = r.into();
@@ -76,7 +76,7 @@ impl Sub<Dssim> for f64 {
     }
 }
 
-impl <RHS: Into<f64>> Add<RHS> for Dssim {
+impl<RHS: Into<f64>> Add<RHS> for Dssim {
     type Output = f64;
     fn add(self, r: RHS) -> Self::Output {
         let rval = r.into();
@@ -92,7 +92,7 @@ impl Add<Dssim> for f64 {
     }
 }
 
-impl <RHS: Into<f64>> Mul<RHS> for Dssim {
+impl<RHS: Into<f64>> Mul<RHS> for Dssim {
     type Output = Dssim;
     fn mul(self, r: RHS) -> Self::Output {
         let rval = r.into();
@@ -108,7 +108,7 @@ impl Mul<Dssim> for f64 {
     }
 }
 
-impl <RHS: Into<f64>> Div<RHS> for Dssim {
+impl<RHS: Into<f64>> Div<RHS> for Dssim {
     type Output = f64;
     fn div(self, r: RHS) -> Self::Output {
         let rval = r.into();

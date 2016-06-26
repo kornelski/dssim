@@ -127,7 +127,7 @@ fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error
 
             let rgb:Vec<_> = bitmap.chunks(3).map(|x|RGB{r:x[0],g:x[1],b:x[2]}).collect();
             let rgba = rgb.to_rgbaplu();
-            assert_eq!(rgba.len(), width*height);
+            assert_eq!(rgba.len(), width * height);
             Ok((rgba, width, height))
         },
     }
@@ -141,11 +141,11 @@ fn main() {
     opts.optopt("o", "", "set output file name", "NAME");
     opts.optflag("h", "help", "print this help menu");
     let matches = match opts.parse(&args[1..]) {
-        Ok(m) => {m}
+        Ok(m) => m,
         Err(err) => {
             writeln!(io::stderr(), "{}", err).unwrap();
             std::process::exit(1);
-        }
+        },
     };
 
     if matches.opt_present("h") {
@@ -165,11 +165,11 @@ fn main() {
     let file1 = files.remove(0);
 
     let (orig_rgba, width1, height1) = match load_image(&file1) {
-        Ok((orig_rgba, width, height)) => {(orig_rgba, width, height)}
+        Ok((orig_rgba, width, height)) => (orig_rgba, width, height),
         Err(err) => {
             writeln!(io::stderr(), "Can't read {}: {}", file1, err).unwrap();
             std::process::exit(1);
-        }
+        },
     };
 
     let mut attr = dssim::Dssim::new();
@@ -178,11 +178,11 @@ fn main() {
     for file2 in files {
 
         let (mod_rgba, width2, height2) = match load_image(&file2) {
-            Ok((mod_rgba, width2, height2)) => {(mod_rgba, width2, height2)}
+            Ok((mod_rgba, width2, height2)) => (mod_rgba, width2, height2),
             Err(err) => {
                 writeln!(io::stderr(), "Can't read {}: {}", file2, err).unwrap();
                 std::process::exit(1);
-            }
+            },
         };
 
         if width1 != width2 || height1 != height2 {

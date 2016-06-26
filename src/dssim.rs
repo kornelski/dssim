@@ -58,7 +58,7 @@ pub struct DssimImage<T> {
     chan: Vec<DssimChanScale<T>>,
 }
 
-/* Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm */
+// Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm
 const DEFAULT_WEIGHTS: [f64; 5] = [0.0448, 0.2856, 0.3001, 0.2363, 0.1333];
 
 pub struct SsimMap {
@@ -74,7 +74,7 @@ pub fn new() -> Dssim {
 
 impl<T> DssimChan<T> {
     pub fn new(bitmap: Vec<T>, width: usize, height: usize, is_chroma: bool) -> DssimChan<T> {
-        DssimChan{
+        DssimChan {
             img: bitmap,
             mu: Vec::with_capacity(width * height),
             img_sq_blur: Vec::new(),
@@ -89,7 +89,7 @@ impl DssimChan<f32> {
     fn preprocess(&mut self, tmp: &mut [f32]) {
         let width = self.width;
         let height = self.height;
-        let tmp = &mut tmp[0..width*height];
+        let tmp = &mut tmp[0..width * height];
 
         assert_eq!(self.img.len(), self.width * self.height);
         assert!(width > 1);
@@ -104,7 +104,7 @@ impl DssimChan<f32> {
             self.mu.set_len(self.width * self.height);
             blur::blur(&self.img[..], tmp, &mut self.mu[..], width, height);
 
-            self.img_sq_blur = self.img.iter().cloned().map(|i|i*i).collect();
+            self.img_sq_blur = self.img.iter().cloned().map(|i| i * i).collect();
             blur::blur_in_place(&mut self.img_sq_blur[..], tmp, width, height);
         }
     }
@@ -176,18 +176,18 @@ impl Dssim {
         let num_scales = self.scale_weights.len();
 
         let mut img = DssimImage {
-            chan: (0..3).map(|_|DssimChanScale{
-                scales: Vec::with_capacity(num_scales),
-            }).collect(),
+            chan: (0..3)
+                .map(|_| DssimChanScale { scales: Vec::with_capacity(num_scales) })
+                .collect(),
         };
 
         let mut scales: Vec<Bitmap<T>> = Vec::with_capacity(num_scales);
         for _ in 0..num_scales {
             let s = if let Some(l) = scales.last() {
-                    (&l.bitmap[..]).downsample(l.width, l.height)
-                } else {
-                    bitmap.downsample(width, height)
-                };
+                (&l.bitmap[..]).downsample(l.width, l.height)
+            } else {
+                bitmap.downsample(width, height)
+            };
             if let Some(s) = s {
                 scales.push(s);
             } else {
@@ -197,25 +197,24 @@ impl Dssim {
 
         let mut converted = Vec::with_capacity(num_scales);
         converted.push(Converted::LAB(bitmap.to_lab(width, height)));
-        converted.extend(scales.drain(..).map(|s|{
-            Converted::LAB((&s.bitmap[..]).to_lab(s.width, s.height))
-        }));
+        converted.extend(scales.drain(..)
+            .map(|s| Converted::LAB((&s.bitmap[..]).to_lab(s.width, s.height))));
 
         for c in converted.drain(..) {
             match c {
                 Converted::Gray(l) => {
                     img.chan[0].scales.push(DssimChan::new(l.bitmap, l.width, l.height, false));
-                }
-                Converted::LAB((l,a,b)) => {
+                },
+                Converted::LAB((l, a, b)) => {
                     img.chan[0].scales.push(DssimChan::new(l.bitmap, l.width, l.height, false));
                     img.chan[1].scales.push(DssimChan::new(a.bitmap, a.width, a.height, true));
                     img.chan[2].scales.push(DssimChan::new(b.bitmap, b.width, b.height, true));
-                }
+                },
             }
         }
 
-        let mut tmp = Vec::with_capacity(width*height);
-        unsafe {tmp.set_len(width*height)};
+        let mut tmp = Vec::with_capacity(width * height);
+        unsafe { tmp.set_len(width * height) };
 
         for mut ch in img.chan.iter_mut() {
             for mut s in ch.scales.iter_mut() {
@@ -233,22 +232,27 @@ impl Dssim {
         let width = original_image.chan[0].scales[0].width;
         let height = original_image.chan[0].scales[0].height;
 
-        let mut tmp = Vec::with_capacity(width*height);
-        unsafe {tmp.set_len(width*height)};
+        let mut tmp = Vec::with_capacity(width * height);
+        unsafe { tmp.set_len(width * height) };
 
         let mut ssim_sum = 0.0;
         let mut weight_sum = 0.0;
 
         let save_channel = self.save_maps_channels > 0;
         if save_channel {
-            self.ssim_maps.push(DssimMapChan{scales:Vec::with_capacity(self.save_maps_scales.into())});
+            self.ssim_maps
+                .push(DssimMapChan { scales: Vec::with_capacity(self.save_maps_scales.into()) });
         }
 
         for (n, weight) in self.scale_weights.iter().cloned().enumerate() {
             let save_maps = save_channel && self.save_maps_scales as usize > n;
 
-            let original_lab = Self::lab_chan(&original_image.chan[0].scales[n], &original_image.chan[1].scales[n], &original_image.chan[2].scales[n]);
-            let mut modified_lab = Self::lab_chan(&modified_image.chan[0].scales[n], &modified_image.chan[1].scales[n], &modified_image.chan[2].scales[n]);
+            let original_lab = Self::lab_chan(&original_image.chan[0].scales[n],
+                                              &original_image.chan[1].scales[n],
+                                              &original_image.chan[2].scales[n]);
+            let mut modified_lab = Self::lab_chan(&modified_image.chan[0].scales[n],
+                                                  &modified_image.chan[1].scales[n],
+                                                  &modified_image.chan[2].scales[n]);
 
             let mut ssim_map = Self::compare_channel(&original_lab, &mut modified_lab, &mut tmp[..]);
 
@@ -256,7 +260,7 @@ impl Dssim {
             let half = avg(&half.bitmap[..], half.width, half.height);
             let half = worst(&half.bitmap[..], half.width, half.height);
 
-            let sum = half.bitmap.iter().fold(0.,|sum,i|sum+ *i as f64);
+            let sum = half.bitmap.iter().fold(0., |sum, i| sum + *i as f64);
             let score = sum / (half.bitmap.len() as f64);
 
             ssim_map.data = half.bitmap;
@@ -303,37 +307,34 @@ impl Dssim {
         let c1 = 0.01 * 0.01;
         let c2 = 0.03 * 0.03;
 
-        let mut map_out = Vec::with_capacity(width*height);
-        unsafe {map_out.set_len(width*height)};
+        let mut map_out = Vec::with_capacity(width * height);
+        unsafe { map_out.set_len(width * height) };
 
         // FIXME: slice https://users.rust-lang.org/t/how-to-zip-two-slices-efficiently/2048
-        for (img1_img2_blur, mu1, mu2, img1_sq_blur, img2_sq_blur, mut map_out)
-            in Zip::new((
-                img1_img2_blur.iter().cloned(),
-                original.mu.iter().cloned(),
-                modified.mu.iter().cloned(),
-                original.img_sq_blur.iter().cloned(),
-                modified.img_sq_blur.iter().cloned(),
-                map_out.iter_mut(),
-            )) {
+        for (img1_img2_blur, mu1, mu2, img1_sq_blur, img2_sq_blur, mut map_out) in
+            Zip::new((img1_img2_blur.iter().cloned(),
+                      original.mu.iter().cloned(),
+                      modified.mu.iter().cloned(),
+                      original.img_sq_blur.iter().cloned(),
+                      modified.img_sq_blur.iter().cloned(),
+                      map_out.iter_mut())) {
 
-            let mu1_sq = (mu1*mu1).avg();
-            let mu2_sq = (mu2*mu2).avg();
-            let mu1_mu2 = (mu1*mu2).avg();
-            let sigma1_sq = img1_sq_blur - (mu1*mu1);
-            let sigma2_sq = img2_sq_blur - (mu2*mu2);
-            let sigma12 = img1_img2_blur - (mu1*mu2);
+            let mu1_sq = (mu1 * mu1).avg();
+            let mu2_sq = (mu2 * mu2).avg();
+            let mu1_mu2 = (mu1 * mu2).avg();
+            let sigma1_sq = img1_sq_blur - (mu1 * mu1);
+            let sigma2_sq = img2_sq_blur - (mu2 * mu2);
+            let sigma12 = img1_img2_blur - (mu1 * mu2);
 
-            let ssim = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2)
-                        /
+            let ssim = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
                        ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
 
             *map_out = ssim;
-            }
+        }
 
-        return SsimMap{
-                width: width,
-                height: height,
+        return SsimMap {
+            width: width,
+            height: height,
             dssim: -1.,
             data: map_out,
         };
@@ -356,7 +357,9 @@ impl SsimMap {
     }
 
     pub fn data(&self) -> Option<&[f32]> {
-        if self.width == 0 {return None;}
+        if self.width == 0 {
+            return None;
+        }
         return Some(&self.data[..]);
     }
 }
