@@ -2,24 +2,14 @@
 #![allow(non_upper_case_globals)]
 
 pub extern crate unzip3;
+pub extern crate rgb;
 use self::unzip3::Unzip3;
 use std;
+use rgb::*;
 
 /// RGBA, but: premultiplied alpha, linear, f32 unit
-#[derive(Debug, Copy, Clone)]
-pub struct RGBAPLU {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct RGBLU {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-}
+pub type RGBAPLU = RGBA<f32>;
+pub type RGBLU = RGB<f32>;
 
 #[derive(Debug, Copy, Clone)]
 pub struct LAB {
@@ -161,7 +151,11 @@ pub trait ToLAB {
     fn to_lab(&self) -> (f32, f32, f32);
 }
 
-impl RGBAPLU {
+pub trait ToRGB {
+    fn to_rgb(self, n: usize) -> RGBLU;
+}
+
+impl ToRGB for RGBAPLU {
     fn to_rgb(self, n: usize) -> RGBLU {
         let mut r = self.r;
         let mut g = self.g;

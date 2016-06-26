@@ -50,18 +50,6 @@ pub struct Dssim {
     ssim_maps: Vec<DssimMapChan>,
 }
 
-#[repr(C)]
-#[derive(Copy, Clone)]
-struct rgba {
-    r:u8,g:u8,b:u8,a:u8,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-struct rgb {
-    r:u8,g:u8,b:u8,
-}
-
 struct DssimChanScale<T> {
     scales: Vec<DssimChan<T>>,
 }
@@ -69,12 +57,6 @@ struct DssimChanScale<T> {
 pub struct DssimImage<T> {
     chan: Vec<DssimChanScale<T>>,
 }
-
-// #[allow(non_camel_case_types)]
-// pub enum Gamma {
-//     sRGB,
-//     Pow(f64),
-// }
 
 /* Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm */
 const DEFAULT_WEIGHTS: [f64; 5] = [0.0448, 0.2856, 0.3001, 0.2363, 0.1333];
