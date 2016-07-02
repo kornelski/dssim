@@ -291,7 +291,11 @@ impl Dssim {
         }
     }
 
-    fn compare_channel(original: &DssimChan<LAB>, mut modified: &mut DssimChan<LAB>, tmp: &mut [LAB]) -> SsimMap {
+    fn compare_channel<L>(original: &DssimChan<L>, mut modified: &mut DssimChan<L>, tmp: &mut [L]) -> SsimMap
+        where DssimChan<L>: Channable<L>,
+        L: Clone + Copy + ops::Mul<Output=L> + ops::Sub<Output=L>,
+        f32: std::convert::From<L>
+    {
         assert_eq!(original.width, modified.width);
         assert_eq!(original.height, modified.height);
 
@@ -315,9 +319,9 @@ impl Dssim {
                       modified.img_sq_blur.iter().cloned(),
                       map_out.iter_mut())) {
 
-            let mu1mu1:LAB = mu1 * mu1;
-            let mu1mu2:LAB = mu1 * mu2;
-            let mu2mu2:LAB = mu2 * mu2;
+            let mu1mu1 = mu1 * mu1;
+            let mu1mu2 = mu1 * mu2;
+            let mu2mu2 = mu2 * mu2;
             let mu1_sq:f32 = mu1mu1.into();
             let mu2_sq:f32 = mu2mu2.into();
             let mu1_mu2:f32 = mu1mu2.into();
