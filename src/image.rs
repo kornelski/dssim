@@ -96,6 +96,12 @@ impl From<LAB> for f64 {
     }
 }
 
+impl From<LAB> for f32 {
+    fn from(other: LAB) -> f32 {
+        other.avg()
+    }
+}
+
 impl std::ops::Div<LAB> for LAB {
     type Output = LAB;
     fn div(self, other: Self::Output) -> Self::Output {

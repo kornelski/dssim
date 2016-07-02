@@ -318,12 +318,12 @@ impl Dssim {
             let mu1mu1:LAB = mu1 * mu1;
             let mu1mu2:LAB = mu1 * mu2;
             let mu2mu2:LAB = mu2 * mu2;
-            let mu1_sq:f32 = mu1mu1.avg();
-            let mu2_sq:f32 = mu2mu2.avg();
-            let mu1_mu2:f32 = mu1mu2.avg();
-            let sigma1_sq:f32 = (img1_sq_blur - mu1mu1).avg();
-            let sigma2_sq:f32 = (img2_sq_blur - mu2mu2).avg();
-            let sigma12:f32 = (img1_img2_blur - mu1mu2).avg();
+            let mu1_sq:f32 = mu1mu1.into();
+            let mu2_sq:f32 = mu2mu2.into();
+            let mu1_mu2:f32 = mu1mu2.into();
+            let sigma1_sq:f32 = (img1_sq_blur - mu1mu1).into();
+            let sigma2_sq:f32 = (img2_sq_blur - mu2mu2).into();
+            let sigma12:f32 = (img1_img2_blur - mu1mu2).into();
 
             let ssim = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
                        ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
