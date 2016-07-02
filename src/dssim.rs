@@ -216,9 +216,6 @@ impl Dssim {
         return Some(img);
     }
 
-    /**
-     Algorithm based on Rabah Mehdi's C++ implementation
-     */
     pub fn compare(&mut self, original_image: &DssimImage<f32>, modified_image: DssimImage<f32>) -> Val {
         let width = original_image.scale[0].chan[0].width;
         let height = original_image.scale[0].chan[0].height;
