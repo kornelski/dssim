@@ -244,12 +244,8 @@ impl Dssim {
         for (n, weight) in self.scale_weights.iter().cloned().enumerate() {
             let save_maps = save_channel && self.save_maps_scales as usize > n;
 
-            let original_lab = Self::lab_chan(&original_image.scale[n].chan[0],
-                                              &original_image.scale[n].chan[1],
-                                              &original_image.scale[n].chan[2]);
-            let mut modified_lab = Self::lab_chan(&modified_image.scale[n].chan[0],
-                                                  &modified_image.scale[n].chan[1],
-                                                  &modified_image.scale[n].chan[2]);
+            let original_lab = Self::lab_chan(&original_image.scale[n]);
+            let mut modified_lab = Self::lab_chan(&modified_image.scale[n]);
 
             let mut ssim_map = Self::compare_channel(&original_lab, &mut modified_lab, &mut tmp[..]);
 
@@ -279,7 +275,10 @@ impl Dssim {
         return to_dssim(ssim_sum / weight_sum).into();
     }
 
-    fn lab_chan(l: &DssimChan<f32>, a: &DssimChan<f32>, b: &DssimChan<f32>) -> DssimChan<LAB> {
+    fn lab_chan(scale: &DssimChanScale<f32>) -> DssimChan<LAB> {
+        let l = &scale.chan[0];
+        let a = &scale.chan[1];
+        let b = &scale.chan[2];
         assert_eq!(l.width, a.width);
         assert_eq!(b.width, a.width);
         DssimChan {
