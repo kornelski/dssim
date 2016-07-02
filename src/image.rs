@@ -141,11 +141,6 @@ pub struct Bitmap<T> {
 }
 pub type GBitmap = Bitmap<f32>;
 
-pub enum Converted {
-    Gray(GBitmap),
-    LAB((GBitmap, GBitmap, GBitmap)),
-}
-
 pub trait ToLAB {
     fn to_luma(&self) -> f32;
     fn to_lab(&self) -> (f32, f32, f32);

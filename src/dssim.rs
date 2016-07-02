@@ -195,21 +195,14 @@ impl Dssim {
         }
 
         let mut converted = Vec::with_capacity(num_scales);
-        converted.push(Converted::LAB(bitmap.to_lab(width, height)));
+        converted.push(bitmap.to_lab(width, height));
         converted.extend(scales.drain(..)
-            .map(|s| Converted::LAB((&s.bitmap[..]).to_lab(s.width, s.height))));
+            .map(|s| (&s.bitmap[..]).to_lab(s.width, s.height)));
 
-        for c in converted.drain(..) {
-            match c {
-                Converted::Gray(l) => {
-                    img.chan[0].scales.push(DssimChan::new(l.bitmap, l.width, l.height, false));
-                },
-                Converted::LAB((l, a, b)) => {
-                    img.chan[0].scales.push(DssimChan::new(l.bitmap, l.width, l.height, false));
-                    img.chan[1].scales.push(DssimChan::new(a.bitmap, a.width, a.height, true));
-                    img.chan[2].scales.push(DssimChan::new(b.bitmap, b.width, b.height, true));
-                },
-            }
+        for (l, a, b) in converted.drain(..) {
+            img.chan[0].scales.push(DssimChan::new(l.bitmap, l.width, l.height, false));
+            img.chan[1].scales.push(DssimChan::new(a.bitmap, a.width, a.height, true));
+            img.chan[2].scales.push(DssimChan::new(b.bitmap, b.width, b.height, true));
         }
 
         let mut tmp = Vec::with_capacity(width * height);
