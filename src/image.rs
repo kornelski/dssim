@@ -306,6 +306,7 @@ impl<T> Downsample<T> for [T] where T: Sum4 + Copy {
     }
 }
 
+#[allow(dead_code)]
 pub fn worst(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
     let half_height = height / 2;
     let half_width = width / 2;
@@ -334,6 +335,7 @@ pub fn worst(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
     };
 }
 
+#[allow(dead_code)]
 pub fn avgworst(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
     let half_height = height / 2;
     let half_width = width / 2;
@@ -366,6 +368,7 @@ pub fn avgworst(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
     };
 }
 
+#[allow(dead_code)]
 pub fn avg(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
     let half_height = height / 2;
     let half_width = width / 2;
