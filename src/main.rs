@@ -26,6 +26,7 @@ extern crate rgb;
 
 mod ffi;
 mod val;
+mod linear;
 
 use std::io::Write;
 use std::env;
@@ -35,6 +36,7 @@ use std::fs;
 use getopts::Options;
 use dssim::RGBAPLU;
 use rgb::*;
+use linear::*;
 
 fn usage(argv0: &str) {
     write!(io::stderr(), "\
@@ -50,59 +52,6 @@ fn to_byte(i: f32) -> u8 {
     if i <= 0.0 {0}
     else if i >= 255.0/256.0 {255}
     else {(i * 256.0) as u8}
-}
-
-trait ToRGBAPLU {
-    fn to_rgbaplu(&self) -> Vec<RGBAPLU>;
-}
-
-impl ToRGBAPLU for [RGBA<u8>] {
-    fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
-        let mut gamma_lut = [0f32; 256];
-
-        for i in 0..256 {
-            let s: f64 = i as f64 / 255.0;
-            gamma_lut[i] = if s <= 0.04045 {
-                s / 12.92
-            } else {
-                ((s + 0.055) / 1.055).powf(2.4)
-            } as f32
-        }
-
-        self.iter().map(|px|{
-            let a_unit = px.a as f32 / 255.0;
-            RGBAPLU {
-                r: gamma_lut[px.r as usize] * a_unit,
-                g: gamma_lut[px.g as usize] * a_unit,
-                b: gamma_lut[px.b as usize] * a_unit,
-                a: a_unit,
-            }
-        }).collect()
-    }
-}
-
-impl ToRGBAPLU for [RGB<u8>] {
-    fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
-        let mut gamma_lut = [0f32; 256];
-
-        for i in 0..256 {
-            let s: f64 = i as f64 / 255.0;
-            gamma_lut[i] = if s <= 0.04045 {
-                s / 12.92
-            } else {
-                ((s + 0.055) / 1.055).powf(2.4)
-            } as f32
-        }
-
-        self.iter().map(|px|{
-            RGBAPLU {
-                r: gamma_lut[px.r as usize],
-                g: gamma_lut[px.g as usize],
-                b: gamma_lut[px.b as usize],
-                a: 1.0,
-            }
-        }).collect()
-    }
 }
 
 fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
