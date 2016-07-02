@@ -42,15 +42,10 @@ pub struct DssimChan<T> {
     pub is_chroma: bool,
 }
 
-struct DssimMapChan {
-    scales: Vec<SsimMap>,
-}
-
 pub struct Dssim {
     scale_weights: Vec<f64>,
     save_maps_scales: u8,
-    save_maps_channels: u8,
-    ssim_maps: Vec<DssimMapChan>,
+    ssim_maps: Vec<SsimMap>,
 }
 
 struct DssimChanScale<T> {
@@ -143,7 +138,6 @@ impl Dssim {
         Dssim {
             scale_weights: DEFAULT_WEIGHTS.iter().cloned().take(4).collect(),
             save_maps_scales: 0,
-            save_maps_channels: 0,
             ssim_maps: Vec::new(),
         }
     }
@@ -152,24 +146,18 @@ impl Dssim {
         self.scale_weights = scales.to_vec();
     }
 
-    pub fn set_save_ssim_maps(&mut self, num_scales: u8, num_channels: u8) {
+    pub fn set_save_ssim_maps(&mut self, num_scales: u8) {
         self.save_maps_scales = num_scales;
-        self.save_maps_channels = num_channels;
 
-        self.ssim_maps.reserve(num_channels.into());
+        self.ssim_maps.reserve(num_scales.into());
     }
 
-    pub fn ssim_map(&mut self, scale_index: usize, channel_index: usize) -> Option<&SsimMap> {
-        if self.ssim_maps.len() <= channel_index {
+    pub fn ssim_map(&mut self, scale_index: usize) -> Option<&SsimMap> {
+        if self.ssim_maps.len() <= scale_index {
             return None;
         }
 
-        let chan = &self.ssim_maps[channel_index];
-        if chan.scales.len() <= scale_index {
-            return None;
-        }
-
-        return Some(&chan.scales[scale_index]);
+        return Some(&self.ssim_maps[scale_index]);
     }
 
     pub fn create_image<T>(&mut self, bitmap: &[T], width: usize, height: usize) -> Option<DssimImage<f32>>
@@ -226,14 +214,8 @@ impl Dssim {
         let mut ssim_sum = 0.0;
         let mut weight_sum = 0.0;
 
-        let save_channel = self.save_maps_channels > 0;
-        if save_channel {
-            self.ssim_maps
-                .push(DssimMapChan { scales: Vec::with_capacity(self.save_maps_scales.into()) });
-        }
-
         for (n, weight) in self.scale_weights.iter().cloned().enumerate() {
-            let save_maps = save_channel && self.save_maps_scales as usize > n;
+            let save_maps = self.save_maps_scales as usize > n;
 
             let original_lab = Self::lab_chan(&original_image.scale[n]);
             let mut modified_lab = Self::lab_chan(&modified_image.scale[n]);
@@ -255,11 +237,10 @@ impl Dssim {
             weight_sum += weight;
 
             if save_maps {
-                {let chan = &mut self.ssim_maps[0];
-                while chan.scales.len() <= n {
-                    chan.scales.push(SsimMap::new());
-                }}
-                self.ssim_maps[0].scales[n] = ssim_map;
+                while self.ssim_maps.len() <= n {
+                    self.ssim_maps.push(SsimMap::new());
+                }
+                self.ssim_maps[n] = ssim_map;
             }
         }
 

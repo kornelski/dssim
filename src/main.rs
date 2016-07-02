@@ -143,7 +143,7 @@ fn main() {
         let modified = attr.create_image(&mod_rgba, width2, height2).expect("mod image creation");
 
         if map_output_file.is_some() {
-            attr.set_save_ssim_maps(1, 1);
+            attr.set_save_ssim_maps(1);
         }
 
         let dssim = attr.compare(&original, modified);
@@ -151,7 +151,7 @@ fn main() {
         println!("{:.6}\t{}", dssim, file2);
 
         if map_output_file.is_some() {
-            let map_meta = attr.ssim_map(0, 0).expect("should give ssimmap");
+            let map_meta = attr.ssim_map(0).expect("should give ssimmap");
             let avgssim = map_meta.dssim as f32;
             let out: Vec<_> = map_meta.data().expect("map should have data").iter().map(|ssim|{
                 let max = 1_f32 - ssim;
