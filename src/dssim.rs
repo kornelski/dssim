@@ -54,11 +54,11 @@ pub struct Dssim {
 }
 
 struct DssimChanScale<T> {
-    scales: Vec<DssimChan<T>>,
+    chan: Vec<DssimChan<T>>,
 }
 
 pub struct DssimImage<T> {
-    chan: Vec<DssimChanScale<T>>,
+    scale: Vec<DssimChanScale<T>>,
 }
 
 // Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm
@@ -178,9 +178,7 @@ impl Dssim {
         let num_scales = self.scale_weights.len();
 
         let mut img = DssimImage {
-            chan: (0..3)
-                .map(|_| DssimChanScale { scales: Vec::with_capacity(num_scales) })
-                .collect(),
+            scale: Vec::with_capacity(num_scales),
         };
 
         let mut scales: Vec<Bitmap<T>> = Vec::with_capacity(num_scales);
@@ -203,17 +201,21 @@ impl Dssim {
             .map(|s| (&s.bitmap[..]).to_lab(s.width, s.height)));
 
         for (l, a, b) in converted {
-            img.chan[0].scales.push(DssimChan::new(l.bitmap, l.width, l.height, false));
-            img.chan[1].scales.push(DssimChan::new(a.bitmap, a.width, a.height, true));
-            img.chan[2].scales.push(DssimChan::new(b.bitmap, b.width, b.height, true));
+            img.scale.push(DssimChanScale{
+                chan: vec![
+                    DssimChan::new(l.bitmap, l.width, l.height, false),
+                    DssimChan::new(a.bitmap, a.width, a.height, true),
+                    DssimChan::new(b.bitmap, b.width, b.height, true),
+                ],
+            });
         }
 
         let mut tmp = Vec::with_capacity(width * height);
         unsafe { tmp.set_len(width * height) };
 
-        for mut ch in img.chan.iter_mut() {
-            for mut s in ch.scales.iter_mut() {
-                s.preprocess(&mut tmp[..]);
+        for mut s in img.scale.iter_mut() {
+            for mut ch in s.chan.iter_mut() {
+                ch.preprocess(&mut tmp[..]);
             }
         }
 
@@ -224,8 +226,8 @@ impl Dssim {
      Algorithm based on Rabah Mehdi's C++ implementation
      */
     pub fn compare(&mut self, original_image: &DssimImage<f32>, modified_image: DssimImage<f32>) -> Val {
-        let width = original_image.chan[0].scales[0].width;
-        let height = original_image.chan[0].scales[0].height;
+        let width = original_image.scale[0].chan[0].width;
+        let height = original_image.scale[0].chan[0].height;
 
         let mut tmp = Vec::with_capacity(width * height);
         unsafe { tmp.set_len(width * height) };
@@ -242,12 +244,12 @@ impl Dssim {
         for (n, weight) in self.scale_weights.iter().cloned().enumerate() {
             let save_maps = save_channel && self.save_maps_scales as usize > n;
 
-            let original_lab = Self::lab_chan(&original_image.chan[0].scales[n],
-                                              &original_image.chan[1].scales[n],
-                                              &original_image.chan[2].scales[n]);
-            let mut modified_lab = Self::lab_chan(&modified_image.chan[0].scales[n],
-                                                  &modified_image.chan[1].scales[n],
-                                                  &modified_image.chan[2].scales[n]);
+            let original_lab = Self::lab_chan(&original_image.scale[n].chan[0],
+                                              &original_image.scale[n].chan[1],
+                                              &original_image.scale[n].chan[2]);
+            let mut modified_lab = Self::lab_chan(&modified_image.scale[n].chan[0],
+                                                  &modified_image.scale[n].chan[1],
+                                                  &modified_image.scale[n].chan[2]);
 
             let mut ssim_map = Self::compare_channel(&original_lab, &mut modified_lab, &mut tmp[..]);
 

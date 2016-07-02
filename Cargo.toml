@@ -6,8 +6,8 @@ documentation = "https://github.com/pornel/dssim"
 keywords = ["ssim", "image", "comparison"]
 license = "AGPL-3.0"
 name = "dssim"
-repository = "https://github.com/pornel/dssim.git"
-version = "2.0.0"
+repository = "https://github.com/pornel/dssim2.git"
+version = "2.1.0"
 
 [[bin]]
 name = "dssim"
