@@ -115,7 +115,7 @@ impl DssimChan<f32> {
 
 impl Channable<LAB> for DssimChan<LAB> {
     fn img1_img2_blur<'a>(&self, modified_img: &'a mut Vec<LAB>, tmp: &mut [LAB]) -> &'a mut [LAB] {
-    use image::unzip3::Unzip3;
+        use image::unzip3::Unzip3;
         let (mut l,mut a,mut b):(Vec<f32>,Vec<f32>,Vec<f32>) = modified_img.iter().zip(self.img.iter()).map(|(img2,img1)|{
             (img2.l * img1.l,
              img2.a * img1.a,
@@ -136,7 +136,6 @@ impl Channable<LAB> for DssimChan<LAB> {
 
         return &mut modified_img[..];
     }
-
 }
 
 impl Dssim {
