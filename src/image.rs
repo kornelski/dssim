@@ -74,14 +74,16 @@ impl std::ops::Add<f32> for LAB {
 }
 
 impl std::ops::Sub<LAB> for LAB {
-    type Output = f32;
+    type Output = LAB;
     fn sub(self, other: LAB) -> Self::Output {
-        let l = self.l - other.l;
-        let a = self.a - other.a;
-        let b = self.b - other.b;
-        (l + a + b) / 3.0
+        LAB {
+            l: self.l - other.l,
+            a: self.a - other.a,
+            b: self.b - other.b,
+        }
     }
 }
+
 impl LAB {
     pub fn avg(&self) -> f32 {
         (self.l + self.a + self.b) / 3.0
