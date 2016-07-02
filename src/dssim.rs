@@ -183,7 +183,7 @@ impl Dssim {
         let mut scales: Vec<Bitmap<T>> = Vec::with_capacity(num_scales);
         for _ in 0..num_scales {
             let s = if let Some(l) = scales.last() {
-                (&l.bitmap[..]).downsample(l.width, l.height)
+                l.bitmap.downsample(l.width, l.height)
             } else {
                 bitmap.downsample(width, height)
             };
