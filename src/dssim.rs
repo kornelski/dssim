@@ -199,7 +199,7 @@ impl Dssim {
         converted.extend(scales.drain(..)
             .map(|s| (&s.bitmap[..]).to_lab(s.width, s.height)));
 
-        for (l, a, b) in converted.drain(..) {
+        for (l, a, b) in converted {
             img.chan[0].scales.push(DssimChan::new(l.bitmap, l.width, l.height, false));
             img.chan[1].scales.push(DssimChan::new(a.bitmap, a.width, a.height, true));
             img.chan[2].scales.push(DssimChan::new(b.bitmap, b.width, b.height, true));
