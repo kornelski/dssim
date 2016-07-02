@@ -197,7 +197,7 @@ impl Dssim {
 
         let mut converted = Vec::with_capacity(num_scales);
         converted.push(bitmap.to_lab(width, height));
-        converted.extend(scales.drain(..)
+        converted.extend(scales.into_iter()
             .map(|s| (&s.bitmap[..]).to_lab(s.width, s.height)));
 
         for (l, a, b) in converted {
