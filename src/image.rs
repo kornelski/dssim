@@ -150,7 +150,6 @@ pub struct Bitmap<T> {
 pub type GBitmap = Bitmap<f32>;
 
 pub trait ToLAB {
-    fn to_luma(&self) -> f32;
     fn to_lab(&self) -> (f32, f32, f32);
 }
 
@@ -185,16 +184,6 @@ impl ToRGB for RGBAPLU {
 }
 
 impl ToLAB for RGBLU {
-    fn to_luma(&self) -> f32 {
-        let fy = ((self.r as f64 * 0.2126 + self.g as f64 * 0.7152 + self.b as f64 * 0.0722) / D65y) as f32;
-
-        let epsilon: f32 = 216. / 24389.;
-        // http://www.brucelindbloom.com/LContinuity.html
-        let Y = if fy > epsilon { fy.powf(1. / 3.) - 16. / 116. } else { ((24389. / 27.) / 116.) * fy };
-
-        return Y * 1.16;
-    }
-
     fn to_lab(&self) -> (f32, f32, f32) {
         let fx = ((self.r as f64 * 0.4124 + self.g as f64 * 0.3576 + self.b as f64 * 0.1805) / D65x) as f32;
         let fy = ((self.r as f64 * 0.2126 + self.g as f64 * 0.7152 + self.b as f64 * 0.0722) / D65y) as f32;
@@ -216,29 +205,10 @@ impl ToLAB for RGBLU {
 
 
 pub trait ToLABBitmap {
-    fn to_luma(&self, width: usize, height: usize) -> GBitmap;
     fn to_lab(&self, width: usize, height: usize) -> (GBitmap, GBitmap, GBitmap);
 }
 
 impl ToLABBitmap for [RGBAPLU] {
-    fn to_luma(&self, width: usize, height: usize) -> GBitmap {
-        let mut x=11; // offset so that block-based compressors don't align
-        let mut y=11;
-        GBitmap{
-            bitmap: self.iter().map(|px|{
-                let n = x ^ y;
-                if x >= width {
-                    x=0;
-                    y+=1;
-                }
-                x += 1;
-                px.to_rgb(n).to_luma()
-            }).collect(),
-            width: width,
-            height: height,
-        }
-    }
-
     fn to_lab(&self, width: usize, height: usize) -> (GBitmap, GBitmap, GBitmap) {
         let mut x=11; // offset so that block-based compressors don't align
         let mut y=11;
@@ -262,14 +232,6 @@ impl ToLABBitmap for [RGBAPLU] {
 }
 
 impl ToLABBitmap for [RGBLU] {
-    fn to_luma(&self, width: usize, height: usize) -> GBitmap {
-        GBitmap {
-            bitmap: self.iter().map(|px| px.to_luma()).collect(),
-            width: width,
-            height: height,
-        }
-    }
-
     fn to_lab(&self, width: usize, height: usize) -> (GBitmap, GBitmap, GBitmap) {
         let (l, a, b) = self.iter().map(|px| px.to_lab()).unzip3();
 
