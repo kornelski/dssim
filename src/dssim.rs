@@ -26,8 +26,12 @@ use self::itertools::Zip;
 use blur;
 use image::*;
 use std;
-
+use std::ops;
 pub use val::Dssim as Val;
+
+trait Channable<T> {
+    fn img1_img2_blur<'a>(&self, modified_img: &'a mut Vec<T>, tmp: &mut [T]) -> &'a mut [T];
+}
 
 pub struct DssimChan<T> {
     pub width: usize,
@@ -109,7 +113,7 @@ impl DssimChan<f32> {
     }
 }
 
-impl DssimChan<LAB> {
+impl Channable<LAB> for DssimChan<LAB> {
     fn img1_img2_blur<'a>(&self, modified_img: &'a mut Vec<LAB>, tmp: &mut [LAB]) -> &'a mut [LAB] {
     use image::unzip3::Unzip3;
         let (mut l,mut a,mut b):(Vec<f32>,Vec<f32>,Vec<f32>) = modified_img.iter().zip(self.img.iter()).map(|(img2,img1)|{
@@ -311,12 +315,15 @@ impl Dssim {
                       modified.img_sq_blur.iter().cloned(),
                       map_out.iter_mut())) {
 
-            let mu1_sq = (mu1 * mu1).avg();
-            let mu2_sq = (mu2 * mu2).avg();
-            let mu1_mu2 = (mu1 * mu2).avg();
-            let sigma1_sq = img1_sq_blur - (mu1 * mu1);
-            let sigma2_sq = img2_sq_blur - (mu2 * mu2);
-            let sigma12 = img1_img2_blur - (mu1 * mu2);
+            let mu1mu1:LAB = (mu1 * mu1);
+            let mu1mu2:LAB = (mu1 * mu2);
+            let mu2mu2:LAB = (mu2 * mu2);
+            let mu1_sq:f32 = mu1mu1.avg();
+            let mu2_sq:f32 = mu2mu2.avg();
+            let mu1_mu2:f32 = mu1mu2.avg();
+            let sigma1_sq:f32 = img1_sq_blur - mu1mu1;
+            let sigma2_sq:f32 = img2_sq_blur - mu2mu2;
+            let sigma12:f32 = img1_img2_blur - mu1mu2;
 
             let ssim = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
                        ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
