@@ -27,6 +27,7 @@ extern crate rgb;
 mod ffi;
 mod val;
 mod linear;
+mod image;
 
 use std::io::Write;
 use std::env;

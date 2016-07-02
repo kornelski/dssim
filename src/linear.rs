@@ -1,4 +1,4 @@
-use dssim::RGBAPLU;
+use super::image::RGBAPLU;
 use rgb::*;
 
 pub trait ToRGBAPLU {

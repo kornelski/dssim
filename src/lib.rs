@@ -6,4 +6,4 @@ mod ffi;
 mod val;
 pub use dssim::*;
 pub use image::*;
-
+mod linear;

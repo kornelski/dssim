@@ -21,7 +21,6 @@
 
 extern crate libc;
 extern crate itertools;
-extern crate lodepng;
 
 use self::itertools::Zip;
 use blur;
@@ -364,23 +363,28 @@ impl SsimMap {
     }
 }
 
-/*
 
 #[test]
 fn png_compare() {
-    let mut d = new();
-    let file1 = lodepng::decode32_file("test1.png").unwrap();
-    let file2 = lodepng::decode32_file("test2.png").unwrap();
+    extern crate lodepng;
 
-    let img1 = d.create_image(file1.buffer.as_ref(), DSSIM_RGBA, file1.width, file1.width*4, 0.45455).unwrap();
-    let img2 = d.create_image(file2.buffer.as_ref(), DSSIM_RGBA, file2.width, file2.width*4, 0.45455).unwrap();
+    use linear::*;
+
+    let mut d = new();
+    let file1 = lodepng::decode32_file("tests/test1-sm.png").unwrap();
+    let file2 = lodepng::decode32_file("tests/test2-sm.png").unwrap();
+
+    let buf1 = &file1.buffer.as_ref().to_rgbaplu();
+    let buf2 = &file2.buffer.as_ref().to_rgbaplu();
+    let img1 = d.create_image(buf1, file1.width, file1.height).unwrap();
+    let img2 = d.create_image(buf2, file2.width, file2.height).unwrap();
 
     let res = d.compare(&img1, img2);
-    assert!((0.015899 - res).abs() < 0.0001, "res is {}", res);
-    assert!(res < 0.0160);
-    assert!(0.0158 < res);
+    assert!((0.003297 - res).abs() < 0.0001, "res is {}", res);
+    assert!(res < 0.0033);
+    assert!(0.0032 < res);
 
-    let img1b = d.create_image(file1.buffer.as_ref(), DSSIM_RGBA, file1.width, file1.width*4, 0.45455).unwrap();
+    let img1b = d.create_image(buf1, file1.width, file1.height).unwrap();
     let res = d.compare(&img1, img1b);
 
     assert!(0.000000000000001 > res);
@@ -388,4 +392,3 @@ fn png_compare() {
     assert_eq!(res, res);
 }
 
-*/
