@@ -29,8 +29,8 @@ use std;
 use std::ops;
 pub use val::Dssim as Val;
 
-trait Channable<T> {
-    fn img1_img2_blur<'a>(&self, modified_img: &'a mut Vec<T>, tmp: &mut [T]) -> &'a mut [T];
+trait Channable<T, I> {
+    fn img1_img2_blur<'a>(&self, modified_img: &'a mut Vec<T>, tmp: &mut [I]) -> &'a mut [T];
 }
 
 pub struct DssimChan<T> {
@@ -108,18 +108,14 @@ impl DssimChan<f32> {
     }
 }
 
-impl Channable<LAB> for DssimChan<LAB> {
-    fn img1_img2_blur<'a>(&self, modified_img: &'a mut Vec<LAB>, tmp: &mut [LAB]) -> &'a mut [LAB] {
+impl Channable<LAB, f32> for DssimChan<LAB> {
+    fn img1_img2_blur<'a>(&self, modified_img: &'a mut Vec<LAB>, tmp32: &mut [f32]) -> &'a mut [LAB] {
         use image::unzip3::Unzip3;
         let (mut l,mut a,mut b):(Vec<f32>,Vec<f32>,Vec<f32>) = modified_img.iter().zip(self.img.iter()).map(|(img2,img1)|{
             (img2.l * img1.l,
              img2.a * img1.a,
              img2.b * img1.b)
         }).unzip3();
-
-        let mut tmp32 = unsafe {
-            std::slice::from_raw_parts_mut(tmp[..].as_mut_ptr() as *mut f32, self.width * self.height)
-        };
 
         blur::blur_in_place(&mut l[..], tmp32, self.width, self.height);
         blur::blur_in_place(&mut a[..], tmp32, self.width, self.height);
@@ -281,8 +277,8 @@ impl Dssim {
         }
     }
 
-    fn compare_channel<L>(original: &DssimChan<L>, mut modified: &mut DssimChan<L>, tmp: &mut [L]) -> SsimMap
-        where DssimChan<L>: Channable<L>,
+    fn compare_channel<L>(original: &DssimChan<L>, mut modified: &mut DssimChan<L>, tmp: &mut [f32]) -> SsimMap
+        where DssimChan<L>: Channable<L, f32>,
         L: Clone + Copy + ops::Mul<Output=L> + ops::Sub<Output=L>,
         f32: std::convert::From<L>
     {
@@ -292,7 +288,7 @@ impl Dssim {
         let width = original.width;
         let height = original.height;
 
-        let img1_img2_blur = original.img1_img2_blur(&mut modified.img, tmp);
+        let img1_img2_blur = original.img1_img2_blur(&mut modified.img, &mut tmp[0 .. width*height]);
 
         let c1 = 0.01 * 0.01;
         let c2 = 0.03 * 0.03;
