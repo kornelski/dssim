@@ -251,13 +251,19 @@ impl Dssim {
         )).enumerate() {
             let save_maps = self.save_maps_scales as usize > n;
 
+            let scale_width = original_image_scale.chan[0].width;
+            let scale_height = original_image_scale.chan[0].height;
+
             let mut ssim_map = {
                 if original_image_scale.chan.len() == 3 {
                     let original_lab = Self::lab_chan(&original_image_scale);
                     let mut modified_lab = Self::lab_chan(&modified_image_scale);
-                    Self::compare_channel(&original_lab, &mut modified_lab, &mut tmp[..])
+
+                    let img1_img2_blur = original_lab.img1_img2_blur(&mut modified_lab, &mut tmp[0 .. scale_width*scale_height]);
+                    Self::compare_channel(&original_lab, &modified_lab, &img1_img2_blur)
                 } else {
-                    Self::compare_channel(&original_image_scale.chan[0], &mut modified_image_scale.chan[0], &mut tmp[..])
+                    let img1_img2_blur = original_image_scale.chan[0].img1_img2_blur(&mut modified_image_scale.chan[0], &mut tmp[0 .. scale_width*scale_height]);
+                    Self::compare_channel(&original_image_scale.chan[0], &modified_image_scale.chan[0], &img1_img2_blur)
                 }
             };
 
@@ -302,8 +308,8 @@ impl Dssim {
         }
     }
 
-    fn compare_channel<L>(original: &DssimChan<L>, mut modified: &mut DssimChan<L>, tmp: &mut [f32]) -> SsimMap
-        where DssimChan<L>: Channable<L, f32>,
+    fn compare_channel<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> SsimMap
+        where
         L: Clone + Copy + ops::Mul<Output=L> + ops::Sub<Output=L>,
         f32: std::convert::From<L>
     {
@@ -312,8 +318,6 @@ impl Dssim {
 
         let width = original.width;
         let height = original.height;
-
-        let img1_img2_blur = original.img1_img2_blur(modified, &mut tmp[0 .. width*height]);
 
         let c1 = 0.01 * 0.01;
         let c2 = 0.03 * 0.03;
