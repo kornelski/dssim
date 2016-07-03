@@ -187,12 +187,12 @@ impl Dssim {
         return downsampled;
     }
 
-    pub fn create_image<'a, 'b, T: 'a>(&mut self, src_img: &BitmapRef<'a, T>) -> Option<DssimImage<f32>>
+    pub fn create_image<'a, 'b, T: 'a, InBitmap>(&mut self, src_img: &InBitmap) -> Option<DssimImage<f32>>
         where
-        BitmapRef<'a, T>: ToLABBitmap,
+        InBitmap: ToLABBitmap,
         Bitmap<T>: ToLABBitmap,
         Bitmap<T>: Downsample<T, Output=Bitmap<T>>,
-        BitmapRef<'a, T>: Downsample<T, Output=<Bitmap<T> as Downsample<T>>::Output>,
+        InBitmap: Downsample<T, Output=<Bitmap<T> as Downsample<T>>::Output>,
         T: Sum4,
         T: Copy + Clone
     {
