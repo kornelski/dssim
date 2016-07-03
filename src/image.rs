@@ -274,22 +274,31 @@ impl ToLABBitmap for [RGBLU] {
 //////////////////////////////
 
 pub trait Downsample<T> {
-    fn downsample(&self, width: usize, height: usize) -> Option<Bitmap<T>>;
+    fn downsample(&self) -> Option<Bitmap<T>>;
 }
 
-impl<T> Downsample<T> for [T] where T: Sum4 + Copy {
-    fn downsample(&self, width: usize, height: usize) -> Option<Bitmap<T>> {
+impl<T> Downsample<T> for Bitmap<T> where T: Sum4 + Copy {
+    fn downsample(&self) -> Option<Bitmap<T>> {
+        self.new_ref().downsample()
+    }
+}
+
+impl<'a, T> Downsample<T> for BitmapRef<'a, T> where T: Sum4 + Copy {
+    fn downsample(&self) -> Option<Bitmap<T>> {
+        let width = self.width;
+        let height = self.height;
+
         if width < 8 || height < 8 {
             return None;
         }
 
-        assert_eq!(width * height, self.len());
+        assert_eq!(width * height, self.bitmap.len());
 
         let half_height = height / 2;
         let half_width = width / 2;
 
         // crop odd pixels
-        let bitmap = &self[0..width * half_height * 2];
+        let bitmap = &self.bitmap[0..width * half_height * 2];
 
         let scaled:Vec<_> = bitmap.chunks(width * 2).flat_map(|pair|{
             let (top, bot) = pair.split_at(half_width * 2);
