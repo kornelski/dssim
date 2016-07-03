@@ -129,6 +129,18 @@ impl Channable<LAB, f32> for DssimChan<LAB> {
     }
 }
 
+impl Channable<f32, f32> for DssimChan<f32> {
+    fn img1_img2_blur<'a>(&self, modified_img: &'a mut Vec<f32>, tmp32: &mut [f32]) -> &'a mut [f32] {
+        let out = &mut modified_img[..];
+        for (img2,img1) in out.iter_mut().zip(self.img.iter()) {
+            *img2 *= *img1
+        }
+
+        blur::blur_in_place(out, tmp32, self.width, self.height);
+        return out;
+    }
+}
+
 impl Dssim {
     pub fn new() -> Dssim {
         Dssim {
@@ -228,17 +240,22 @@ impl Dssim {
         let mut ssim_sum = 0.0;
         let mut weight_sum = 0.0;
 
-        for (n, (weight, modified_image_scale, original_image_scale)) in Zip::new((
+        for (n, (weight, mut modified_image_scale, original_image_scale)) in Zip::new((
             self.scale_weights.iter().cloned(),
             modified_image.scale.into_iter(),
             original_image.scale.iter(),
         )).enumerate() {
             let save_maps = self.save_maps_scales as usize > n;
 
-            let original_lab = Self::lab_chan(&original_image_scale);
-            let mut modified_lab = Self::lab_chan(&modified_image_scale);
-
-            let mut ssim_map = Self::compare_channel(&original_lab, &mut modified_lab, &mut tmp[..]);
+            let mut ssim_map = {
+                if original_image_scale.chan.len() == 3 {
+                    let original_lab = Self::lab_chan(&original_image_scale);
+                    let mut modified_lab = Self::lab_chan(&modified_image_scale);
+                    Self::compare_channel(&original_lab, &mut modified_lab, &mut tmp[..])
+                } else {
+                    Self::compare_channel(&original_image_scale.chan[0], &mut modified_image_scale.chan[0], &mut tmp[..])
+                }
+            };
 
             let half = avgworst(&ssim_map.data[..], ssim_map.width, ssim_map.height);
             let half = avg(&half.bitmap[..], half.width, half.height);
