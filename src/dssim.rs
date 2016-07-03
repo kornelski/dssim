@@ -162,15 +162,15 @@ impl Dssim {
         return Some(&self.ssim_maps[scale_index]);
     }
 
-    pub fn create_scales<'a, T: 'a>(&self, src_img: &BitmapRef<'a, T>) -> Vec<Bitmap<T>>
+    pub fn create_scales<InBitmap, OutBitmap, T>(&self, src_img: &InBitmap) -> Vec<OutBitmap>
         where
-        Bitmap<T>: Downsample<T, Output=Bitmap<T>>,
-        BitmapRef<'a, T>: Downsample<T, Output=<Bitmap<T> as Downsample<T>>::Output>,
-        T: Sum4
+        InBitmap: Downsample<T, Output=OutBitmap>,
+        OutBitmap: Downsample<T, Output=OutBitmap>,
+        T: Copy + Sum4
     {
         let num_scales = self.scale_weights.len();
 
-        let mut downsampled: Vec<<Bitmap<T> as Downsample<T>>::Output> = Vec::with_capacity(num_scales);
+        let mut downsampled: Vec<OutBitmap> = Vec::with_capacity(num_scales);
         for _ in 1..num_scales { // 1, because unscaled bitmap will be added
             let s = if let Some(l) = downsampled.last() {
                 l.downsample()
@@ -192,7 +192,7 @@ impl Dssim {
         Bitmap<T>: Downsample<T, Output=Bitmap<T>>,
         BitmapRef<'a, T>: Downsample<T, Output=<Bitmap<T> as Downsample<T>>::Output>,
         T: Sum4,
-        T: Clone
+        T: Copy + Clone
     {
         let downsampled = self.create_scales(src_img);
 
