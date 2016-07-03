@@ -187,20 +187,18 @@ impl Dssim {
         return downsampled;
     }
 
-    pub fn create_image<'a, 'b, T: 'a, InBitmap>(&mut self, src_img: &InBitmap) -> Option<DssimImage<f32>>
+    pub fn create_image<'a, 'b, T: 'a, InBitmap, OutBitmap>(&mut self, src_img: &InBitmap) -> Option<DssimImage<f32>>
         where
         InBitmap: ToLABBitmap,
-        Bitmap<T>: ToLABBitmap,
-        Bitmap<T>: Downsample<T, Output=Bitmap<T>>,
-        InBitmap: Downsample<T, Output=<Bitmap<T> as Downsample<T>>::Output>,
+        OutBitmap: ToLABBitmap,
+        InBitmap: Downsample<T, Output=OutBitmap>,
+        OutBitmap: Downsample<T, Output=OutBitmap>,
         T: Sum4,
         T: Copy + Clone
     {
-        let downsampled:Vec<_> = self.create_scales(src_img).into_iter().map(|s| {
-            s.to_lab()
-        }).collect();
-
-        let mut all_sizes = std::iter::once(src_img.to_lab()).chain(downsampled).peekable();
+        let mut all_sizes = std::iter::once(src_img.to_lab())
+            .chain(self.create_scales(src_img).into_iter().map(|s| s.to_lab()))
+            .peekable();
 
         let mut tmp = {
             let largest = all_sizes.peek().unwrap();
