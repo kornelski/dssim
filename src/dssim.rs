@@ -224,12 +224,14 @@ impl Dssim {
         };
 
         return DssimImage {
-            scale: all_sizes.map(|s| s.bitmap.to_lab(s.width, s.height)).map(|(l,a,b)|DssimChanScale{
-                chan: vec![
-                    {let mut ch = DssimChan::new(l.bitmap, l.width, l.height, false); ch.preprocess(&mut tmp[..]); ch },
-                    {let mut ch = DssimChan::new(a.bitmap, a.width, a.height, true); ch.preprocess(&mut tmp[..]); ch },
-                    {let mut ch = DssimChan::new(b.bitmap, b.width, b.height, true); ch.preprocess(&mut tmp[..]); ch },
-                ],
+            scale: all_sizes.map(|s| {
+                DssimChanScale {
+                    chan: s.bitmap.to_lab(s.width, s.height).into_iter().enumerate().map(|(n,l)| {
+                        let mut ch = DssimChan::new(l.bitmap, l.width, l.height, n > 0);
+                        ch.preprocess(&mut tmp[..]);
+                        ch
+                    }).collect(),
+                }
             }).collect(),
         };
     }
