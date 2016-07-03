@@ -228,11 +228,15 @@ impl Dssim {
         let mut ssim_sum = 0.0;
         let mut weight_sum = 0.0;
 
-        for (n, weight) in self.scale_weights.iter().cloned().enumerate() {
+        for (n, (weight, modified_image_scale, original_image_scale)) in Zip::new((
+            self.scale_weights.iter().cloned(),
+            modified_image.scale.into_iter(),
+            original_image.scale.iter(),
+        )).enumerate() {
             let save_maps = self.save_maps_scales as usize > n;
 
-            let original_lab = Self::lab_chan(&original_image.scale[n]);
-            let mut modified_lab = Self::lab_chan(&modified_image.scale[n]);
+            let original_lab = Self::lab_chan(&original_image_scale);
+            let mut modified_lab = Self::lab_chan(&modified_image_scale);
 
             let mut ssim_map = Self::compare_channel(&original_lab, &mut modified_lab, &mut tmp[..]);
 
