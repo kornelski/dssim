@@ -233,15 +233,23 @@ impl ToLAB for RGBLU {
 
 
 pub trait ToLABBitmap {
-    fn to_lab(&self, width: usize, height: usize) -> Vec<GBitmap>;
+    fn to_lab(&self) -> Vec<GBitmap>;
 }
 
-impl ToLABBitmap for [RGBAPLU] {
-    fn to_lab(&self, width: usize, height: usize) -> Vec<GBitmap> {
+impl ToLABBitmap for Bitmap<RGBAPLU> {
+    fn to_lab(&self) -> Vec<GBitmap> {
+        self.new_ref().to_lab()
+    }
+}
+
+impl<'a> ToLABBitmap for BitmapRef<'a, RGBAPLU> {
+    fn to_lab(&self) -> Vec<GBitmap> {
+        let width = self.width;
+        let height = self.height;
         let mut x=11; // offset so that block-based compressors don't align
         let mut y=11;
 
-        let (l,a,b) = self.iter().map(|px|{
+        let (l,a,b) = self.bitmap.iter().map(|px|{
             let n = x ^ y;
             if x >= width {
                 x=0;
@@ -259,9 +267,11 @@ impl ToLABBitmap for [RGBAPLU] {
     }
 }
 
-impl ToLABBitmap for [RGBLU] {
-    fn to_lab(&self, width: usize, height: usize) -> Vec<GBitmap> {
-        let (l, a, b) = self.iter().map(|px| px.to_lab()).unzip3();
+impl<'a> ToLABBitmap for BitmapRef<'a, RGBLU> {
+    fn to_lab(&self) -> Vec<GBitmap> {
+        let width = self.width;
+        let height = self.height;
+        let (l, a, b) = self.bitmap.iter().map(|px| px.to_lab()).unzip3();
 
         return vec![
             GBitmap{bitmap:l, width:width, height:height},

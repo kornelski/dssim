@@ -187,44 +187,40 @@ impl Dssim {
         return downsampled;
     }
 
-    pub fn create_image<'a, T:'a>(&mut self, src_img: &BitmapRef<'a, T>) -> Option<DssimImage<f32>>
-        where [T]: ToLABBitmap,
+    pub fn create_image<'a, 'b, T: 'a>(&mut self, src_img: &BitmapRef<'a, T>) -> Option<DssimImage<f32>>
+        where
+        BitmapRef<'a, T>: ToLABBitmap,
+        Bitmap<T>: ToLABBitmap,
         Bitmap<T>: Downsample<T, Output=Bitmap<T>>,
         BitmapRef<'a, T>: Downsample<T, Output=<Bitmap<T> as Downsample<T>>::Output>,
         T: Sum4,
         T: Copy + Clone
     {
-        let downsampled = self.create_scales(src_img);
+        let downsampled:Vec<_> = self.create_scales(src_img).into_iter().map(|s| {
+            s.to_lab()
+        }).collect();
 
-        return Some(self.create_image_from_scales(
-            std::iter::once(src_img).cloned().chain(downsampled.iter().map(|s| s.new_ref()))));
-    }
-
-    fn create_image_from_scales<'a, T: 'a, I>(&self, all_sizes: I) -> DssimImage<f32>
-        where [T]: ToLABBitmap,
-              I: IntoIterator<Item = BitmapRef<'a, T>>
-    {
-        let mut all_sizes = all_sizes.into_iter().peekable();
+        let mut all_sizes = std::iter::once(src_img.to_lab()).chain(downsampled).peekable();
 
         let mut tmp = {
             let largest = all_sizes.peek().unwrap();
-            let pixels = largest.width * largest.height;
+            let pixels = largest[0].width * largest[0].height;
             let mut tmp = Vec::with_capacity(pixels);
             unsafe { tmp.set_len(pixels) };
             tmp
         };
 
-        return DssimImage {
+        return Some(DssimImage {
             scale: all_sizes.map(|s| {
                 DssimChanScale {
-                    chan: s.bitmap.to_lab(s.width, s.height).into_iter().enumerate().map(|(n,l)| {
+                    chan: s.into_iter().enumerate().map(|(n,l)| {
                         let mut ch = DssimChan::new(l.bitmap, l.width, l.height, n > 0);
                         ch.preprocess(&mut tmp[..]);
                         ch
                     }).collect(),
                 }
             }).collect(),
-        };
+        });
     }
 
     pub fn compare(&mut self, original_image: &DssimImage<f32>, modified_image: DssimImage<f32>) -> Val {
