@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
+#![allow(dead_code)]
 
 pub extern crate unzip3;
 pub extern crate rgb;
@@ -147,6 +148,32 @@ pub struct Bitmap<T> {
     pub width: usize,
     pub height: usize,
 }
+
+
+pub struct BitmapRef<'a, T:'a> {
+    pub bitmap: &'a [T],
+    pub width: usize,
+    pub height: usize,
+}
+
+impl<'a, T> BitmapRef<'a, T> {
+    pub fn new(bitmap: &'a [T], width: usize, height: usize) -> BitmapRef<'a, T> {
+        BitmapRef {
+            bitmap:bitmap, width:width, height:height
+        }
+    }
+}
+
+impl<T> Bitmap<T> {
+    pub fn new_ref<'a>(&'a self) -> BitmapRef<'a, T> {
+        BitmapRef {
+            bitmap: self.bitmap.as_ref(),
+            width: self.width,
+            height: self.height,
+        }
+    }
+}
+
 pub type GBitmap = Bitmap<f32>;
 
 pub trait ToLAB {

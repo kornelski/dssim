@@ -183,14 +183,14 @@ impl Dssim {
             }
         }
 
-        let converted:Vec<_> = std::iter::once(bitmap.to_lab(width, height)).chain(
-            downsampled.into_iter().map(|s| (&s.bitmap[..]).to_lab(s.width, s.height))
-        ).collect();
+        let all_sizes:Vec<_> = std::iter::once(BitmapRef::new(bitmap, width, height))
+            .chain(downsampled.iter().map(|s| s.new_ref()))
+            .collect();
 
         let mut tmp = Vec::with_capacity(width * height);
         unsafe { tmp.set_len(width * height) };
 
-        for (l, a, b) in converted {
+        for (l, a, b) in all_sizes.into_iter().map(|s| s.bitmap.to_lab(s.width, s.height)) {
             img.scale.push(DssimChanScale{
                 chan: vec![
                     {let mut ch = DssimChan::new(l.bitmap, l.width, l.height, false); ch.preprocess(&mut tmp[..]); ch },
