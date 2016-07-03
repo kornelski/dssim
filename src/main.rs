@@ -36,6 +36,7 @@ use std::io::Read;
 use std::fs;
 use getopts::Options;
 use dssim::RGBAPLU;
+use dssim::BitmapRef;
 use rgb::*;
 use linear::*;
 
@@ -123,7 +124,7 @@ fn main() {
     };
 
     let mut attr = dssim::Dssim::new();
-    let original = attr.create_image(&orig_rgba, width1, height1).expect("orig image creation");
+    let original = attr.create_image(&BitmapRef::new(&orig_rgba, width1, height1)).expect("orig image creation");
 
     for file2 in files {
 
@@ -140,7 +141,7 @@ fn main() {
             std::process::exit(1);
         }
 
-        let modified = attr.create_image(&mod_rgba, width2, height2).expect("mod image creation");
+        let modified = attr.create_image(&BitmapRef::new(&mod_rgba, width2, height2)).expect("mod image creation");
 
         if map_output_file.is_some() {
             attr.set_save_ssim_maps(1);

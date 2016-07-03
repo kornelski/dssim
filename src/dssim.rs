@@ -184,17 +184,17 @@ impl Dssim {
         return downsampled;
     }
 
-    pub fn create_image<'storage, T:'storage>(&mut self, bitmap: &'storage [T], width: usize, height: usize) -> Option<DssimImage<f32>>
+    pub fn create_image<'storage, T:'storage>(&mut self, src_img: &BitmapRef<'storage, T>) -> Option<DssimImage<f32>>
         where [T]: ToLABBitmap,
         BitmapRef<'storage, T>: Downsample<T>,
         Bitmap<T>: Downsample<T>,
         T: Sum4,
+        T: Clone
     {
-        let src_img:BitmapRef<'storage, T> = BitmapRef::new(bitmap, width, height);
-        let downsampled = self.create_scales(&src_img);
+        let downsampled = self.create_scales(src_img);
 
         return Some(self.create_image_from_scales(
-            std::iter::once(src_img).chain(downsampled.iter().map(|s| s.new_ref()))));
+            std::iter::once(src_img).cloned().chain(downsampled.iter().map(|s| s.new_ref()))));
     }
 
     fn create_image_from_scales<'a, T: 'a, I>(&self, all_sizes: I) -> DssimImage<f32>
@@ -370,15 +370,15 @@ fn png_compare() {
 
     let buf1 = &file1.buffer.as_ref().to_rgbaplu();
     let buf2 = &file2.buffer.as_ref().to_rgbaplu();
-    let img1 = d.create_image(buf1, file1.width, file1.height).unwrap();
-    let img2 = d.create_image(buf2, file2.width, file2.height).unwrap();
+    let img1 = d.create_image(&BitmapRef::new(buf1, file1.width, file1.height)).unwrap();
+    let img2 = d.create_image(&BitmapRef::new(buf2, file2.width, file2.height)).unwrap();
 
     let res = d.compare(&img1, img2);
     assert!((0.003297 - res).abs() < 0.0001, "res is {}", res);
     assert!(res < 0.0033);
     assert!(0.0032 < res);
 
-    let img1b = d.create_image(buf1, file1.width, file1.height).unwrap();
+    let img1b = d.create_image(&BitmapRef::new(buf1, file1.width, file1.height)).unwrap();
     let res = d.compare(&img1, img1b);
 
     assert!(0.000000000000001 > res);

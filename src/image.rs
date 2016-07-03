@@ -150,6 +150,7 @@ pub struct Bitmap<T> {
 }
 
 
+#[derive(Debug, Copy, Clone)]
 pub struct BitmapRef<'a, T:'a> {
     pub bitmap: &'a [T],
     pub width: usize,
