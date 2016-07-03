@@ -162,11 +162,10 @@ impl Dssim {
         return Some(&self.ssim_maps[scale_index]);
     }
 
-    pub fn create_scales<InBitmap, OutBitmap, T>(&self, src_img: &InBitmap) -> Vec<OutBitmap>
+    pub fn create_scales<InBitmap, OutBitmap>(&self, src_img: &InBitmap) -> Vec<OutBitmap>
         where
-        InBitmap: Downsample<T, Output=OutBitmap>,
-        OutBitmap: Downsample<T, Output=OutBitmap>,
-        T: Copy + Sum4
+        InBitmap: Downsample<Output=OutBitmap>,
+        OutBitmap: Downsample<Output=OutBitmap>,
     {
         let num_scales = self.scale_weights.len();
 
@@ -187,14 +186,12 @@ impl Dssim {
         return downsampled;
     }
 
-    pub fn create_image<'a, 'b, T: 'a, InBitmap, OutBitmap>(&mut self, src_img: &InBitmap) -> Option<DssimImage<f32>>
+    pub fn create_image<InBitmap, OutBitmap>(&mut self, src_img: &InBitmap) -> Option<DssimImage<f32>>
         where
         InBitmap: ToLABBitmap,
         OutBitmap: ToLABBitmap,
-        InBitmap: Downsample<T, Output=OutBitmap>,
-        OutBitmap: Downsample<T, Output=OutBitmap>,
-        T: Sum4,
-        T: Copy + Clone
+        InBitmap: Downsample<Output=OutBitmap>,
+        OutBitmap: Downsample<Output=OutBitmap>,
     {
         let mut all_sizes = std::iter::once(src_img.to_lab())
             .chain(self.create_scales(src_img).into_iter().map(|s| s.to_lab()))
