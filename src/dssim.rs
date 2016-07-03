@@ -183,10 +183,9 @@ impl Dssim {
             }
         }
 
-        let mut converted = Vec::with_capacity(num_scales);
-        converted.push(bitmap.to_lab(width, height));
-        converted.extend(downsampled.into_iter()
-            .map(|s| (&s.bitmap[..]).to_lab(s.width, s.height)));
+        let converted:Vec<_> = std::iter::once(bitmap.to_lab(width, height)).chain(
+            downsampled.into_iter().map(|s| (&s.bitmap[..]).to_lab(s.width, s.height))
+        ).collect();
 
         let mut tmp = Vec::with_capacity(width * height);
         unsafe { tmp.set_len(width * height) };
