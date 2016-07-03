@@ -30,7 +30,7 @@ use std::ops;
 pub use val::Dssim as Val;
 
 trait Channable<T, I> {
-    fn img1_img2_blur<'a>(&self, modified: &mut DssimChan<T>, tmp: &mut [I]) -> Vec<T>;
+    fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp: &mut [I]) -> Vec<T>;
 }
 
 pub struct DssimChan<T> {
@@ -109,31 +109,21 @@ impl DssimChan<f32> {
     }
 }
 
-impl Channable<LAB, f32> for DssimChan<LAB> {
-    fn img1_img2_blur<'a>(&self, modified: &mut DssimChan<LAB>, tmp32: &mut [f32]) -> Vec<LAB> {
-        let mut modified_img = modified.img.take().unwrap();
+impl Channable<LAB, f32> for [DssimChan<f32>] {
+    fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<LAB> {
 
-        use image::unzip3::Unzip3;
-        let (mut l,mut a,mut b):(Vec<f32>,Vec<f32>,Vec<f32>) = modified_img.iter().zip(self.img.as_ref().unwrap().iter()).map(|(img2,img1)|{
-            (img2.l * img1.l,
-             img2.a * img1.a,
-             img2.b * img1.b)
-        }).unzip3();
+        let blurred:Vec<_> = self.iter().zip(modified.iter_mut()).map(|(o,m)|{
+            o.img1_img2_blur(m, tmp32)
+        }).collect();
 
-        blur::blur_in_place(&mut l[..], tmp32, self.width, self.height);
-        blur::blur_in_place(&mut a[..], tmp32, self.width, self.height);
-        blur::blur_in_place(&mut b[..], tmp32, self.width, self.height);
-
-        for (mut out, l,a,b) in Zip::new((modified_img.iter_mut(), l.iter(), a.iter(), b.iter())) {
-            *out = LAB{l:*l,a:*a,b:*b};
-        }
-
-        return modified_img;
+        return Zip::new((blurred[0].iter(), blurred[1].iter(), blurred[2].iter())).map(|(l,a,b)| {
+            LAB{l:*l,a:*a,b:*b}
+        }).collect();
     }
 }
 
 impl Channable<f32, f32> for DssimChan<f32> {
-    fn img1_img2_blur<'a>(&self, modified: &mut DssimChan<f32>, tmp32: &mut [f32]) -> Vec<f32> {
+    fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<f32> {
         let mut modified_img = modified.img.take().unwrap();
 
         for (img2,img1) in modified_img.iter_mut().zip(self.img.as_ref().unwrap().iter()) {
@@ -258,10 +248,12 @@ impl Dssim {
 
             let mut ssim_map = {
                 if original_image_scale.chan.len() == 3 {
-                    let original_lab = Self::lab_chan(&original_image_scale);
-                    let mut modified_lab = Self::lab_chan(&modified_image_scale);
 
-                    let img1_img2_blur = original_lab.img1_img2_blur(&mut modified_lab, &mut tmp[0 .. scale_width*scale_height]);
+                    let img1_img2_blur = original_image_scale.chan.img1_img2_blur(&mut modified_image_scale.chan, &mut tmp[0 .. scale_width*scale_height]);
+
+                    let original_lab = Self::lab_chan(&original_image_scale);
+                    let modified_lab = Self::lab_chan(&modified_image_scale);
+
                     Self::compare_channel(&original_lab, &modified_lab, &img1_img2_blur)
                 } else {
                     let img1_img2_blur = original_image_scale.chan[0].img1_img2_blur(&mut modified_image_scale.chan[0], &mut tmp[0 .. scale_width*scale_height]);
@@ -302,7 +294,7 @@ impl Dssim {
         assert_eq!(b.width, a.width);
         DssimChan {
             img_sq_blur: Zip::new((l.img_sq_blur.iter(), a.img_sq_blur.iter(), b.img_sq_blur.iter())).map(|(l,a,b)|LAB{l:*l,a:*a,b:*b}).collect(),
-            img: Some(Zip::new((l.img.as_ref().unwrap().iter(), a.img.as_ref().unwrap().iter(), b.img.as_ref().unwrap().iter())).map(|(l,a,b)|LAB{l:*l,a:*a,b:*b}).collect()),
+            img: if l.img.is_some() {Some(Zip::new((l.img.as_ref().unwrap().iter(), a.img.as_ref().unwrap().iter(), b.img.as_ref().unwrap().iter())).map(|(l,a,b)|LAB{l:*l,a:*a,b:*b}).collect())} else {None},
             mu: Zip::new((l.mu.iter(), a.mu.iter(), b.mu.iter())).map(|(l,a,b)|LAB{l:*l,a:*a,b:*b}).collect(),
             is_chroma: false,
             width: l.width,
