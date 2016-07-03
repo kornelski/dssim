@@ -12,6 +12,7 @@ version = "2.1.0"
 [[bin]]
 name = "dssim"
 path = "src/main.rs"
+doctest = false
 
 [dependencies]
 c_vec = "= 1.0.12"
@@ -27,3 +28,4 @@ path = "../mozjpeg-rust"
 
 [lib]
 name = "dssim"
+doctest = false
