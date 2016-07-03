@@ -160,21 +160,17 @@ impl Dssim {
         return Some(&self.ssim_maps[scale_index]);
     }
 
-    pub fn create_image<T>(&mut self, bitmap: &[T], width: usize, height: usize) -> Option<DssimImage<f32>>
-        where [T]: ToLABBitmap + Downsample<T>
+    pub fn create_scales<T>(&self, src_img: &BitmapRef<T>) -> Vec<Bitmap<T>>
+        where [T]: Downsample<T>
     {
         let num_scales = self.scale_weights.len();
-
-        let mut img = DssimImage {
-            scale: Vec::with_capacity(num_scales),
-        };
 
         let mut downsampled: Vec<Bitmap<T>> = Vec::with_capacity(num_scales);
         for _ in 1..num_scales { // 1, because unscaled bitmap will be added
             let s = if let Some(l) = downsampled.last() {
                 l.bitmap.downsample(l.width, l.height)
             } else {
-                bitmap.downsample(width, height)
+                src_img.bitmap.downsample(src_img.width, src_img.height)
             };
             if let Some(s) = s {
                 downsampled.push(s);
@@ -183,24 +179,42 @@ impl Dssim {
             }
         }
 
-        let all_sizes:Vec<_> = std::iter::once(BitmapRef::new(bitmap, width, height))
-            .chain(downsampled.iter().map(|s| s.new_ref()))
-            .collect();
+        return downsampled;
+    }
 
-        let mut tmp = Vec::with_capacity(width * height);
-        unsafe { tmp.set_len(width * height) };
+    pub fn create_image<T>(&mut self, bitmap: &[T], width: usize, height: usize) -> Option<DssimImage<f32>>
+        where [T]: ToLABBitmap + Downsample<T>
+    {
+        let src_img = BitmapRef::new(bitmap, width, height);
+        let downsampled = self.create_scales(&src_img);
 
-        for (l, a, b) in all_sizes.into_iter().map(|s| s.bitmap.to_lab(s.width, s.height)) {
-            img.scale.push(DssimChanScale{
+        return Some(self.create_image_from_scales(
+            std::iter::once(src_img).chain(downsampled.iter().map(|s| s.new_ref()))));
+    }
+
+    fn create_image_from_scales<'a, T: 'a, I>(&self, all_sizes: I) -> DssimImage<f32>
+        where [T]: ToLABBitmap,
+              I: IntoIterator<Item = BitmapRef<'a, T>>
+    {
+        let mut all_sizes = all_sizes.into_iter().peekable();
+
+        let mut tmp = {
+            let largest = all_sizes.peek().unwrap();
+            let pixels = largest.width * largest.height;
+            let mut tmp = Vec::with_capacity(pixels);
+            unsafe { tmp.set_len(pixels) };
+            tmp
+        };
+
+        return DssimImage {
+            scale: all_sizes.map(|s| s.bitmap.to_lab(s.width, s.height)).map(|(l,a,b)|DssimChanScale{
                 chan: vec![
                     {let mut ch = DssimChan::new(l.bitmap, l.width, l.height, false); ch.preprocess(&mut tmp[..]); ch },
                     {let mut ch = DssimChan::new(a.bitmap, a.width, a.height, true); ch.preprocess(&mut tmp[..]); ch },
                     {let mut ch = DssimChan::new(b.bitmap, b.width, b.height, true); ch.preprocess(&mut tmp[..]); ch },
                 ],
-            });
-        }
-
-        return Some(img);
+            }).collect(),
+        };
     }
 
     pub fn compare(&mut self, original_image: &DssimImage<f32>, modified_image: DssimImage<f32>) -> Val {
@@ -293,12 +307,12 @@ impl Dssim {
             let mu1mu1 = mu1 * mu1;
             let mu1mu2 = mu1 * mu2;
             let mu2mu2 = mu2 * mu2;
-            let mu1_sq:f32 = mu1mu1.into();
-            let mu2_sq:f32 = mu2mu2.into();
-            let mu1_mu2:f32 = mu1mu2.into();
-            let sigma1_sq:f32 = (img1_sq_blur - mu1mu1).into();
-            let sigma2_sq:f32 = (img2_sq_blur - mu2mu2).into();
-            let sigma12:f32 = (img1_img2_blur - mu1mu2).into();
+            let mu1_sq: f32 = mu1mu1.into();
+            let mu2_sq: f32 = mu2mu2.into();
+            let mu1_mu2: f32 = mu1mu2.into();
+            let sigma1_sq: f32 = (img1_sq_blur - mu1mu1).into();
+            let sigma2_sq: f32 = (img2_sq_blur - mu2mu2).into();
+            let sigma12: f32 = (img1_img2_blur - mu1mu2).into();
 
             let ssim = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
                        ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
