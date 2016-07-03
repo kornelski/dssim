@@ -118,13 +118,19 @@ pub trait Sum4 {
     fn sum4(a: Self, b: Self, c: Self, d: Self) -> Self;
 }
 
+impl Sum4 for f32 {
+    fn sum4(a: Self, b: Self, c: Self, d: Self) -> Self {
+        (a + b + c + d) * 0.25
+    }
+}
+
 impl Sum4 for RGBAPLU {
     fn sum4(a: Self, b: Self, c: Self, d: Self) -> Self {
         RGBAPLU {
-            r: (a.r + b.r + c.r + d.r) * 0.25,
-            g: (a.g + b.g + c.g + d.g) * 0.25,
-            b: (a.b + b.b + c.b + d.b) * 0.25,
-            a: (a.a + b.a + c.a + d.a) * 0.25,
+            r: Sum4::sum4(a.r, b.r, c.r, d.r),
+            g: Sum4::sum4(a.g, b.g, c.g, d.g),
+            b: Sum4::sum4(a.b, b.b, c.b, d.b),
+            a: Sum4::sum4(a.a, b.a, c.a, d.a),
         }
     }
 }
@@ -132,9 +138,9 @@ impl Sum4 for RGBAPLU {
 impl Sum4 for RGBLU {
     fn sum4(a: Self, b: Self, c: Self, d: Self) -> Self {
         RGBLU {
-            r: (a.r + b.r + c.r + d.r) * 0.25,
-            g: (a.g + b.g + c.g + d.g) * 0.25,
-            b: (a.b + b.b + c.b + d.b) * 0.25,
+            r: Sum4::sum4(a.r, b.r, c.r, d.r),
+            g: Sum4::sum4(a.g, b.g, c.g, d.g),
+            b: Sum4::sum4(a.b, b.b, c.b, d.b),
         }
     }
 }
