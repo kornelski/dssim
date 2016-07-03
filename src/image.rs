@@ -275,17 +275,20 @@ impl ToLABBitmap for [RGBLU] {
 //////////////////////////////
 
 pub trait Downsample<T> {
-    fn downsample(&self) -> Option<Bitmap<T>>;
+    type Output;
+    fn downsample(&self) -> Option<Self::Output>;
 }
 
 impl<T> Downsample<T> for Bitmap<T> where T: Sum4 + Copy {
-    fn downsample(&self) -> Option<Bitmap<T>> {
+    type Output = Bitmap<T>;
+    fn downsample(&self) -> Option<Self::Output> {
         self.new_ref().downsample()
     }
 }
 
 impl<'a, T> Downsample<T> for BitmapRef<'a, T> where T: Sum4 + Copy {
-    fn downsample(&self) -> Option<Bitmap<T>> {
+    type Output = Bitmap<T>;
+    fn downsample(&self) -> Option<Self::Output> {
         let width = self.width;
         let height = self.height;
 

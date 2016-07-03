@@ -163,13 +163,14 @@ impl Dssim {
     }
 
     pub fn create_scales<'a, T: 'a>(&self, src_img: &BitmapRef<'a, T>) -> Vec<Bitmap<T>>
-        where BitmapRef<'a, T>: Downsample<T>,
-        Bitmap<T>: Downsample<T>,
+        where
+        Bitmap<T>: Downsample<T, Output=Bitmap<T>>,
+        BitmapRef<'a, T>: Downsample<T, Output=<Bitmap<T> as Downsample<T>>::Output>,
         T: Sum4
     {
         let num_scales = self.scale_weights.len();
 
-        let mut downsampled: Vec<Bitmap<T>> = Vec::with_capacity(num_scales);
+        let mut downsampled: Vec<<Bitmap<T> as Downsample<T>>::Output> = Vec::with_capacity(num_scales);
         for _ in 1..num_scales { // 1, because unscaled bitmap will be added
             let s = if let Some(l) = downsampled.last() {
                 l.downsample()
@@ -186,10 +187,10 @@ impl Dssim {
         return downsampled;
     }
 
-    pub fn create_image<'storage, T:'storage>(&mut self, src_img: &BitmapRef<'storage, T>) -> Option<DssimImage<f32>>
+    pub fn create_image<'a, T:'a>(&mut self, src_img: &BitmapRef<'a, T>) -> Option<DssimImage<f32>>
         where [T]: ToLABBitmap,
-        BitmapRef<'storage, T>: Downsample<T>,
-        Bitmap<T>: Downsample<T>,
+        Bitmap<T>: Downsample<T, Output=Bitmap<T>>,
+        BitmapRef<'a, T>: Downsample<T, Output=<Bitmap<T> as Downsample<T>>::Output>,
         T: Sum4,
         T: Clone
     {
