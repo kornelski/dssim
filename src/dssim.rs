@@ -169,15 +169,15 @@ impl Dssim {
             scale: Vec::with_capacity(num_scales),
         };
 
-        let mut scales: Vec<Bitmap<T>> = Vec::with_capacity(num_scales);
-        for _ in 0..num_scales {
-            let s = if let Some(l) = scales.last() {
+        let mut downsampled: Vec<Bitmap<T>> = Vec::with_capacity(num_scales);
+        for _ in 1..num_scales { // 1, because unscaled bitmap will be added
+            let s = if let Some(l) = downsampled.last() {
                 l.bitmap.downsample(l.width, l.height)
             } else {
                 bitmap.downsample(width, height)
             };
             if let Some(s) = s {
-                scales.push(s);
+                downsampled.push(s);
             } else {
                 break;
             }
@@ -185,7 +185,7 @@ impl Dssim {
 
         let mut converted = Vec::with_capacity(num_scales);
         converted.push(bitmap.to_lab(width, height));
-        converted.extend(scales.into_iter()
+        converted.extend(downsampled.into_iter()
             .map(|s| (&s.bitmap[..]).to_lab(s.width, s.height)));
 
         let mut tmp = Vec::with_capacity(width * height);
