@@ -248,6 +248,24 @@ impl ToLABBitmap for Bitmap<RGBAPLU> {
     }
 }
 
+impl ToLABBitmap for Bitmap<f32> {
+    fn to_lab(&self) -> Vec<GBitmap> {
+        vec![
+            GBitmap{
+                width: self.width,
+                height: self.height,
+                bitmap: self.bitmap.iter().cloned().map(|fy| {
+                    let epsilon: f32 = 216. / 24389.;
+                    // http://www.brucelindbloom.com/LContinuity.html
+                    let Y = if fy > epsilon { fy.powf(1. / 3.) - 16. / 116. } else { ((24389. / 27.) / 116.) * fy };
+
+                    return Y * 1.16;
+                }).collect(),
+            },
+        ]
+    }
+}
+
 impl<'a> ToLABBitmap for BitmapRef<'a, RGBAPLU> {
     fn to_lab(&self) -> Vec<GBitmap> {
         let width = self.width;

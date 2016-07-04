@@ -4,6 +4,7 @@ mod image;
 mod blur;
 mod ffi;
 mod val;
+mod linear;
 pub use dssim::*;
 pub use image::*;
-mod linear;
+pub use linear::*;

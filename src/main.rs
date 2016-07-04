@@ -26,7 +26,6 @@ extern crate rgb;
 
 mod ffi;
 mod val;
-mod linear;
 mod image;
 
 use std::io::Write;
@@ -36,9 +35,9 @@ use std::io::Read;
 use std::fs;
 use getopts::Options;
 use dssim::RGBAPLU;
+use dssim::ToRGBAPLU;
 use dssim::BitmapRef;
 use rgb::*;
-use linear::*;
 
 fn usage(argv0: &str) {
     write!(io::stderr(), "\

@@ -20,6 +20,17 @@ pub trait ToRGBAPLU {
     fn to_rgbaplu(&self) -> Vec<RGBAPLU>;
 }
 
+pub trait ToGLU {
+    fn to_glu(&self) -> Vec<f32>;
+}
+
+impl ToGLU for [u8] {
+    fn to_glu(&self) -> Vec<f32> {
+        let gamma_lut = make_lut();
+        self.iter().cloned().map(|px|gamma_lut[px as usize]).collect()
+    }
+}
+
 impl ToRGBAPLU for [RGBA<u8>] {
     fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
         let gamma_lut = make_lut();
