@@ -56,9 +56,16 @@ fn to_byte(i: f32) -> u8 {
 }
 
 fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
-    let mut file = try!(fs::File::open(path));
     let mut data = Vec::new();
-    try!(file.read_to_end(&mut data));
+    match path {
+        "-" => {
+            try!(std::io::stdin().read_to_end(&mut data));
+        },
+        path => {
+            let mut file = try!(fs::File::open(path));
+            try!(file.read_to_end(&mut data));
+        },
+    };
 
     match lodepng::decode32(&data) {
         Ok(image) => {
