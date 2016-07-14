@@ -7,17 +7,18 @@ keywords = ["ssim", "image", "comparison"]
 license = "AGPL-3.0"
 name = "dssim"
 repository = "https://github.com/pornel/dssim2.git"
-version = "2.2.1"
+version = "2.3.0"
 
 [[bin]]
+doctest = false
 name = "dssim"
 path = "src/main.rs"
-doctest = false
 
 [dependencies]
 c_vec = "= 1.0.12"
 getopts = "0.2.4"
 itertools = "0.4.4"
+lcms2 = "1.0.0"
 libc = "0.2.4"
 lodepng = "0.6.2"
 rgb = "0.2.0"
@@ -27,5 +28,5 @@ unzip3 = "0.1.0"
 path = "../mozjpeg-rust"
 
 [lib]
-name = "dssim"
 doctest = false
+name = "dssim"
