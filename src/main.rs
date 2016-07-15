@@ -23,6 +23,7 @@ extern crate lodepng;
 extern crate mozjpeg;
 extern crate dssim;
 extern crate rgb;
+extern crate file;
 
 mod ffi;
 mod val;
@@ -32,7 +33,6 @@ use std::io::Write;
 use std::env;
 use std::io;
 use std::io::Read;
-use std::fs;
 use getopts::Options;
 use dssim::RGBAPLU;
 use dssim::ToRGBAPLU;
@@ -56,14 +56,14 @@ fn to_byte(i: f32) -> u8 {
 }
 
 fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
-    let mut data = Vec::new();
-    match path {
+    let data = match path {
         "-" => {
+            let mut data = Vec::new();
             try!(std::io::stdin().read_to_end(&mut data));
+            data
         },
         path => {
-            let mut file = try!(fs::File::open(path));
-            try!(file.read_to_end(&mut data));
+            try!(file::get(path))
         },
     };
 
