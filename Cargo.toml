@@ -28,6 +28,7 @@ unzip3 = "0.1.0"
 
 [dependencies.mozjpeg]
 path = "../mozjpeg-rust"
+version = "0.7.0"
 
 [lib]
 doctest = false

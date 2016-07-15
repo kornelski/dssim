@@ -20,6 +20,7 @@
 extern crate getopts;
 extern crate libc;
 extern crate lodepng;
+extern crate lcms2;
 extern crate mozjpeg;
 extern crate dssim;
 extern crate rgb;
@@ -37,6 +38,7 @@ use getopts::Options;
 use dssim::RGBAPLU;
 use dssim::ToRGBAPLU;
 use dssim::BitmapRef;
+use lcms2::*;
 use rgb::*;
 
 fn usage(argv0: &str) {
@@ -75,14 +77,24 @@ fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error
         _ => {
             let mut dinfo = mozjpeg::Decompress::new();
             dinfo.set_mem_src(&data[..]);
-
+            dinfo.save_marker(mozjpeg::Marker::APP(2));
             assert!(dinfo.read_header(true));
             assert!(dinfo.start_decompress());
             let width = dinfo.output_width();
             let height = dinfo.output_height();
-            let bitmap = dinfo.read_scanlines().unwrap();
+            let mut rgb:Vec<RGB8> = dinfo.read_scanlines().unwrap();
 
-            let rgb:Vec<_> = bitmap.chunks(3).map(|x|RGB{r:x[0],g:x[1],b:x[2]}).collect();
+            if let Some(marker) = dinfo.markers().next() {
+                let data = marker.data;
+                if "ICC_PROFILE\0".as_bytes() == &data[0..12] {
+                    let icc = &data[14..];
+                    let profile = Profile::new_icc(icc).unwrap();
+                    let t = Transform::new(&profile, PixelFormat::RGB_8,
+                        &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
+                    t.transform_in_place(&mut rgb);
+                }
+            }
+
             let rgba = rgb.to_rgbaplu();
             assert_eq!(rgba.len(), width * height);
             Ok((rgba, width, height))
@@ -177,4 +189,10 @@ fn main() {
             }
         }
     }
+}
+
+#[test]
+fn image_load() {
+    load_image("tests/profile.jpg").unwrap();
+    load_image("tests/profile.png").unwrap();
 }
