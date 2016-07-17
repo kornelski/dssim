@@ -69,11 +69,13 @@ fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error
         },
     };
 
-    match lodepng::decode32(&data) {
-        Ok(image) => {
-            let orig_rgba = image.buffer.as_ref().to_rgbaplu();
-            Ok((orig_rgba, image.width, image.height))
-        },
+    let mut state = lodepng::State::new();
+
+    match state.decode(&data) {
+        Ok(lodepng::Image::RGBA(image)) => Ok((image.buffer.as_ref().to_rgbaplu(), image.width, image.height)),
+        Ok(lodepng::Image::RGB(image)) => Ok((image.buffer.as_ref().to_rgbaplu(), image.width, image.height)),
+        Ok(lodepng::Image::RGB16(image)) => Ok((image.buffer.as_ref().to_rgbaplu(), image.width, image.height)),
+        Ok(lodepng::Image::RGBA16(image)) => Ok((image.buffer.as_ref().to_rgbaplu(), image.width, image.height)),
         _ => {
             let mut dinfo = mozjpeg::Decompress::new();
             dinfo.set_mem_src(&data[..]);
