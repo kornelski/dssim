@@ -57,6 +57,49 @@ fn to_byte(i: f32) -> u8 {
     else {(i * 256.0) as u8}
 }
 
+trait LcmsPixelFormat {
+    fn pixel_format() -> PixelFormat;
+}
+
+impl LcmsPixelFormat for RGB8 { fn pixel_format() -> PixelFormat { PixelFormat::RGB_8 } }
+impl LcmsPixelFormat for RGB16 { fn pixel_format() -> PixelFormat { PixelFormat::RGB_16 } }
+impl LcmsPixelFormat for RGBA8 { fn pixel_format() -> PixelFormat { PixelFormat::RGBA_8 } }
+impl LcmsPixelFormat for RGBA16 { fn pixel_format() -> PixelFormat { PixelFormat::RGBA_16 } }
+
+trait ToSRGB {
+    fn to_srgb(&mut self, profile: Option<Profile>) -> Vec<RGBAPLU>;
+}
+
+impl<T> ToSRGB for [T] where T: Copy + LcmsPixelFormat, [T]: ToRGBAPLU {
+    fn to_srgb(&mut self, profile: Option<Profile>) -> Vec<RGBAPLU> {
+        if let Some(profile) = profile {
+            let t = Transform::new(&profile, T::pixel_format(),
+                                   &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
+            t.transform_in_place(self);
+        }
+        self.to_rgbaplu()
+    }
+}
+
+fn load_png(state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
+
+    let profile = if state.info_png().get("sRGB").is_some() {
+        None
+    } else if let Ok(iccp) = state.get_icc() {
+        Profile::new_icc(iccp.as_ref())
+    } else {
+        None
+    };
+
+    match res {
+        lodepng::Image::RGBA(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::RGB(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::RGB16(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::RGBA16(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        _ => Err(lodepng::Error(59)),
+    }
+}
+
 fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
     let data = match path {
         "-" => {
@@ -70,12 +113,11 @@ fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error
     };
 
     let mut state = lodepng::State::new();
+    state.color_convert(false);
+    state.remember_unknown_chunks(true);
 
     match state.decode(&data) {
-        Ok(lodepng::Image::RGBA(image)) => Ok((image.buffer.as_ref().to_rgbaplu(), image.width, image.height)),
-        Ok(lodepng::Image::RGB(image)) => Ok((image.buffer.as_ref().to_rgbaplu(), image.width, image.height)),
-        Ok(lodepng::Image::RGB16(image)) => Ok((image.buffer.as_ref().to_rgbaplu(), image.width, image.height)),
-        Ok(lodepng::Image::RGBA16(image)) => Ok((image.buffer.as_ref().to_rgbaplu(), image.width, image.height)),
+        Ok(img) => load_png(state, img),
         _ => {
             let mut dinfo = mozjpeg::Decompress::new();
             dinfo.set_mem_src(&data[..]);
@@ -86,18 +128,15 @@ fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error
             let height = dinfo.output_height();
             let mut rgb:Vec<RGB8> = dinfo.read_scanlines().unwrap();
 
-            if let Some(marker) = dinfo.markers().next() {
+            let profile = if let Some(marker) = dinfo.markers().next() {
                 let data = marker.data;
                 if "ICC_PROFILE\0".as_bytes() == &data[0..12] {
                     let icc = &data[14..];
-                    let profile = Profile::new_icc(icc).unwrap();
-                    let t = Transform::new(&profile, PixelFormat::RGB_8,
-                        &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
-                    t.transform_in_place(&mut rgb);
-                }
-            }
+                    Profile::new_icc(icc)
+                } else {None}
+            } else {None};
 
-            let rgba = rgb.to_rgbaplu();
+            let rgba = rgb.to_srgb(profile);
             assert_eq!(rgba.len(), width * height);
             Ok((rgba, width, height))
         },
@@ -194,7 +233,11 @@ fn main() {
 }
 
 #[test]
-fn image_load() {
+fn image_load1() {
     load_image("tests/profile.jpg").unwrap();
+}
+
+#[test]
+fn image_load2() {
     load_image("tests/profile.png").unwrap();
 }
