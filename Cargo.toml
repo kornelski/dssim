@@ -8,6 +8,7 @@ license = "AGPL-3.0"
 name = "dssim"
 repository = "https://github.com/pornel/dssim2.git"
 version = "2.3.0"
+publish = false
 
 [[bin]]
 doctest = false
