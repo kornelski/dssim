@@ -73,11 +73,21 @@ trait ToSRGB {
 impl<T> ToSRGB for [T] where T: Copy + LcmsPixelFormat, [T]: ToRGBAPLU {
     fn to_srgb(&mut self, profile: Option<Profile>) -> Vec<RGBAPLU> {
         if let Some(profile) = profile {
-            let t = Transform::new(&profile, T::pixel_format(),
-                                   &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
-            t.transform_in_place(self);
+            if T::pixel_format() == PixelFormat::RGB_8 {
+                let t = Transform::new(&profile, PixelFormat::RGB_8,
+                                       &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
+                t.transform_in_place(self);
+                return self.to_rgbaplu();
+            } else {
+                let t = Transform::new(&profile, T::pixel_format(),
+                                       &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
+                let mut dest = vec![RGB8::new(0,0,0); self.len()];
+                t.transform_pixels(self, &mut dest);
+                return dest.to_rgbaplu();
+            }
+        } else {
+            return self.to_rgbaplu();
         }
-        self.to_rgbaplu()
     }
 }
 
