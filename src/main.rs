@@ -178,7 +178,6 @@ fn load_image(path: &str) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
             assert!(dinfo.start_decompress());
             let width = dinfo.output_width();
             let height = dinfo.output_height();
-            let mut rgb:Vec<RGB8> = dinfo.read_scanlines().unwrap();
 
             let profile = if let Some(marker) = dinfo.markers().next() {
                 let data = marker.data;
@@ -188,9 +187,22 @@ fn load_image(path: &str) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
                 } else {None}
             } else {None};
 
-            let rgba = rgb.to_srgb(profile);
-            assert_eq!(rgba.len(), width * height);
-            Ok(Bitmap::new(rgba, width, height))
+            match dinfo.out_color_space() {
+                mozjpeg::ColorSpace::JCS_RGB => {
+                    let mut rgb:Vec<RGB8> = dinfo.read_scanlines().unwrap();
+                    let rgba = rgb.to_srgb(profile);
+                    assert_eq!(rgba.len(), width * height);
+                    Ok(Bitmap::new(rgba, width, height))
+                },
+                mozjpeg::ColorSpace::JCS_GRAYSCALE => {
+                    let g:Vec<lodepng::Grey<u8>> = dinfo.read_scanlines().unwrap();
+                    assert_eq!(g.len(), width * height);
+                    let mut g:Vec<_> = g.iter().map(|c| RGB::new(c.0,c.0,c.0)).collect();
+                    let rgba = g.to_srgb(profile);
+                    Ok(Bitmap::new(rgba, width, height))
+                },
+                _ => Err(lodepng::Error(59)),
+            }
         },
     }
 }
@@ -282,6 +294,25 @@ fn main() {
             }
         }
     }
+}
+
+#[test]
+fn image_gray() {
+    let mut attr = dssim::Dssim::new();
+
+    let g1 = attr.create_image(&load_image("tests/gray1-rgba.png").unwrap()).unwrap();
+    let g2 = attr.create_image(&load_image("tests/gray1-pal.png").unwrap()).unwrap();
+    let g3 = attr.create_image(&load_image("tests/gray1-gray.png").unwrap()).unwrap();
+    let g4 = attr.create_image(&load_image("tests/gray1.jpg").unwrap()).unwrap();
+
+    let diff = attr.compare(&g1, g2);
+    assert!(diff < 0.00001);
+
+    let diff = attr.compare(&g1, g3);
+    assert!(diff < 0.00001);
+
+    let diff = attr.compare(&g1, g4);
+    assert!(diff < 0.00006);
 }
 
 #[test]
