@@ -78,7 +78,7 @@ impl ToRGBAPLU for [RGBA<u16>] {
     fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
         let gamma_lut = make_lut16();
         self.iter().map(|px|{
-            let a_unit = px.a as f32 / 255.0;
+            let a_unit = px.a as f32 / 65535.0;
             RGBAPLU {
                 r: gamma_lut[px.r as usize] * a_unit,
                 g: gamma_lut[px.g as usize] * a_unit,
