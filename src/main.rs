@@ -58,17 +58,17 @@ fn to_byte(i: f32) -> u8 {
 }
 
 trait LcmsPixelFormat {
-    fn pixel_format() -> PixelFormat;
+    fn pixel_format() -> (PixelFormat, ColorSpaceSignature);
 }
 
-impl LcmsPixelFormat for RGB8 { fn pixel_format() -> PixelFormat { PixelFormat::RGB_8 } }
-impl LcmsPixelFormat for RGB16 { fn pixel_format() -> PixelFormat { PixelFormat::RGB_16 } }
-impl LcmsPixelFormat for RGBA8 { fn pixel_format() -> PixelFormat { PixelFormat::RGBA_8 } }
-impl LcmsPixelFormat for RGBA16 { fn pixel_format() -> PixelFormat { PixelFormat::RGBA_16 } }
-impl LcmsPixelFormat for lodepng::Grey<u8> { fn pixel_format() -> PixelFormat { PixelFormat::GRAY_8 } }
-impl LcmsPixelFormat for lodepng::Grey<u16> { fn pixel_format() -> PixelFormat { PixelFormat::GRAY_16 } }
-impl LcmsPixelFormat for lodepng::GreyAlpha<u8> { fn pixel_format() -> PixelFormat { PixelFormat::GRAYA_8 } }
-impl LcmsPixelFormat for lodepng::GreyAlpha<u16> { fn pixel_format() -> PixelFormat { PixelFormat::GRAYA_16 } }
+impl LcmsPixelFormat for RGB8 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGB_8, ColorSpaceSignature::SigRgbData) } }
+impl LcmsPixelFormat for RGB16 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGB_16, ColorSpaceSignature::SigRgbData) } }
+impl LcmsPixelFormat for RGBA8 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGBA_8, ColorSpaceSignature::SigRgbData) } }
+impl LcmsPixelFormat for RGBA16 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGBA_16, ColorSpaceSignature::SigRgbData) } }
+impl LcmsPixelFormat for lodepng::Grey<u8> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAY_8, ColorSpaceSignature::SigGrayData) } }
+impl LcmsPixelFormat for lodepng::Grey<u16> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAY_16, ColorSpaceSignature::SigGrayData) } }
+impl LcmsPixelFormat for lodepng::GreyAlpha<u8> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAYA_8, ColorSpaceSignature::SigGrayData) } }
+impl LcmsPixelFormat for lodepng::GreyAlpha<u16> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAYA_16, ColorSpaceSignature::SigGrayData) } }
 
 trait ToSRGB {
     fn to_srgb(&mut self, profile: Option<Profile>) -> Vec<RGBAPLU>;
@@ -76,22 +76,24 @@ trait ToSRGB {
 
 impl<T> ToSRGB for [T] where T: Copy + LcmsPixelFormat, [T]: ToRGBAPLU {
     fn to_srgb(&mut self, profile: Option<Profile>) -> Vec<RGBAPLU> {
+        let (format, color_space) = T::pixel_format();
         if let Some(profile) = profile {
-            if T::pixel_format() == PixelFormat::RGB_8 {
-                let t = Transform::new(&profile, PixelFormat::RGB_8,
-                                       &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
-                t.transform_in_place(self);
-                return self.to_rgbaplu();
-            } else {
-                let t = Transform::new(&profile, T::pixel_format(),
-                                       &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
-                let mut dest = vec![RGB8::new(0,0,0); self.len()];
-                t.transform_pixels(self, &mut dest);
-                return dest.to_rgbaplu();
+            if profile.color_space() == color_space {
+                if PixelFormat::RGB_8 == format {
+                    let t = Transform::new(&profile, PixelFormat::RGB_8,
+                                           &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
+                    t.transform_in_place(self);
+                    return self.to_rgbaplu();
+                } else {
+                    let t = Transform::new(&profile, format,
+                                           &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
+                    let mut dest = vec![RGB8::new(0,0,0); self.len()];
+                    t.transform_pixels(self, &mut dest);
+                    return dest.to_rgbaplu();
+                }
             }
-        } else {
-            return self.to_rgbaplu();
         }
+        return self.to_rgbaplu();
     }
 }
 
