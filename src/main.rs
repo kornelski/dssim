@@ -65,6 +65,10 @@ impl LcmsPixelFormat for RGB8 { fn pixel_format() -> PixelFormat { PixelFormat::
 impl LcmsPixelFormat for RGB16 { fn pixel_format() -> PixelFormat { PixelFormat::RGB_16 } }
 impl LcmsPixelFormat for RGBA8 { fn pixel_format() -> PixelFormat { PixelFormat::RGBA_8 } }
 impl LcmsPixelFormat for RGBA16 { fn pixel_format() -> PixelFormat { PixelFormat::RGBA_16 } }
+impl LcmsPixelFormat for lodepng::Grey<u8> { fn pixel_format() -> PixelFormat { PixelFormat::GRAY_8 } }
+impl LcmsPixelFormat for lodepng::Grey<u16> { fn pixel_format() -> PixelFormat { PixelFormat::GRAY_16 } }
+impl LcmsPixelFormat for lodepng::GreyAlpha<u8> { fn pixel_format() -> PixelFormat { PixelFormat::GRAYA_8 } }
+impl LcmsPixelFormat for lodepng::GreyAlpha<u16> { fn pixel_format() -> PixelFormat { PixelFormat::GRAYA_16 } }
 
 trait ToSRGB {
     fn to_srgb(&mut self, profile: Option<Profile>) -> Vec<RGBAPLU>;
@@ -106,6 +110,22 @@ fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAP
         lodepng::Image::RGB(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::RGB16(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::RGBA16(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::Grey(mut image) => {
+            let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGB::new(c.0,c.0,c.0)).collect();
+            Ok((rgb.to_srgb(profile), image.width, image.height))
+        },
+        lodepng::Image::Grey16(mut image) => {
+            let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGB::new(c.0,c.0,c.0)).collect();
+            Ok((rgb.to_srgb(profile), image.width, image.height))
+        },
+        lodepng::Image::GreyAlpha(mut image) => {
+            let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGBA::new(c.0,c.0,c.0,c.1)).collect();
+            Ok((rgb.to_srgb(profile), image.width, image.height))
+        },
+        lodepng::Image::GreyAlpha16(mut image) => {
+            let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGBA::new(c.0,c.0,c.0,c.1)).collect();
+            Ok((rgb.to_srgb(profile), image.width, image.height))
+        },
         lodepng::Image::RawData(image) => {
             let mut png = state.info_raw_mut();
             if png.colortype() == lodepng::LCT_PALETTE {
@@ -129,7 +149,6 @@ fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAP
             }
             return Err(lodepng::Error(59));
         },
-        _ => Err(lodepng::Error(59)),
     }
 }
 
