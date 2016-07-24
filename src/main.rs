@@ -91,7 +91,7 @@ impl<T> ToSRGB for [T] where T: Copy + LcmsPixelFormat, [T]: ToRGBAPLU {
     }
 }
 
-fn load_png(state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
+fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
 
     let profile = if state.info_png().get("sRGB").is_some() {
         None
@@ -106,6 +106,29 @@ fn load_png(state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAPLU>,
         lodepng::Image::RGB(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::RGB16(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::RGBA16(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::RawData(image) => {
+            let mut png = state.info_raw_mut();
+            if png.colortype() == lodepng::LCT_PALETTE {
+                let pal_own = png.palette_mut().to_srgb(profile);
+                let pal = &pal_own;
+
+                return match png.bitdepth as u8 {
+                    8 => Ok((image.buffer.as_ref().iter().map(|&c| pal[c as usize]).collect(), image.width, image.height)),
+                    depth @ 1 | depth @ 2 | depth @ 4 => {
+                        let pixels = 8/depth;
+                        let mask = depth - 1;
+                        return Ok((image.buffer.as_ref().iter().flat_map(|c| {
+                            (0..pixels).rev().map(move |n|{
+                                pal[(c >> (n*depth) & mask) as usize]
+                            })
+                        })
+                        .take(image.width*image.height).collect(), image.width, image.height));
+                    },
+                    _ => Err(lodepng::Error(59)),
+                };
+            }
+            return Err(lodepng::Error(59));
+        },
         _ => Err(lodepng::Error(59)),
     }
 }
