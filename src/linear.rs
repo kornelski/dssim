@@ -1,5 +1,6 @@
 use super::image::RGBAPLU;
 use rgb::*;
+extern crate lodepng;
 
 fn make_lut() -> [f32; 256] {
     let mut gamma_lut = [0f32; 256];
@@ -54,6 +55,66 @@ impl ToRGBAPLU for [RGBA<u8>] {
                 g: gamma_lut[px.g as usize] * a_unit,
                 b: gamma_lut[px.b as usize] * a_unit,
                 a: a_unit,
+            }
+        }).collect()
+    }
+}
+
+impl ToRGBAPLU for [lodepng::GreyAlpha<u8>] {
+    fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
+        let gamma_lut = make_lut();
+        self.iter().map(|px|{
+            let a_unit = px.1 as f32 / 255.0;
+            RGBAPLU {
+                r: gamma_lut[px.0 as usize] * a_unit,
+                g: gamma_lut[px.0 as usize] * a_unit,
+                b: gamma_lut[px.0 as usize] * a_unit,
+                a: a_unit,
+            }
+        }).collect()
+    }
+}
+
+impl ToRGBAPLU for [lodepng::Grey<u8>] {
+    fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
+        let gamma_lut = make_lut();
+
+        self.iter().map(|px|{
+            RGBAPLU {
+                r: gamma_lut[px.0 as usize],
+                g: gamma_lut[px.0 as usize],
+                b: gamma_lut[px.0 as usize],
+                a: 1.0,
+            }
+        }).collect()
+    }
+}
+
+impl ToRGBAPLU for [lodepng::GreyAlpha<u16>] {
+    fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
+        let gamma_lut = make_lut16();
+        self.iter().map(|px|{
+            let a_unit = px.1 as f32 / 65535.0;
+            RGBAPLU {
+                r: gamma_lut[px.0 as usize] * a_unit,
+                g: gamma_lut[px.0 as usize] * a_unit,
+                b: gamma_lut[px.0 as usize] * a_unit,
+                a: a_unit,
+            }
+        }).collect()
+    }
+}
+
+impl ToRGBAPLU for [lodepng::Grey<u16>] {
+    fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
+        let gamma_lut = make_lut16();
+
+        self.iter().map(|px|{
+            RGBAPLU {
+                r: gamma_lut[px.0 as usize],
+                g: gamma_lut[px.0 as usize],
+                b: gamma_lut[px.0 as usize],
+                a: 1.0,
             }
         }).collect()
     }

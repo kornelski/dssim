@@ -111,20 +111,16 @@ fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<Bitmap<RGB
         lodepng::Image::RGB16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::RGBA16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::Grey(mut image) => {
-            let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGB::new(c.0,c.0,c.0)).collect();
-            Ok(Bitmap::new(rgb.to_srgb(profile), image.width, image.height))
+            Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height))
         },
         lodepng::Image::Grey16(mut image) => {
-            let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGB::new(c.0,c.0,c.0)).collect();
-            Ok(Bitmap::new(rgb.to_srgb(profile), image.width, image.height))
+            Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height))
         },
         lodepng::Image::GreyAlpha(mut image) => {
-            let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGBA::new(c.0,c.0,c.0,c.1)).collect();
-            Ok(Bitmap::new(rgb.to_srgb(profile), image.width, image.height))
+            Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height))
         },
         lodepng::Image::GreyAlpha16(mut image) => {
-            let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGBA::new(c.0,c.0,c.0,c.1)).collect();
-            Ok(Bitmap::new(rgb.to_srgb(profile), image.width, image.height))
+            Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height))
         },
         lodepng::Image::RawData(image) => {
             let mut png = state.info_raw_mut();
@@ -195,11 +191,8 @@ fn load_image(path: &str) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
                     Ok(Bitmap::new(rgba, width, height))
                 },
                 mozjpeg::ColorSpace::JCS_GRAYSCALE => {
-                    let g:Vec<lodepng::Grey<u8>> = dinfo.read_scanlines().unwrap();
-                    assert_eq!(g.len(), width * height);
-                    let mut g:Vec<_> = g.iter().map(|c| RGB::new(c.0,c.0,c.0)).collect();
-                    let rgba = g.to_srgb(profile);
-                    Ok(Bitmap::new(rgba, width, height))
+                    let mut g:Vec<lodepng::Grey<u8>> = dinfo.read_scanlines().unwrap();
+                    Ok(Bitmap::new(g.to_srgb(profile), width, height))
                 },
                 _ => Err(lodepng::Error(59)),
             }
