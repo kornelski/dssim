@@ -286,10 +286,18 @@ fn main() {
 
 #[test]
 fn image_load1() {
-    load_image("tests/profile.jpg").unwrap();
-}
 
-#[test]
-fn image_load2() {
-    load_image("tests/profile.png").unwrap();
+    let mut attr = dssim::Dssim::new();
+    let prof_jpg = attr.create_image(&load_image("tests/profile.jpg").unwrap()).unwrap();
+    let prof_png = attr.create_image(&load_image("tests/profile.png").unwrap()).unwrap();
+    let diff = attr.compare(&prof_jpg, prof_png);
+    assert!(diff <= 0.002);
+
+    let strip_jpg = attr.create_image(&load_image("tests/profile-stripped.jpg").unwrap()).unwrap();
+    let diff = attr.compare(&strip_jpg, prof_jpg);
+    assert!(diff > 0.013);
+
+    let strip_png = attr.create_image(&load_image("tests/profile-stripped.png").unwrap()).unwrap();
+    let diff = attr.compare(&strip_jpg, strip_png);
+    assert!(diff > 0.014);
 }
