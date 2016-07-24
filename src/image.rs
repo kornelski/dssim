@@ -172,12 +172,18 @@ impl<'a, T> BitmapRef<'a, T> {
 }
 
 impl<T> Bitmap<T> {
-    pub fn new_ref<'a>(&'a self) -> BitmapRef<'a, T> {
-        BitmapRef {
-            bitmap: self.bitmap.as_ref(),
-            width: self.width,
-            height: self.height,
+    pub fn new(bitmap: Vec<T>, width: usize, height: usize) -> Bitmap<T> {
+        Bitmap {
+            bitmap:bitmap, width:width, height:height
         }
+    }
+
+    pub fn new_ref<'a>(&'a self) -> BitmapRef<'a, T> {
+        BitmapRef::new(
+            self.bitmap.as_ref(),
+            self.width,
+            self.height,
+        )
     }
 }
 

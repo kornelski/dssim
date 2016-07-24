@@ -37,7 +37,7 @@ use std::io::Read;
 use getopts::Options;
 use dssim::RGBAPLU;
 use dssim::ToRGBAPLU;
-use dssim::BitmapRef;
+use dssim::Bitmap;
 use lcms2::*;
 use rgb::*;
 
@@ -95,7 +95,7 @@ impl<T> ToSRGB for [T] where T: Copy + LcmsPixelFormat, [T]: ToRGBAPLU {
     }
 }
 
-fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
+fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
 
     let profile = if state.info_png().get("sRGB").is_some() {
         None
@@ -106,25 +106,25 @@ fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAP
     };
 
     match res {
-        lodepng::Image::RGBA(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::RGB(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::RGB16(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::RGBA16(mut image) => Ok((image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::RGBA(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::RGB(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::RGB16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::RGBA16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::Grey(mut image) => {
             let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGB::new(c.0,c.0,c.0)).collect();
-            Ok((rgb.to_srgb(profile), image.width, image.height))
+            Ok(Bitmap::new(rgb.to_srgb(profile), image.width, image.height))
         },
         lodepng::Image::Grey16(mut image) => {
             let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGB::new(c.0,c.0,c.0)).collect();
-            Ok((rgb.to_srgb(profile), image.width, image.height))
+            Ok(Bitmap::new(rgb.to_srgb(profile), image.width, image.height))
         },
         lodepng::Image::GreyAlpha(mut image) => {
             let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGBA::new(c.0,c.0,c.0,c.1)).collect();
-            Ok((rgb.to_srgb(profile), image.width, image.height))
+            Ok(Bitmap::new(rgb.to_srgb(profile), image.width, image.height))
         },
         lodepng::Image::GreyAlpha16(mut image) => {
             let mut rgb:Vec<_> = image.buffer.as_mut().iter().map(|c| RGBA::new(c.0,c.0,c.0,c.1)).collect();
-            Ok((rgb.to_srgb(profile), image.width, image.height))
+            Ok(Bitmap::new(rgb.to_srgb(profile), image.width, image.height))
         },
         lodepng::Image::RawData(image) => {
             let mut png = state.info_raw_mut();
@@ -133,11 +133,11 @@ fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAP
                 let pal = &pal_own;
 
                 return match png.bitdepth as u8 {
-                    8 => Ok((image.buffer.as_ref().iter().map(|&c| pal[c as usize]).collect(), image.width, image.height)),
+                    8 => Ok(Bitmap::new(image.buffer.as_ref().iter().map(|&c| pal[c as usize]).collect(), image.width, image.height)),
                     depth @ 1 | depth @ 2 | depth @ 4 => {
                         let pixels = 8/depth;
                         let mask = depth - 1;
-                        return Ok((image.buffer.as_ref().iter().flat_map(|c| {
+                        return Ok(Bitmap::new(image.buffer.as_ref().iter().flat_map(|c| {
                             (0..pixels).rev().map(move |n|{
                                 pal[(c >> (n*depth) & mask) as usize]
                             })
@@ -152,7 +152,7 @@ fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<(Vec<RGBAP
     }
 }
 
-fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error> {
+fn load_image(path: &str) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
     let data = match path {
         "-" => {
             let mut data = Vec::new();
@@ -190,7 +190,7 @@ fn load_image(path: &str) -> Result<(Vec<RGBAPLU>, usize, usize), lodepng::Error
 
             let rgba = rgb.to_srgb(profile);
             assert_eq!(rgba.len(), width * height);
-            Ok((rgba, width, height))
+            Ok(Bitmap::new(rgba, width, height))
         },
     }
 }
@@ -226,8 +226,8 @@ fn main() {
 
     let file1 = files.remove(0);
 
-    let (orig_rgba, width1, height1) = match load_image(&file1) {
-        Ok((orig_rgba, width, height)) => (orig_rgba, width, height),
+    let orig_rgba = match load_image(&file1) {
+        Ok(image) => image,
         Err(err) => {
             writeln!(io::stderr(), "Can't read {}: {}", file1, err).unwrap();
             std::process::exit(1);
@@ -235,24 +235,24 @@ fn main() {
     };
 
     let mut attr = dssim::Dssim::new();
-    let original = attr.create_image(&BitmapRef::new(&orig_rgba, width1, height1)).expect("orig image creation");
+    let original = attr.create_image(&orig_rgba).expect("orig image creation");
 
     for file2 in files {
 
-        let (mod_rgba, width2, height2) = match load_image(&file2) {
-            Ok((mod_rgba, width2, height2)) => (mod_rgba, width2, height2),
+        let mod_rgba = match load_image(&file2) {
+            Ok(image) => image,
             Err(err) => {
                 writeln!(io::stderr(), "Can't read {}: {}", file2, err).unwrap();
                 std::process::exit(1);
             },
         };
 
-        if width1 != width2 || height1 != height2 {
-            writeln!(io::stderr(), "Image {} has different size than {}\n", file2, file1).unwrap();
-            std::process::exit(1);
-        }
+        // if width1 != width2 || height1 != height2 {
+        //     writeln!(io::stderr(), "Image {} has different size than {}\n", file2, file1).unwrap();
+        //     std::process::exit(1);
+        // }
 
-        let modified = attr.create_image(&BitmapRef::new(&mod_rgba, width2, height2)).expect("mod image creation");
+        let modified = attr.create_image(&mod_rgba).expect("mod image creation");
 
         if map_output_file.is_some() {
             attr.set_save_ssim_maps(1);
