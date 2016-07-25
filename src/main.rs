@@ -311,6 +311,21 @@ fn image_gray() {
 }
 
 #[test]
+fn image_gray_profile() {
+    let mut attr = dssim::Dssim::new();
+
+    let gp1 = attr.create_image(&load_image("tests/gray-profile.png").unwrap()).unwrap();
+    let gp2 = attr.create_image(&load_image("tests/gray-profile2.png").unwrap()).unwrap();
+    let gp3 = attr.create_image(&load_image("tests/gray-profile.jpg").unwrap()).unwrap();
+
+    let diff = attr.compare(&gp1, gp2);
+    assert!(diff < 0.0003, "{}", diff);
+
+    let diff = attr.compare(&gp1, gp3);
+    assert!(diff < 0.0003, "{}", diff);
+}
+
+#[test]
 fn image_load1() {
 
     let mut attr = dssim::Dssim::new();
