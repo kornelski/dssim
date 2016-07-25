@@ -62,13 +62,13 @@ trait LcmsPixelFormat {
 }
 
 impl LcmsPixelFormat for RGB8 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGB_8, ColorSpaceSignature::SigRgbData) } }
-impl LcmsPixelFormat for RGB16 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGB_16, ColorSpaceSignature::SigRgbData) } }
+impl LcmsPixelFormat for RGB16 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGB_16_SE, ColorSpaceSignature::SigRgbData) } } // assumes LE CPU :(
 impl LcmsPixelFormat for RGBA8 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGBA_8, ColorSpaceSignature::SigRgbData) } }
-impl LcmsPixelFormat for RGBA16 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGBA_16, ColorSpaceSignature::SigRgbData) } }
+impl LcmsPixelFormat for RGBA16 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGBA_16_SE, ColorSpaceSignature::SigRgbData) } } // assumes LE CPU :(
 impl LcmsPixelFormat for lodepng::Grey<u8> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAY_8, ColorSpaceSignature::SigGrayData) } }
-impl LcmsPixelFormat for lodepng::Grey<u16> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAY_16, ColorSpaceSignature::SigGrayData) } }
+impl LcmsPixelFormat for lodepng::Grey<u16> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAY_16_SE, ColorSpaceSignature::SigGrayData) } } // assumes LE CPU :(
 impl LcmsPixelFormat for lodepng::GreyAlpha<u8> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAYA_8, ColorSpaceSignature::SigGrayData) } }
-impl LcmsPixelFormat for lodepng::GreyAlpha<u16> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAYA_16, ColorSpaceSignature::SigGrayData) } }
+impl LcmsPixelFormat for lodepng::GreyAlpha<u16> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAYA_16_SE, ColorSpaceSignature::SigGrayData) } } // assumes LE CPU :(
 
 trait ToSRGB {
     fn to_srgb(&mut self, profile: Option<Profile>) -> Vec<RGBAPLU>;
