@@ -46,7 +46,7 @@ impl GammaComponent for u8 {
 impl GammaComponent for u16 {
     fn max_value() -> usize { 65535 }
     fn to_linear(&self, lut: &[f32]) -> f32 {
-        lut[*self as usize]
+        lut[u16::from_be(*self) as usize] // Hacky! Lodepng assumes big-endian u16
     }
 }
 
