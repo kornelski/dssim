@@ -1,75 +1,83 @@
-use std;
-use ffi::vImage_Buffer;
-use ffi::vImageConvolve_PlanarF;
-use ffi::vImage_Flags::kvImageEdgeExtend;
 
-pub fn blur(src: &[f32], tmp: &mut [f32], dst: &mut [f32], width: usize, height: usize) {
-    assert_eq!(src.len(), width * height);
-    assert_eq!(dst.len(), width * height);
+#[cfg(target_os = "macos")]
+mod mac {
+    use std;
+    use ffi::vImage_Buffer;
+    use ffi::vImageConvolve_PlanarF;
+    use ffi::vImage_Flags::kvImageEdgeExtend;
 
-    let srcbuf = vImage_Buffer {
-        width: width as u64,
-        height: height as u64,
-        rowBytes: width * std::mem::size_of::<f32>(),
-        data: src.as_ptr(),
-    };
-    let mut dstbuf = vImage_Buffer {
-        width: width as u64,
-        height: height as u64,
-        rowBytes: width * std::mem::size_of::<f32>(),
-        data: dst.as_mut_ptr(),
-    };
+    pub fn blur(src: &[f32], tmp: &mut [f32], dst: &mut [f32], width: usize, height: usize) {
+        assert_eq!(src.len(), width * height);
+        assert_eq!(dst.len(), width * height);
 
-    do_blur(&srcbuf, tmp, &mut dstbuf, width, height);
-}
-
-pub fn blur_in_place(srcdst: &mut [f32], tmp: &mut [f32], width: usize, height: usize) {
-    assert_eq!(srcdst.len(), width * height);
-
-    let srcbuf = vImage_Buffer {
-        width: width as u64,
-        height: height as u64,
-        rowBytes: width * std::mem::size_of::<f32>(),
-        data: srcdst.as_ptr(),
-    };
-    let mut dstbuf = vImage_Buffer {
-        width: width as u64,
-        height: height as u64,
-        rowBytes: width * std::mem::size_of::<f32>(),
-        data: srcdst.as_mut_ptr(),
-    };
-
-    do_blur(&srcbuf, tmp, &mut dstbuf, width, height);
-}
-
-pub fn do_blur(srcbuf: &vImage_Buffer<*const f32>, tmp: &mut [f32], dstbuf: &mut vImage_Buffer<*mut f32>, width: usize, height: usize) {
-    assert_eq!(tmp.len(), width * height);
-
-    let kernel: [f32; 9] = [
-        1./16., 2./16., 1./16.,
-        2./16., 4./16., 2./16.,
-        1./16., 2./16., 1./16.,
-    ];
-    unsafe {
-        let mut tmpwrbuf = vImage_Buffer {
+        let srcbuf = vImage_Buffer {
             width: width as u64,
             height: height as u64,
             rowBytes: width * std::mem::size_of::<f32>(),
-            data: tmp.as_mut_ptr(),
+            data: src.as_ptr(),
         };
-        let res = vImageConvolve_PlanarF(srcbuf, &mut tmpwrbuf, std::ptr::null_mut(), 0, 0, kernel[..].as_ptr(), 3, 3, 0., kvImageEdgeExtend);
-        assert_eq!(0, res);
-
-        let tmprbuf = vImage_Buffer {
+        let mut dstbuf = vImage_Buffer {
             width: width as u64,
             height: height as u64,
             rowBytes: width * std::mem::size_of::<f32>(),
-            data: tmp.as_ptr(),
+            data: dst.as_mut_ptr(),
         };
-        let res = vImageConvolve_PlanarF(&tmprbuf, dstbuf, std::ptr::null_mut(), 0, 0, kernel.as_ptr(), 3, 3, 0., kvImageEdgeExtend);
-        assert_eq!(0, res);
+
+        do_blur(&srcbuf, tmp, &mut dstbuf, width, height);
+    }
+
+    pub fn blur_in_place(srcdst: &mut [f32], tmp: &mut [f32], width: usize, height: usize) {
+        assert_eq!(srcdst.len(), width * height);
+
+        let srcbuf = vImage_Buffer {
+            width: width as u64,
+            height: height as u64,
+            rowBytes: width * std::mem::size_of::<f32>(),
+            data: srcdst.as_ptr(),
+        };
+        let mut dstbuf = vImage_Buffer {
+            width: width as u64,
+            height: height as u64,
+            rowBytes: width * std::mem::size_of::<f32>(),
+            data: srcdst.as_mut_ptr(),
+        };
+
+        do_blur(&srcbuf, tmp, &mut dstbuf, width, height);
+    }
+
+    pub fn do_blur(srcbuf: &vImage_Buffer<*const f32>, tmp: &mut [f32], dstbuf: &mut vImage_Buffer<*mut f32>, width: usize, height: usize) {
+        assert_eq!(tmp.len(), width * height);
+
+        let kernel: [f32; 9] = [
+            1./16., 2./16., 1./16.,
+            2./16., 4./16., 2./16.,
+            1./16., 2./16., 1./16.,
+        ];
+        unsafe {
+            let mut tmpwrbuf = vImage_Buffer {
+                width: width as u64,
+                height: height as u64,
+                rowBytes: width * std::mem::size_of::<f32>(),
+                data: tmp.as_mut_ptr(),
+            };
+            let res = vImageConvolve_PlanarF(srcbuf, &mut tmpwrbuf, std::ptr::null_mut(), 0, 0, kernel[..].as_ptr(), 3, 3, 0., kvImageEdgeExtend);
+            assert_eq!(0, res);
+
+            let tmprbuf = vImage_Buffer {
+                width: width as u64,
+                height: height as u64,
+                rowBytes: width * std::mem::size_of::<f32>(),
+                data: tmp.as_ptr(),
+            };
+            let res = vImageConvolve_PlanarF(&tmprbuf, dstbuf, std::ptr::null_mut(), 0, 0, kernel.as_ptr(), 3, 3, 0., kvImageEdgeExtend);
+            assert_eq!(0, res);
+        }
     }
 }
+
+#[cfg(target_os = "macos")]
+pub use self::mac::*;
+
 
 #[test]
 fn blur_one() {
