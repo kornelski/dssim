@@ -112,18 +112,10 @@ fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<Bitmap<RGB
         lodepng::Image::RGB(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::RGB16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::RGBA16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::Grey(mut image) => {
-            Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height))
-        },
-        lodepng::Image::Grey16(mut image) => {
-            Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height))
-        },
-        lodepng::Image::GreyAlpha(mut image) => {
-            Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height))
-        },
-        lodepng::Image::GreyAlpha16(mut image) => {
-            Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height))
-        },
+        lodepng::Image::Grey(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::Grey16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::GreyAlpha(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
+        lodepng::Image::GreyAlpha16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
         lodepng::Image::RawData(image) => {
             let mut png = state.info_raw_mut();
             if png.colortype() == lodepng::LCT_PALETTE {
@@ -157,9 +149,7 @@ fn load_image(path: &str) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
             try!(std::io::stdin().read_to_end(&mut data));
             data
         },
-        path => {
-            try!(file::get(path))
-        },
+        path => try!(file::get(path)),
     };
 
     let mut state = lodepng::State::new();
@@ -187,13 +177,13 @@ fn load_image(path: &str) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
 
             match dinfo.out_color_space() {
                 mozjpeg::ColorSpace::JCS_RGB => {
-                    let mut rgb:Vec<RGB8> = dinfo.read_scanlines().unwrap();
+                    let mut rgb: Vec<RGB8> = dinfo.read_scanlines().unwrap();
                     let rgba = rgb.to_srgb(profile);
                     assert_eq!(rgba.len(), width * height);
                     Ok(Bitmap::new(rgba, width, height))
                 },
                 mozjpeg::ColorSpace::JCS_GRAYSCALE => {
-                    let mut g:Vec<lodepng::Grey<u8>> = dinfo.read_scanlines().unwrap();
+                    let mut g: Vec<lodepng::Grey<u8>> = dinfo.read_scanlines().unwrap();
                     Ok(Bitmap::new(g.to_srgb(profile), width, height))
                 },
                 _ => Err(lodepng::Error(59)),

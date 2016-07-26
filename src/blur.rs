@@ -75,9 +75,19 @@ mod mac {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
+mod portable {
+    pub fn blur(src: &[f32], tmp: &mut [f32], dst: &mut [f32], width: usize, height: usize) {}
+
+    pub fn blur_in_place(srcdst: &mut [f32], tmp: &mut [f32], width: usize, height: usize) {}
+}
+
+
 #[cfg(target_os = "macos")]
 pub use self::mac::*;
 
+#[cfg(not(target_os = "macos"))]
+pub use self::portable::*;
 
 #[test]
 fn blur_one() {

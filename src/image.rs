@@ -157,7 +157,7 @@ pub struct Bitmap<T> {
 
 
 #[derive(Debug, Copy, Clone)]
-pub struct BitmapRef<'a, T:'a> {
+pub struct BitmapRef<'a, T: 'a> {
     pub bitmap: &'a [T],
     pub width: usize,
     pub height: usize,
@@ -362,7 +362,11 @@ pub fn worst(input: &[f32], width: usize, height: usize) -> Bitmap<f32> {
     let half_width = width / 2;
 
     if half_height < 4 || half_width < 4 {
-        return Bitmap{bitmap:input.iter().cloned().collect(), width:width, height:height};
+        return Bitmap {
+            bitmap: input.iter().cloned().collect(),
+            width: width,
+            height: height,
+        };
     }
 
     // crop odd pixels

@@ -126,7 +126,7 @@ impl Channable<f32, f32> for DssimChan<f32> {
     fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<f32> {
         let mut modified_img = modified.img.take().unwrap();
 
-        for (img2,img1) in modified_img.iter_mut().zip(self.img.as_ref().unwrap().iter()) {
+        for (img2, img1) in modified_img.iter_mut().zip(self.img.as_ref().unwrap().iter()) {
             *img2 *= *img1
         }
 
@@ -187,11 +187,10 @@ impl Dssim {
     }
 
     pub fn create_image<InBitmap, OutBitmap>(&mut self, src_img: &InBitmap) -> Option<DssimImage<f32>>
-        where
-        InBitmap: ToLABBitmap,
-        OutBitmap: ToLABBitmap,
-        InBitmap: Downsample<Output=OutBitmap>,
-        OutBitmap: Downsample<Output=OutBitmap>,
+        where InBitmap: ToLABBitmap,
+              OutBitmap: ToLABBitmap,
+              InBitmap: Downsample<Output = OutBitmap>,
+              OutBitmap: Downsample<Output = OutBitmap>
     {
         let mut all_sizes = std::iter::once(src_img.to_lab())
             .chain(self.create_scales(src_img).into_iter().map(|s| s.to_lab()))
@@ -295,9 +294,8 @@ impl Dssim {
     }
 
     fn compare_channel<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> SsimMap
-        where
-        L: Clone + Copy + ops::Mul<Output=L> + ops::Sub<Output=L>,
-        f32: std::convert::From<L>
+        where L: Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L>,
+              f32: std::convert::From<L>
     {
         assert_eq!(original.width, modified.width);
         assert_eq!(original.height, modified.height);
