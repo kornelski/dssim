@@ -7,7 +7,7 @@ keywords = ["ssim", "image", "comparison"]
 license = "AGPL-3.0"
 name = "dssim"
 repository = "https://github.com/pornel/dssim2.git"
-version = "2.4.1"
+version = "2.4.2"
 publish = false
 
 [[bin]]
