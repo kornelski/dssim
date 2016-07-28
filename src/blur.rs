@@ -153,6 +153,22 @@ pub use self::mac::*;
 pub use self::portable::*;
 
 #[test]
+fn blur_zero() {
+    let src = vec![0.25];
+
+    let mut tmp = vec![-55.; 1];
+    let mut dst = vec![-99.; 1];
+
+    let mut src2 = src.clone();
+
+    blur(&src[..], &mut tmp[..], &mut dst[..], 1, 1);
+    blur_in_place(&mut src2[..], &mut tmp[..], 1, 1);
+
+    assert_eq!(src2, dst);
+    assert_eq!(0.25, dst[0]);
+}
+
+#[test]
 fn blur_one() {
     let src = vec![
     0.,0.,0.,0.,0.,
