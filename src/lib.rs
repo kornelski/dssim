@@ -1,3 +1,4 @@
+extern crate rgb;
 extern crate libc;
 mod dssim;
 mod image;

@@ -18,28 +18,17 @@
  */
 
 extern crate getopts;
-extern crate libc;
 extern crate lodepng;
-extern crate lcms2;
-extern crate mozjpeg;
 extern crate dssim;
 extern crate rgb;
-extern crate file;
-
-mod ffi;
-mod val;
-mod image;
+extern crate load_image;
 
 use std::io::Write;
 use std::env;
 use std::io;
-use std::io::Read;
 use getopts::Options;
-use dssim::RGBAPLU;
-use dssim::ToRGBAPLU;
-use dssim::Bitmap;
-use lcms2::*;
-use rgb::*;
+use load_image::Image;
+use dssim::*;
 
 fn usage(argv0: &str) {
     write!(io::stderr(), "\
@@ -57,138 +46,16 @@ fn to_byte(i: f32) -> u8 {
     else {(i * 256.0) as u8}
 }
 
-trait LcmsPixelFormat {
-    fn pixel_format() -> (PixelFormat, ColorSpaceSignature);
-}
-
-impl LcmsPixelFormat for RGB8 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGB_8, ColorSpaceSignature::SigRgbData) } }
-impl LcmsPixelFormat for RGB16 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGB_16_SE, ColorSpaceSignature::SigRgbData) } } // assumes LE CPU :(
-impl LcmsPixelFormat for RGBA8 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGBA_8, ColorSpaceSignature::SigRgbData) } }
-impl LcmsPixelFormat for RGBA16 { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::RGBA_16_SE, ColorSpaceSignature::SigRgbData) } } // assumes LE CPU :(
-impl LcmsPixelFormat for lodepng::Grey<u8> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAY_8, ColorSpaceSignature::SigGrayData) } }
-impl LcmsPixelFormat for lodepng::Grey<u16> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAY_16_SE, ColorSpaceSignature::SigGrayData) } } // assumes LE CPU :(
-impl LcmsPixelFormat for lodepng::GreyAlpha<u8> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAYA_8, ColorSpaceSignature::SigGrayData) } }
-impl LcmsPixelFormat for lodepng::GreyAlpha<u16> { fn pixel_format() -> (PixelFormat, ColorSpaceSignature) { (PixelFormat::GRAYA_16_SE, ColorSpaceSignature::SigGrayData) } } // assumes LE CPU :(
-
-trait ToSRGB {
-    fn to_srgb(&mut self, profile: Option<Profile>) -> Vec<RGBAPLU>;
-}
-
-impl<T> ToSRGB for [T] where T: Copy + LcmsPixelFormat, [T]: ToRGBAPLU {
-    fn to_srgb(&mut self, profile: Option<Profile>) -> Vec<RGBAPLU> {
-        let (format, color_space) = T::pixel_format();
-        if let Some(profile) = profile {
-            if profile.color_space() == color_space {
-                if PixelFormat::RGB_8 == format {
-                    let t = Transform::new(&profile, PixelFormat::RGB_8,
-                                           &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
-                    t.transform_in_place(self);
-                    return self.to_rgbaplu();
-                } else {
-                    let t = Transform::new(&profile, format,
-                                           &Profile::new_srgb(), PixelFormat::RGB_8, Intent::RelativeColorimetric);
-                    let mut dest = vec![RGB8::new(0,0,0); self.len()];
-                    t.transform_pixels(self, &mut dest);
-                    return dest.to_rgbaplu();
-                }
-            }
-        }
-        return self.to_rgbaplu();
-    }
-}
-
-fn load_png(mut state: lodepng::State, res: lodepng::Image) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
-
-    let profile = if state.info_png().get("sRGB").is_some() {
-        None
-    } else if let Ok(iccp) = state.get_icc() {
-        Profile::new_icc(iccp.as_ref())
-    } else {
-        None
-    };
-
-    match res {
-        lodepng::Image::RGBA(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::RGB(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::RGB16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::RGBA16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::Grey(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::Grey16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::GreyAlpha(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::GreyAlpha16(mut image) => Ok(Bitmap::new(image.buffer.as_mut().to_srgb(profile), image.width, image.height)),
-        lodepng::Image::RawData(image) => {
-            let mut png = state.info_raw_mut();
-            if png.colortype() == lodepng::LCT_PALETTE {
-                let pal_own = png.palette_mut().to_srgb(profile);
-                let pal = &pal_own;
-
-                return match png.bitdepth as u8 {
-                    8 => Ok(Bitmap::new(image.buffer.as_ref().iter().map(|&c| pal[c as usize]).collect(), image.width, image.height)),
-                    depth @ 1 | depth @ 2 | depth @ 4 => {
-                        let pixels = 8/depth;
-                        let mask = depth - 1;
-                        return Ok(Bitmap::new(image.buffer.as_ref().iter().flat_map(|c| {
-                            (0..pixels).rev().map(move |n|{
-                                pal[(c >> (n*depth) & mask) as usize]
-                            })
-                        })
-                        .take(image.width*image.height).collect(), image.width, image.height));
-                    },
-                    _ => Err(lodepng::Error(59)),
-                };
-            }
-            return Err(lodepng::Error(59));
-        },
-    }
-}
-
-fn load_image(path: &str) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
-    let data = match path {
-        "-" => {
-            let mut data = Vec::new();
-            try!(std::io::stdin().read_to_end(&mut data));
-            data
-        },
-        path => try!(file::get(path)),
-    };
-
-    let mut state = lodepng::State::new();
-    state.color_convert(false);
-    state.remember_unknown_chunks(true);
-
-    match state.decode(&data) {
-        Ok(img) => load_png(state, img),
-        _ => {
-            let mut dinfo = mozjpeg::Decompress::new();
-            dinfo.set_mem_src(&data[..]);
-            dinfo.save_marker(mozjpeg::Marker::APP(2));
-            assert!(dinfo.read_header(true));
-            assert!(dinfo.start_decompress());
-            let width = dinfo.output_width();
-            let height = dinfo.output_height();
-
-            let profile = if let Some(marker) = dinfo.markers().next() {
-                let data = marker.data;
-                if "ICC_PROFILE\0".as_bytes() == &data[0..12] {
-                    let icc = &data[14..];
-                    Profile::new_icc(icc)
-                } else {None}
-            } else {None};
-
-            match dinfo.out_color_space() {
-                mozjpeg::ColorSpace::JCS_RGB => {
-                    let mut rgb: Vec<RGB8> = dinfo.read_scanlines().unwrap();
-                    let rgba = rgb.to_srgb(profile);
-                    assert_eq!(rgba.len(), width * height);
-                    Ok(Bitmap::new(rgba, width, height))
-                },
-                mozjpeg::ColorSpace::JCS_GRAYSCALE => {
-                    let mut g: Vec<lodepng::Grey<u8>> = dinfo.read_scanlines().unwrap();
-                    Ok(Bitmap::new(g.to_srgb(profile), width, height))
-                },
-                _ => Err(lodepng::Error(59)),
-            }
-        },
+fn load(path: &str) -> Result<Bitmap<RGBAPLU>, lodepng::Error> {
+    match try!(load_image::load_image(path)) {
+        Image::RGB8(img) => Ok(Bitmap::new(img.bitmap.to_rgbaplu(), img.width, img.height)),
+        Image::RGB16(img) => Ok(Bitmap::new(img.bitmap.to_rgbaplu(), img.width, img.height)),
+        Image::RGBA8(img) => Ok(Bitmap::new(img.bitmap.to_rgbaplu(), img.width, img.height)),
+        Image::RGBA16(img) => Ok(Bitmap::new(img.bitmap.to_rgbaplu(), img.width, img.height)),
+        Image::GRAY8(img) => Ok(Bitmap::new(img.bitmap.to_rgbaplu(), img.width, img.height)),
+        Image::GRAY16(img) => Ok(Bitmap::new(img.bitmap.to_rgbaplu(), img.width, img.height)),
+        Image::GRAYA8(img) => Ok(Bitmap::new(img.bitmap.to_rgbaplu(), img.width, img.height)),
+        Image::GRAYA16(img) => Ok(Bitmap::new(img.bitmap.to_rgbaplu(), img.width, img.height)),
     }
 }
 
@@ -223,7 +90,7 @@ fn main() {
 
     let file1 = files.remove(0);
 
-    let orig_rgba = match load_image(&file1) {
+    let orig_rgba = match load(&file1) {
         Ok(image) => image,
         Err(err) => {
             writeln!(io::stderr(), "Can't read {}: {}", file1, err).unwrap();
@@ -236,7 +103,7 @@ fn main() {
 
     for file2 in files {
 
-        let mod_rgba = match load_image(&file2) {
+        let mod_rgba = match load(&file2) {
             Ok(image) => image,
             Err(err) => {
                 writeln!(io::stderr(), "Can't read {}: {}", file2, err).unwrap();
@@ -265,7 +132,7 @@ fn main() {
             let out: Vec<_> = map_meta.data().expect("map should have data").iter().map(|ssim|{
                 let max = 1_f32 - ssim;
                 let maxsq = max * max;
-                return RGBA::<u8> {
+                return rgb::RGBA::<u8> {
                     r: to_byte(max * 3.0),
                     g: to_byte(maxsq * 6.0),
                     b: to_byte(max / ((1_f32 - avgssim) * 4_f32)),
@@ -285,10 +152,10 @@ fn main() {
 fn image_gray() {
     let mut attr = dssim::Dssim::new();
 
-    let g1 = attr.create_image(&load_image("tests/gray1-rgba.png").unwrap()).unwrap();
-    let g2 = attr.create_image(&load_image("tests/gray1-pal.png").unwrap()).unwrap();
-    let g3 = attr.create_image(&load_image("tests/gray1-gray.png").unwrap()).unwrap();
-    let g4 = attr.create_image(&load_image("tests/gray1.jpg").unwrap()).unwrap();
+    let g1 = attr.create_image(&load("tests/gray1-rgba.png").unwrap()).unwrap();
+    let g2 = attr.create_image(&load("tests/gray1-pal.png").unwrap()).unwrap();
+    let g3 = attr.create_image(&load("tests/gray1-gray.png").unwrap()).unwrap();
+    let g4 = attr.create_image(&load("tests/gray1.jpg").unwrap()).unwrap();
 
     let diff = attr.compare(&g1, g2);
     assert!(diff < 0.00001);
@@ -304,9 +171,9 @@ fn image_gray() {
 fn image_gray_profile() {
     let mut attr = dssim::Dssim::new();
 
-    let gp1 = attr.create_image(&load_image("tests/gray-profile.png").unwrap()).unwrap();
-    let gp2 = attr.create_image(&load_image("tests/gray-profile2.png").unwrap()).unwrap();
-    let gp3 = attr.create_image(&load_image("tests/gray-profile.jpg").unwrap()).unwrap();
+    let gp1 = attr.create_image(&load("tests/gray-profile.png").unwrap()).unwrap();
+    let gp2 = attr.create_image(&load("tests/gray-profile2.png").unwrap()).unwrap();
+    let gp3 = attr.create_image(&load("tests/gray-profile.jpg").unwrap()).unwrap();
 
     let diff = attr.compare(&gp1, gp2);
     assert!(diff < 0.0003, "{}", diff);
@@ -319,16 +186,16 @@ fn image_gray_profile() {
 fn image_load1() {
 
     let mut attr = dssim::Dssim::new();
-    let prof_jpg = attr.create_image(&load_image("tests/profile.jpg").unwrap()).unwrap();
-    let prof_png = attr.create_image(&load_image("tests/profile.png").unwrap()).unwrap();
+    let prof_jpg = attr.create_image(&load("tests/profile.jpg").unwrap()).unwrap();
+    let prof_png = attr.create_image(&load("tests/profile.png").unwrap()).unwrap();
     let diff = attr.compare(&prof_jpg, prof_png);
     assert!(diff <= 0.002);
 
-    let strip_jpg = attr.create_image(&load_image("tests/profile-stripped.jpg").unwrap()).unwrap();
+    let strip_jpg = attr.create_image(&load("tests/profile-stripped.jpg").unwrap()).unwrap();
     let diff = attr.compare(&strip_jpg, prof_jpg);
     assert!(diff > 0.013);
 
-    let strip_png = attr.create_image(&load_image("tests/profile-stripped.png").unwrap()).unwrap();
+    let strip_png = attr.create_image(&load("tests/profile-stripped.png").unwrap()).unwrap();
     let diff = attr.compare(&strip_jpg, strip_png);
     assert!(diff > 0.014);
 }

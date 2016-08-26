@@ -6,9 +6,9 @@ documentation = "https://github.com/pornel/dssim"
 keywords = ["ssim", "image", "comparison"]
 license = "AGPL-3.0"
 name = "dssim"
-repository = "https://github.com/pornel/dssim2.git"
-version = "2.5.3"
 publish = false
+repository = "https://github.com/pornel/dssim2.git"
+version = "2.6.0"
 
 [[bin]]
 doctest = false
@@ -17,14 +17,16 @@ path = "src/main.rs"
 
 [dependencies]
 c_vec = "= 1.0.12"
-file = "0.1.0"
 getopts = "0.2.4"
 itertools = "0.4.4"
-lcms2 = "1.0.0"
 libc = "0.2.4"
 lodepng = "0.12.3"
 rgb = "0.5.0"
 unzip3 = "0.1.0"
+
+[dependencies.load_image]
+path = "../image-rust"
+version = "1.0.0"
 
 [dependencies.mozjpeg]
 path = "../mozjpeg-rust"
