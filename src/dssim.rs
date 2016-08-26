@@ -28,6 +28,7 @@ use image::*;
 use std;
 use std::ops;
 pub use val::Dssim as Val;
+pub use tolab::ToLABBitmap;
 
 trait Channable<T, I> {
     fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp: &mut [I]) -> Vec<T>;
