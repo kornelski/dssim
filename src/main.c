@@ -152,7 +152,7 @@ int main(int argc, char *const argv[])
     png24_image image1 = {};
     int retval = read_image(file1, &image1);
     if (retval) {
-        fprintf(stderr, "Can't read %s\n", file1);
+        fprintf(stderr, "Can't read %s (%d)\n", file1, retval);
         return retval;
     }
 
@@ -168,7 +168,7 @@ int main(int argc, char *const argv[])
         png24_image image2 = {};
         retval = read_image(file2, &image2);
         if (retval) {
-            fprintf(stderr, "Can't read %s\n", file2);
+            fprintf(stderr, "Can't read %s (%d)\n", file2, retval);
             break;
         }
 
