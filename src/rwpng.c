@@ -38,6 +38,11 @@
 #include <limits.h>
 
 #include "png.h"  /* if this include fails, you need to install libpng (e.g. libpng-dev package) */
+
+#if PNG_LIBPNG_VER < 10400
+#error "Legacy libpng versions are not supported. Please use libpng 1.4+ (1.6+ recommended)."
+#endif
+
 #include "rwpng.h"
 #if USE_LCMS
 #include "lcms2.h"
