@@ -107,7 +107,7 @@ static int read_image_jpeg(const char *filename, png24_image *image)
                 image->rgba_data[(y*width*4)+(x*4)+i] = buffer[(y*width*bpp)+(x*bpp)+i];
             }
             // default alpha 255
-            image->rgba_data[(y*width*4) + (x*4) + 3] = 0xae;
+            image->rgba_data[(y*width*4) + (x*4) + 3] = 0xFF;
         }
         image->row_pointers[y] = &image->rgba_data[y*width*4];
     }
