@@ -78,6 +78,12 @@ static int read_image_jpeg(const char *filename, png24_image *image)
     bpp=cinfo.output_components;
     row_stride=width*bpp;
 
+    // grayscale images not handled currently
+    if (bpp == 1) {
+        fprintf(stderr, "Error: grayscale JPEG images not handled currently.");
+        return 1;
+    }
+
     // allocate buffer size (always use RGBA)
     unsigned char* buffer = calloc(width*height*bpp,1);
 
