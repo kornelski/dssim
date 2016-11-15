@@ -21,6 +21,7 @@
 #include <stdbool.h>
 #include <string.h>
 
+
 #include "dssim.h"
 #include "rwpng.h"
 #include "png.h"
@@ -29,10 +30,11 @@
 extern char *optarg;
 extern int optind, opterr;
 
+
 /*
  Reads image into png24_image struct. Returns non-zero on error
  */
-static int read_image(const char *filename, png24_image *image)
+static int read_image_png(const char *filename, png24_image *image)
 {
     bool using_stdin = false;
     FILE *fp;
@@ -53,6 +55,120 @@ static int read_image(const char *filename, png24_image *image)
     }
     return retval;
 }
+
+
+
+#ifdef USE_LIBJPEG
+#include <jpeglib.h>
+static int read_image_jpeg(const char *filename, png24_image *image)
+{
+    int retval;
+    unsigned int width,height,row_stride;
+    unsigned int bpp;
+    unsigned int x,y,i;
+    struct jpeg_decompress_struct cinfo;
+    struct jpeg_error_mgr jerr;
+    cinfo.err = jpeg_std_error(&jerr);
+    jpeg_create_decompress(&cinfo);
+
+    // decompress
+    FILE *file = fopen(filename,"rb");
+    if(!file)
+    {
+        return 1;
+    }
+    jpeg_stdio_src(&cinfo,file);
+    retval=jpeg_read_header(&cinfo,TRUE);
+    if(retval != 1)
+    {
+        return 1;
+    }
+    jpeg_start_decompress(&cinfo);
+
+    width=cinfo.output_width;
+    height=cinfo.output_height;
+    bpp=cinfo.output_components;
+    row_stride=width*bpp;
+
+    // grayscale images not handled currently
+    if (bpp == 1) {
+        fprintf(stderr, "Error: grayscale JPEG images not handled currently.");
+        return 1;
+    }
+
+    // allocate buffer size (always use RGBA)
+    unsigned char* buffer = calloc(width*height*bpp,1);
+
+    while(cinfo.output_scanline < height)
+    {
+        unsigned char *buffer_array[1];
+        buffer_array[0] = buffer + cinfo.output_scanline*row_stride;
+        jpeg_read_scanlines(&cinfo,buffer_array,1);
+    }
+
+    //convert to RGBA
+    image->rgba_data = calloc(width*height*4,1);
+    image->row_pointers = calloc(height,sizeof(unsigned char*));
+
+    for(y=0;y<height;y++)
+    {
+        for(x=0;x<width;x++)
+        {
+            for(i=0;i<bpp;i++)
+            {
+                image->rgba_data[(y*width*4)+(x*4)+i] = buffer[(y*width*bpp)+(x*bpp)+i];
+            }
+            // default alpha 255
+            image->rgba_data[(y*width*4) + (x*4) + 3] = 0xFF;
+        }
+        image->row_pointers[y] = &image->rgba_data[y*width*4];
+    }
+    image->width=width;
+    image->height=height;
+    jpeg_destroy_decompress(&cinfo);
+    fclose(file);
+    free(buffer);
+    return 0;
+}
+#endif // #ifdef USE_LIBJPEG
+
+static int read_image(const char *filename, png24_image *image)
+{
+    int retval=1;
+    unsigned char *header;
+    // read first 4 byte to determine filetype by magical number
+    FILE *fp = fopen(filename,"rb");
+    if(!fp)
+    {
+        return 1;
+    }
+    header = calloc(4,1);
+    if(!header)
+    {
+        return 1;
+    }
+    fread(header,1,4,fp);
+    fclose(fp);
+
+    // the png number is not really precise but I guess the situation where this would falsely pass is almost equal to 0
+    if(header[0]==0x89 && header[1]==0x50 && header[2]==0x4e && header[3]==0x47)
+    {
+        retval=read_image_png(filename,image);
+    }
+#ifdef USE_LIBJPEG
+    else
+    {
+        retval=read_image_jpeg(filename,image);
+    }
+#endif
+    free(header);
+    return retval;
+}
+
+/*
+    Reads JPG image into png24_image struct
+    ( this is used for compatiblity purposes )
+*/
 
 static int write_image(const char *filename,
                        const dssim_rgba *pixels,
@@ -151,6 +267,7 @@ int main(int argc, char *const argv[])
     const char *file1 = argv[optind];
     png24_image image1 = {};
     int retval = read_image(file1, &image1);
+
     if (retval) {
         fprintf(stderr, "Can't read %s (%d)\n", file1, retval);
         return retval;
@@ -161,6 +278,7 @@ int main(int argc, char *const argv[])
     dssim_image *original = dssim_create_image(attr, image1.row_pointers, DSSIM_RGBA, image1.width, image1.height, get_gamma(&image1));
     free(image1.row_pointers);
     free(image1.rgba_data);
+
 
     for (int arg = optind+1; arg < argc; arg++) {
         const char *file2 = argv[arg];
@@ -196,6 +314,7 @@ int main(int argc, char *const argv[])
         dssim_dealloc_image(modified);
 
         printf("%.8f\t%s\n", dssim, file2);
+
 
         if (map_output_file) {
             dssim_ssim_map map_meta = dssim_pop_ssim_map(attr, 0, 0);
