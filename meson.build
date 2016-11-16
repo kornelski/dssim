@@ -25,6 +25,9 @@ libdssim = shared_library('dssim-lib',
 			  c_args: c_args,
 			  install:true)
 
+dssim_dep = declare_dependency(link_with : libdssim,
+  include_directories : include_directories('src/'))
+
 h = install_headers ('src/dssim.h')
 
 pkgconfig_gen(libraries : libdssim,
