@@ -31,36 +31,9 @@ extern char *optarg;
 extern int optind, opterr;
 
 
-/*
- Reads image into png24_image struct. Returns non-zero on error
- */
-static int read_image_png(const char *filename, png24_image *image)
-{
-    bool using_stdin = false;
-    FILE *fp;
-    if (0 == strcmp("-", filename)) {
-        using_stdin = true;
-        fp = stdin;
-    } else {
-        fp = fopen(filename, "rb");
-        if (!fp) {
-            return 1;
-        }
-    }
-
-    int retval = rwpng_read_image24(fp, image, 0);
-
-    if (!using_stdin) {
-        fclose(fp);
-    }
-    return retval;
-}
-
-
-
 #ifdef USE_LIBJPEG
 #include <jpeglib.h>
-static int read_image_jpeg(const char *filename, png24_image *image)
+static int read_image_jpeg(FILE *file, png24_image *image)
 {
     int retval;
     unsigned int width,height,row_stride;
@@ -72,11 +45,6 @@ static int read_image_jpeg(const char *filename, png24_image *image)
     jpeg_create_decompress(&cinfo);
 
     // decompress
-    FILE *file = fopen(filename,"rb");
-    if(!file)
-    {
-        return 1;
-    }
     jpeg_stdio_src(&cinfo,file);
     retval=jpeg_read_header(&cinfo,TRUE);
     if(retval != 1)
@@ -126,7 +94,6 @@ static int read_image_jpeg(const char *filename, png24_image *image)
     image->width=width;
     image->height=height;
     jpeg_destroy_decompress(&cinfo);
-    fclose(file);
     free(buffer);
     return 0;
 }
@@ -135,33 +102,43 @@ static int read_image_jpeg(const char *filename, png24_image *image)
 static int read_image(const char *filename, png24_image *image)
 {
     int retval=1;
-    unsigned char *header;
-    // read first 4 byte to determine filetype by magical number
-    FILE *fp = fopen(filename,"rb");
-    if(!fp)
-    {
-        return 1;
+    bool using_stdin = false;
+    FILE *fh;
+    unsigned char buffer[8];
+
+    if (0 == strcmp("-", filename)) {
+        using_stdin = true;
+        fh = stdin;
+    } else {
+        fh = fopen(filename, "rb");
+        if (!fh) {
+            return 1;
+        }
     }
-    header = calloc(4,1);
-    if(!header)
-    {
-        return 1;
-    }
-    fread(header,1,4,fp);
-    fclose(fp);
+
+    setvbuf(fh, (char *)buffer, _IOFBF, 8);
+
+    // the first read fills the buffer up, but put char back on after
+    int c = fgetc(fh);
+    ungetc(c, fh);
 
     // the png number is not really precise but I guess the situation where this would falsely pass is almost equal to 0
-    if(header[0]==0x89 && header[1]==0x50 && header[2]==0x4e && header[3]==0x47)
+    if (png_check_sig(buffer, 8))
     {
-        retval=read_image_png(filename,image);
+    /*
+     Reads image into png24_image struct. Returns non-zero on error
+     */
+        retval = rwpng_read_image24(fh, image, 0);
     }
 #ifdef USE_LIBJPEG
     else
     {
-        retval=read_image_jpeg(filename,image);
+        retval=read_image_jpeg(fh,image);
     }
 #endif
-    free(header);
+    if(!using_stdin) {
+        fclose(fh);
+     }
     return retval;
 }
 
