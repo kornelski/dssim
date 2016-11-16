@@ -1,4 +1,6 @@
-project ('dssim', 'C')
+project ('dssim', 'C',
+  version : '1.3.2.1',
+  default_options : [ 'warning_level=1'])
 
 dssim_lib_sources = ['src/dssim.c']
 
