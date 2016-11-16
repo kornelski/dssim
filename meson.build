@@ -1,5 +1,6 @@
 project ('dssim', 'C',
   version : '1.3.2.1',
+  meson_version : '>= 0.35.0',
   default_options : [ 'warning_level=1'])
 
 dssim_lib_sources = ['src/dssim.c']
@@ -15,8 +16,9 @@ c_args = ['-DNDEBUG',
       '-Wall',
       '-std=c99']
 
-mathlib = find_library('m', required : true)
-zlib = find_library('z', required : true)
+cc = meson.get_compiler('c')
+mathlib = cc.find_library('m')
+zlib = cc.find_library('z')
 
 libdssim = shared_library('dssim-lib',
               dssim_lib_sources,
@@ -30,16 +32,15 @@ dssim_dep = declare_dependency(link_with : libdssim,
 
 h = install_headers ('src/dssim.h')
 
-pkgconfig_gen(libraries : libdssim,
-          subdirs : '.',
-          name : 'libdssim',
-          filebase : 'dssim',
-          version : '1.1',
-          description : 'A structural similarity library.')
+pkg = import('pkgconfig')
+pkg.generate(libraries : libdssim,
+             subdirs : '.',
+             name : 'libdssim',
+             filebase : 'dssim',
+             version : meson.project_version(),
+             description : 'A structural similarity library.')
 
 png_dep = dependency('libpng')
-
-
 executable = executable ('dssim',
              dssim_sources,
              install: true,
