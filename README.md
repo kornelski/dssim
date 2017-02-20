@@ -61,17 +61,16 @@ Plain download from here: https://launchpad.net/~lkwg82/+archive/ubuntu/dssim/+p
 
 ## Accuracy
 
-Scores for version 1.3 measured against [TID2008][1] database:
+Scores for version 1.3 measured against [TID2013][1] database:
 
-TID2008 Category | Spearman correlation
+TID2013 Category | Spearman correlation
 --- | ---
-Noise   | -0.872
-Noise2  | -0.888
-Safe    | -0.889
-Hard    | -0.903
-Simple  | -0.922
-Exotic  | -0.484
-Exotic2 | -0.651
-Full    | -0.818
+Noise  | -0.890
+Actual | -0.903
+Simple | -0.917
+Exotic | -0.787
+New    | -0.897
+Color  | -0.916
+Full   | -0.852
 
-[1]: http://www.computervisiononline.com/dataset/tid2008-tampere-image-database-2008
+[1]: http://www.ponomarenko.info/tid2013.htm
