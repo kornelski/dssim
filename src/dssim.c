@@ -569,18 +569,13 @@ dssim_image *dssim_create_image_float_callback(dssim_attr *attr, const int num_c
         int chan_width = subsample_chroma && is_chroma ? width/2 : width;
         int chan_height = subsample_chroma && is_chroma ? height/2 : height;
         int s = 0;
-        for(; s < attr->num_scales; s++) {
+        for(; s < attr->num_scales && chan_width >= 8 && chan_height >= 8; s++, chan_width /= 2, chan_height /= 2) {
             img->chan[ch].scales[s] = (dssim_chan){
                 .width = chan_width,
                 .height = chan_height,
                 .is_chroma = is_chroma,
                 .img = malloc(chan_width * chan_height * sizeof(img->chan[ch].scales[s].img[0])),
             };
-            chan_width /= 2;
-            chan_height /= 2;
-            if (chan_width < 8 || chan_height < 8) {
-                break;
-            }
         }
         img->chan[ch].num_scales = s;
     }
