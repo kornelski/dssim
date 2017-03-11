@@ -74,3 +74,7 @@ Color  | -0.916
 Full   | -0.852
 
 [1]: http://www.ponomarenko.info/tid2013.htm
+
+## License
+
+DSSIM is dual-licensed under [AGPL](LICENSE) or [commercial](https://supportedsource.org/projects/dssim) license.
