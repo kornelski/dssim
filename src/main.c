@@ -97,12 +97,21 @@ static int read_image_jpeg(FILE *file, png24_image *image)
 }
 #endif // #ifdef USE_LIBJPEG
 
+static int is_png(FILE *fh) {
+#if defined(USE_COCOA) || !defined(USE_LIBJPEG)
+    return 1;
+#else
+    int c = fgetc(fh);
+    ungetc(c, fh);
+    return c == 89;
+#endif
+}
+
 static int read_image(const char *filename, png24_image *image)
 {
     int retval=1;
     bool using_stdin = false;
     FILE *fh;
-    unsigned char buffer[8];
 
     if (0 == strcmp("-", filename)) {
         using_stdin = true;
@@ -114,14 +123,8 @@ static int read_image(const char *filename, png24_image *image)
         }
     }
 
-    setvbuf(fh, (char *)buffer, _IOFBF, 8);
-
-    // the first read fills the buffer up, but put char back on after
-    int c = fgetc(fh);
-    ungetc(c, fh);
-
     // the png number is not really precise but I guess the situation where this would falsely pass is almost equal to 0
-    if (png_check_sig(buffer, 8)) {
+    if (is_png(fh)) {
         /*
          Reads image into png24_image struct. Returns non-zero on error
          */
