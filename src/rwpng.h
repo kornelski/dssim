@@ -62,7 +62,7 @@ typedef enum {
 } pngquant_error;
 
 typedef struct rwpng_rgba {
-  unsigned char r,g,b,a;
+    unsigned char r,g,b,a;
 } rwpng_rgba;
 
 struct rwpng_chunk {
@@ -74,13 +74,13 @@ struct rwpng_chunk {
 };
 
 typedef enum {
-  RWPNG_NONE,
-  RWPNG_SRGB, // sRGB chunk
-  RWPNG_ICCP, // used ICC profile
-  RWPNG_ICCP_WARN_GRAY, // ignore and warn about GRAY ICC profile
-  RWPNG_GAMA_CHRM, // used gAMA and cHRM
-  RWPNG_GAMA_ONLY, // used gAMA only (i.e. not sRGB)
-  RWPNG_COCOA, // Colors handled by Cocoa reader
+    RWPNG_NONE,
+    RWPNG_SRGB, // sRGB chunk
+    RWPNG_ICCP, // used ICC profile
+    RWPNG_ICCP_WARN_GRAY, // ignore and warn about GRAY ICC profile
+    RWPNG_GAMA_CHRM, // used gAMA and cHRM
+    RWPNG_GAMA_ONLY, // used gAMA only (i.e. not sRGB)
+    RWPNG_COCOA, // Colors handled by Cocoa reader
 } rwpng_color_transform;
 
 typedef struct {

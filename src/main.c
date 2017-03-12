@@ -47,8 +47,7 @@ static int read_image_jpeg(FILE *file, png24_image *image)
     // decompress
     jpeg_stdio_src(&cinfo,file);
     retval=jpeg_read_header(&cinfo,TRUE);
-    if(retval != 1)
-    {
+    if(retval != 1) {
         return 1;
     }
     jpeg_start_decompress(&cinfo);
@@ -67,8 +66,7 @@ static int read_image_jpeg(FILE *file, png24_image *image)
     // allocate buffer size (always use RGBA)
     unsigned char* buffer = calloc(width*height*bpp,1);
 
-    while(cinfo.output_scanline < height)
-    {
+    while(cinfo.output_scanline < height) {
         unsigned char *buffer_array[1];
         buffer_array[0] = buffer + cinfo.output_scanline*row_stride;
         jpeg_read_scanlines(&cinfo,buffer_array,1);
@@ -123,22 +121,20 @@ static int read_image(const char *filename, png24_image *image)
     ungetc(c, fh);
 
     // the png number is not really precise but I guess the situation where this would falsely pass is almost equal to 0
-    if (png_check_sig(buffer, 8))
-    {
-    /*
-     Reads image into png24_image struct. Returns non-zero on error
-     */
+    if (png_check_sig(buffer, 8)) {
+        /*
+         Reads image into png24_image struct. Returns non-zero on error
+         */
         retval = rwpng_read_image24(fh, image, 0);
     }
 #ifdef USE_LIBJPEG
-    else
-    {
+    else {
         retval=read_image_jpeg(fh,image);
     }
 #endif
     if(!using_stdin) {
         fclose(fh);
-     }
+    }
     return retval;
 }
 
