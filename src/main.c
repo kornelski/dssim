@@ -30,7 +30,6 @@
 extern char *optarg;
 extern int optind, opterr;
 
-
 #ifdef USE_LIBJPEG
 #include <jpeglib.h>
 static int read_image_jpeg(FILE *file, png24_image *image)
@@ -210,6 +209,89 @@ double get_gamma(const png24_image *image) {
     return 0.45455;
 }
 
+int process_images(int num_images,
+			char *const image_list[],
+			char*map_output_file,
+			double* results)
+{
+    const char *file1 = image_list[0];
+    png24_image image1 = {};
+    int retval = read_image(file1, &image1);
+
+    if (retval) {
+        fprintf(stderr, "Can't read %s (%d)\n", file1, retval);
+        return retval;
+    }
+
+    dssim_attr *attr = dssim_create_attr();
+
+    dssim_image *original = dssim_create_image(attr, image1.row_pointers, DSSIM_RGBA, image1.width, image1.height, get_gamma(&image1));
+    free(image1.row_pointers);
+    free(image1.rgba_data);
+
+    // start at 1, skipping the first image in the list
+    for (int i = 1; i < num_images; i++) {
+        const char *file2 = image_list[i];
+
+        png24_image image2 = {};
+        retval = read_image(file2, &image2);
+        if (retval) {
+            fprintf(stderr, "Can't read %s (%d)\n", file2, retval);
+            break;
+        }
+
+        if (image1.width != image2.width || image1.height != image2.height) {
+            fprintf(stderr, "Image %s has different size than %s\n", file2, file1);
+            retval = 4;
+            break;
+        }
+
+        dssim_image *modified = dssim_create_image(attr, image2.row_pointers, DSSIM_RGBA, image2.width, image2.height, get_gamma(&image2));
+        free(image2.row_pointers);
+        free(image2.rgba_data);
+
+        if (!modified) {
+            fprintf(stderr, "Unable to process image %s\n", file2);
+            retval = 4;
+            break;
+        }
+
+        if (map_output_file) {
+            dssim_set_save_ssim_maps(attr, 1, 1);
+        }
+
+        results[i] = dssim_compare(attr, original, modified);
+        dssim_dealloc_image(modified);
+
+        if (map_output_file) {
+            dssim_ssim_map map_meta = dssim_pop_ssim_map(attr, 0, 0);
+            dssim_px_t *map = map_meta.data;
+            dssim_rgba *out = (dssim_rgba*)map;
+            for(int i=0; i < map_meta.width*map_meta.height; i++) {
+                const dssim_px_t max = 1.0 - map[i];
+                const dssim_px_t maxsq = max * max;
+                out[i] = (dssim_rgba) {
+                    .r = to_byte(max * 3.0),
+                    .g = to_byte(maxsq * 6.0),
+                    .b = to_byte(max / ((1.0 - map_meta.dssim) * 4.0)),
+                    .a = 255,
+                };
+            }
+            if (write_image(map_output_file, out, map_meta.width, map_meta.height)) {
+                fprintf(stderr, "Can't write %s\n", map_output_file);
+                free(map);
+                return 1;
+            }
+            free(map);
+        }
+    }
+
+    dssim_dealloc_image(original);
+    dssim_dealloc_attr(attr);
+
+    return retval;
+}
+
 int main(int argc, char *const argv[])
 {
     char *map_output_file = NULL;
@@ -240,83 +322,29 @@ int main(int argc, char *const argv[])
         return 1;
     }
 
-    const char *file1 = argv[optind];
-    png24_image image1 = {};
-    int retval = read_image(file1, &image1);
+    int num_images = argc-1;
+    char* image_list[num_images];
+    double results[num_images];
+    int retval;
 
-    if (retval) {
-        fprintf(stderr, "Can't read %s (%d)\n", file1, retval);
-        return retval;
+    // Build up a list of images so we don't have to pass along argc/argv
+    // Also, initialize results
+    results[0] = 0.0;
+    for(int image_index=1; image_index < argc; image_index++) {
+    	image_list[image_index-1] = argv[image_index];
+
+	results[image_index] = 0.0;
     }
 
-    dssim_attr *attr = dssim_create_attr();
-
-    dssim_image *original = dssim_create_image(attr, image1.row_pointers, DSSIM_RGBA, image1.width, image1.height, get_gamma(&image1));
-    free(image1.row_pointers);
-    free(image1.rgba_data);
-
-
-    for (int arg = optind+1; arg < argc; arg++) {
-        const char *file2 = argv[arg];
-
-        png24_image image2 = {};
-        retval = read_image(file2, &image2);
-        if (retval) {
-            fprintf(stderr, "Can't read %s (%d)\n", file2, retval);
-            break;
-        }
-
-        if (image1.width != image2.width || image1.height != image2.height) {
-            fprintf(stderr, "Image %s has different size than %s\n", file2, file1);
-            retval = 4;
-            break;
-        }
-
-        dssim_image *modified = dssim_create_image(attr, image2.row_pointers, DSSIM_RGBA, image2.width, image2.height, get_gamma(&image2));
-        free(image2.row_pointers);
-        free(image2.rgba_data);
-
-        if (!modified) {
-            fprintf(stderr, "Unable to process image %s\n", file2);
-            retval = 4;
-            break;
-        }
-
-        if (map_output_file) {
-            dssim_set_save_ssim_maps(attr, 1, 1);
-        }
-
-        double dssim = dssim_compare(attr, original, modified);
-        dssim_dealloc_image(modified);
-
-        printf("%.8f\t%s\n", dssim, file2);
-
-
-        if (map_output_file) {
-            dssim_ssim_map map_meta = dssim_pop_ssim_map(attr, 0, 0);
-            dssim_px_t *map = map_meta.data;
-            dssim_rgba *out = (dssim_rgba*)map;
-            for(int i=0; i < map_meta.width*map_meta.height; i++) {
-                const dssim_px_t max = 1.0 - map[i];
-                const dssim_px_t maxsq = max * max;
-                out[i] = (dssim_rgba) {
-                    .r = to_byte(max * 3.0),
-                    .g = to_byte(maxsq * 6.0),
-                    .b = to_byte(max / ((1.0 - map_meta.dssim) * 4.0)),
-                    .a = 255,
-                };
-            }
-            if (write_image(map_output_file, out, map_meta.width, map_meta.height)) {
-                fprintf(stderr, "Can't write %s\n", map_output_file);
-                free(map);
-                return 1;
-            }
-            free(map);
+    if( (retval = process_images(num_images,
+    				image_list,
+				map_output_file,
+                                results) ) == 0) {
+        // Skipping first image here as well, so start at index 1
+        for (int results_index=1; results_index < num_images; results_index++) {
+            printf("%.8f\t%s\n", results[results_index], image_list[results_index]);
         }
     }
-
-    dssim_dealloc_image(original);
-    dssim_dealloc_attr(attr);
 
     return retval;
 }
