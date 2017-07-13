@@ -55,6 +55,7 @@ impl Dssim {
         }
     }
 
+    #[must_use]
     pub fn pop_ssim_map(&mut self, scale_index: u8, channel_index: u8) -> Option<SsimMap> {
         let m = unsafe {
             ffi::dssim_pop_ssim_map(self.handle, scale_index as c_uint, channel_index as c_uint)
@@ -72,10 +73,12 @@ impl Dssim {
         });
     }
 
-    pub fn create_image<'img, T>(&mut self, bitmap: &'img [T], color_type: ColorType, width: usize, stride: usize, gamma: f64) -> Option<DssimImage<'img>> {
+    pub fn new_image<'img, T>(&mut self, bitmap: &'img [T], color_type: ColorType, width: usize, stride: usize, gamma: f64) -> Result<DssimImage<'img>, String> {
         let pixel_size = std::mem::size_of::<T>();
         let min_stride = width * pixel_size;
-        assert!(stride >= min_stride, "width {}, pixel {}, stride {}", width, pixel_size, stride);
+        if stride < min_stride {
+            return Err(format!("width {} * pixel {} < stride {}", width, pixel_size, stride));
+        }
 
         let bitmap_bytes: &'img [u8] = unsafe {
             std::slice::from_raw_parts(std::mem::transmute(bitmap.as_ptr()), pixel_size*bitmap.len())
@@ -92,15 +95,16 @@ impl Dssim {
         };
 
         if handle.is_null() {
-            None
+            Err("Unable to create image".to_owned())
         } else {
-            Some(DssimImage::<'img> {
+            Ok(DssimImage::<'img> {
                 handle: handle,
                 _mem_marker: std::marker::PhantomData,
             })
         }
     }
 
+    #[must_use]
     pub fn compare(&mut self, original: &DssimImage, modified: DssimImage) -> Val {
         assert!(!self.handle.is_null());
         assert!(!original.handle.is_null());
@@ -147,15 +151,15 @@ fn test() {
     let file1 = lodepng::decode32_file("test1.png").unwrap();
     let file2 = lodepng::decode32_file("test2.png").unwrap();
 
-    let img1 = d.create_image(file1.buffer.as_ref(), DSSIM_RGBA, file1.width, file1.width*4, 0.45455).unwrap();
-    let img2 = d.create_image(file2.buffer.as_ref(), DSSIM_RGBA, file2.width, file2.width*4, 0.45455).unwrap();
+    let img1 = d.new_image(file1.buffer.as_ref(), DSSIM_RGBA, file1.width, file1.width*4, 0.45455).unwrap();
+    let img2 = d.new_image(file2.buffer.as_ref(), DSSIM_RGBA, file2.width, file2.width*4, 0.45455).unwrap();
 
     let res = d.compare(&img1, img2);
     assert!((0.015899 - res).abs() < 0.0001, "res is {}", res);
     assert!(res < 0.0160);
     assert!(0.0158 < res);
 
-    let img1b = d.create_image(file1.buffer.as_ref(), DSSIM_RGBA, file1.width, file1.width*4, 0.45455).unwrap();
+    let img1b = d.new_image(file1.buffer.as_ref(), DSSIM_RGBA, file1.width, file1.width*4, 0.45455).unwrap();
     let res = d.compare(&img1, img1b);
 
     assert!(d.pop_ssim_map(1, 1).is_none());
