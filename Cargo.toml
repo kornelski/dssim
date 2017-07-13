@@ -1,21 +1,22 @@
 [package]
-
 name = "dssim"
-version = "0.1.2"
 description = "API for the DSSIM tool. AGPL-licensed. Measures structural similarity between images using a multi-scale variant of the SSIM algorithm."
-documentation = "https://github.com/pornel/dssim"
 repository = "https://github.com/pornel/dssim.git"
+documentation = "https://docs.rs/dssim"
+include = ["src/*.rs", "src/*.c", "src/*.h", "Makefile", "LICENSE", "README.md", "Cargo.toml"]
+homepage = "https://github.com/pornel/dssim"
 keywords = ["ssim", "image", "comparison"]
 license = "AGPL-3.0"
 authors = ["Kornel <pornel@pornel.net>"]
 build = "src/build.rs"
+version = "0.1.3"
 
 [lib]
 name = "dssim"
 
 [dependencies]
-c_vec = "= 1.0.12"
-libc = "*"
+c_vec = "1.2.1"
+libc = "0.2"
 
 [dev-dependencies]
-lodepng = "*"
+lodepng = "1.1.1"
