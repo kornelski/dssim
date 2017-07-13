@@ -1,35 +1,9 @@
-use std::process::Command;
-use std::env::var as getenv;
-use std::path::Path;
+extern crate gcc;
 
 fn main() {
-    let destdir = getenv("OUT_DIR").unwrap();
+    gcc::compile_library("libdssim.a", &["src/dssim.c"]);
 
-    let mut cmd = Command::new("make");
-    cmd.current_dir(&Path::new(&getenv("CARGO_MANIFEST_DIR").unwrap()));
-
-    cmd.arg(format!("DESTDIR={}/", destdir));
-
-    if let Some(j) = getenv("NUM_JOBS").ok() {
-        cmd.arg(format!("-j{}", j));
+    if cfg!(target_os = "macos") {
+        println!("cargo:rustc-link-lib=framework=Accelerate");
     }
-
-    cmd.arg(format!("{}/libdssim.a", destdir));
-
-    if !cmd.status().unwrap().success() {
-        panic!("Script failed");
-    }
-
-    println!("cargo:rustc-flags=-L {} {} -l static=dssim", destdir, getframework());
-    println!("cargo:root={}", destdir);
-}
-
-#[cfg(target_os = "macos")]
-fn getframework() -> &'static str {
-    "-l framework=Accelerate"
-}
-
-#[cfg(not(target_os = "macos"))]
-fn getframework() -> &'static str {
-    ""
 }
