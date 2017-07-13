@@ -2,6 +2,7 @@ extern crate libc;
 
 pub use ffi::dssim_ssim_map;
 pub use ffi::dssim_colortype::*;
+pub use ffi::DSSIM_SRGB_GAMMA;
 
 use libc::{c_int, c_uint};
 mod ffi;
@@ -75,7 +76,7 @@ impl Dssim {
 
 
         let handle = unsafe {
-            ffi::dssim_create_image(self.handle, row_pointers.as_ptr(), color_type, width as c_int, row_pointers.len() as c_int, gamma)
+            ffi::dssim_create_image(self.handle, row_pointers.as_ptr(), color_type, width as c_int, row_pointers.len() as c_int, if gamma > 0. {gamma} else {DSSIM_SRGB_GAMMA})
         };
 
         if handle.is_null() {
