@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 #![allow(non_camel_case_types)]
 
-extern crate libc;
-use ::libc::{c_int, c_uint, c_void};
+use std::os::raw::{c_int, c_uint, c_void};
 
 pub enum dssim_image { }
 pub enum dssim_attr { }
@@ -35,7 +34,7 @@ pub enum dssim_colortype {
 pub struct dssim_ssim_map {
     pub width: c_int,
     pub height: c_int,
-    pub ssim: f64,
+    pub dssim: f64,
     pub data: *mut dssim_px_t,
 }
 

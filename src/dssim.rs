@@ -4,7 +4,7 @@ pub use ffi::dssim_ssim_map;
 pub use ffi::dssim_colortype::*;
 pub use ffi::DSSIM_SRGB_GAMMA;
 
-use libc::{c_int, c_uint};
+use std::os::raw::{c_int, c_uint};
 mod ffi;
 mod val;
 
@@ -23,7 +23,12 @@ pub struct DssimImage<'mem_src> {
 
 pub type ColorType = ffi::dssim_colortype;
 
-pub type SsimMap = ffi::dssim_ssim_map;
+pub struct SsimMap<'a> {
+    pub width: usize,
+    pub height: usize,
+    pub dssim: f64,
+    pub ssim_map: &'a [ffi::dssim_px_t],
+}
 
 pub fn new() -> Dssim {
     Dssim::new()
@@ -54,10 +59,17 @@ impl Dssim {
         let m = unsafe {
             ffi::dssim_pop_ssim_map(self.handle, scale_index as c_uint, channel_index as c_uint)
         };
-        if 0 == m.width {
+        if m.width <= 0 || m.height <= 0 || m.data.is_null() {
             return None;
         }
-        return Some(m);
+        return Some(SsimMap {
+            width: m.width as usize,
+            height: m.height as usize,
+            dssim: m.dssim,
+            ssim_map: unsafe {
+                std::slice::from_raw_parts(m.data, m.width as usize * m.height as usize)
+            },
+        });
     }
 
     pub fn create_image<'img, T>(&mut self, bitmap: &'img [T], color_type: ColorType, width: usize, stride: usize, gamma: f64) -> Option<DssimImage<'img>> {
@@ -108,6 +120,14 @@ impl Drop for Dssim {
     }
 }
 
+impl<'a> Drop for SsimMap<'a> {
+    fn drop(&mut self) {
+        unsafe {
+            libc::free(self.ssim_map.as_ptr() as *mut _);
+        }
+    }
+}
+
 impl<'a> Drop for DssimImage<'a> {
     fn drop(&mut self) {
         assert!(!self.handle.is_null());
@@ -123,6 +143,7 @@ extern crate lodepng;
 #[test]
 fn test() {
     let mut d = new();
+    d.set_save_ssim_maps(1, 1);
     let file1 = lodepng::decode32_file("test1.png").unwrap();
     let file2 = lodepng::decode32_file("test2.png").unwrap();
 
@@ -136,6 +157,11 @@ fn test() {
 
     let img1b = d.create_image(file1.buffer.as_ref(), DSSIM_RGBA, file1.width, file1.width*4, 0.45455).unwrap();
     let res = d.compare(&img1, img1b);
+
+    assert!(d.pop_ssim_map(1, 1).is_none());
+    let map = d.pop_ssim_map(0, 0).unwrap();
+    assert_eq!(file1.width, map.width);
+    assert_eq!(file1.height, map.height);
 
     assert!(0.000000000000001 > res);
     assert!(res < 0.000000000000001);
