@@ -6,6 +6,7 @@ use ::std::ops::Mul;
 use ::std::ops::Div;
 
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
+/// Float result of DSSIM
 pub struct Dssim(f64);
 
 impl Dssim {

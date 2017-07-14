@@ -1,6 +1,15 @@
+//! ```rust,ignore
+//! let mut d = dssim::new();
+//!
+//! let img1 = d.new_image(file1.buffer.as_ref(), dssim::DSSIM_RGBA, file1.width, file1.width*4, 0.45455)?;
+//! let img2 = d.new_image(file2.buffer.as_ref(), dssim::DSSIM_RGBA, file2.width, file2.width*4, 0.45455)?;
+//!
+//! let res = d.compare(&img1, img2);
+//! assert!(res < 0.0160);
+//! ```
+
 extern crate libc;
 
-pub use ffi::dssim_ssim_map;
 pub use ffi::dssim_colortype::*;
 pub use ffi::DSSIM_SRGB_GAMMA;
 
@@ -11,18 +20,22 @@ mod val;
 pub use val::Dssim as Val;
 
 #[allow(missing_copy_implementations)]
+/// Object holding settings
 pub struct Dssim {
     handle: *mut ffi::dssim_attr,
 }
 
 #[allow(missing_copy_implementations)]
+/// Object holding pixels
 pub struct DssimImage<'mem_src> {
     handle: *mut ffi::dssim_image,
     _mem_marker: std::marker::PhantomData<&'mem_src ffi::dssim_image>,
 }
 
+/// `DSSIM_RGBA` or `DSSIM_RGB` or `DSSIM_GRAY`
 pub type ColorType = ffi::dssim_colortype;
 
+/// Per-pixel results
 pub struct SsimMap<'a> {
     pub width: usize,
     pub height: usize,
@@ -43,18 +56,21 @@ impl Dssim {
         }
     }
 
+    /// Weights of how important each resolution is
     pub fn set_scales(&mut self, scales: &[f64]) {
         unsafe {
             ffi::dssim_set_scales(self.handle, scales.len() as c_int, scales.as_ptr());
         }
     }
 
+    /// Enable saving of per-pixel results for each channel/res
     pub fn set_save_ssim_maps(&mut self, num_scales: u8, num_channels: u8) {
         unsafe {
             ffi::dssim_set_save_ssim_maps(self.handle, num_scales as c_uint, num_channels as c_uint);
         }
     }
 
+    /// Read result of specific res/channel
     #[must_use]
     pub fn pop_ssim_map(&mut self, scale_index: u8, channel_index: u8) -> Option<SsimMap> {
         let m = unsafe {
@@ -73,6 +89,11 @@ impl Dssim {
         });
     }
 
+    /// Describe pixel array
+    ///
+    /// Stride is in bytes
+    ///
+    /// 0 gamma means sRGB
     pub fn new_image<'img, T>(&mut self, bitmap: &'img [T], color_type: ColorType, width: usize, stride: usize, gamma: f64) -> Result<DssimImage<'img>, String> {
         let pixel_size = std::mem::size_of::<T>();
         let min_stride = width * pixel_size;

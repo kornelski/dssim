@@ -7,16 +7,8 @@ pub enum dssim_image { }
 pub enum dssim_attr { }
 pub type dssim_px_t = f32;
 
+/// Magic constant to use sRGB gamma curve
 pub const DSSIM_SRGB_GAMMA:f64 = -47571492.0;
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct dssim_rgba {
-    pub r: u8,
-    pub g: u8,
-    pub b: u8,
-    pub a: u8,
-}
 
 #[repr(C)]
 #[derive(Copy, Clone)]
