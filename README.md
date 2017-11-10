@@ -70,4 +70,4 @@ Full   | -0.851
 
 ## License
 
-DSSIM is dual-licensed under [AGPL](LICENSE) or [commercial](https://supportedsource.org/projects/dssim) license.
+DSSIM is dual-licensed under [AGPL](LICENSE) or [commercial](https://supso.org/projects/dssim) license.
