@@ -115,8 +115,8 @@ impl Channable<LAB, f32> for [DssimChan<f32>] {
             o.img1_img2_blur(m, tmp32)
         }).collect();
 
-        return multizip((blurred[0].iter(), blurred[1].iter(), blurred[2].iter())).map(|(l,a,b)| {
-            LAB{l:*l,a:*a,b:*b}
+        return multizip((blurred[0].iter().cloned(), blurred[1].iter().cloned(), blurred[2].iter().cloned())).map(|(l,a,b)| {
+            LAB {l,a,b}
         }).collect();
     }
 }
@@ -273,9 +273,12 @@ impl Dssim {
         assert_eq!(l.width, a.width);
         assert_eq!(b.width, a.width);
         DssimChan {
-            img_sq_blur: multizip((l.img_sq_blur.iter(), a.img_sq_blur.iter(), b.img_sq_blur.iter())).map(|(l,a,b)|LAB{l:*l,a:*a,b:*b}).collect(),
-            img: if l.img.is_some() {Some(multizip((l.img.as_ref().unwrap().iter(), a.img.as_ref().unwrap().iter(), b.img.as_ref().unwrap().iter())).map(|(l,a,b)|LAB{l:*l,a:*a,b:*b}).collect())} else {None},
-            mu: multizip((l.mu.iter(), a.mu.iter(), b.mu.iter())).map(|(l,a,b)|LAB{l:*l,a:*a,b:*b}).collect(),
+            img_sq_blur: multizip((l.img_sq_blur.iter().cloned(), a.img_sq_blur.iter().cloned(), b.img_sq_blur.iter().cloned()))
+                .map(|(l,a,b)|LAB {l,a,b}).collect(),
+            img: if let (&Some(ref l),&Some(ref a),&Some(ref b)) = (&l.img, &a.img, &b.img) {
+                Some(multizip((l.iter().cloned(), a.iter().cloned(), b.iter().cloned())).map(|(l,a,b)|LAB {l,a,b}).collect())
+            } else {None},
+            mu: multizip((l.mu.iter().cloned(), a.mu.iter().cloned(), b.mu.iter().cloned())).map(|(l,a,b)|LAB {l,a,b}).collect(),
             is_chroma: false,
             width: l.width,
             height: l.height,
