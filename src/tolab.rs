@@ -8,6 +8,7 @@ use image::RGBAPLU;
 use image::RGBLU;
 use image::ToRGB;
 use imgref::*;
+use rayon::prelude::*;
 
 const D65x: f64 = 0.9505;
 const D65y: f64 = 1.0;
@@ -53,7 +54,7 @@ impl ToLABBitmap for ImgVec<f32> {
     fn to_lab(&self) -> Vec<GBitmap> {
         vec![
             Img::new(
-                self.buf.iter().cloned().map(|fy| {
+                self.buf.par_iter().cloned().map(|fy| {
                     let epsilon: f32 = 216. / 24389.;
                     // http://www.brucelindbloom.com/LContinuity.html
                     let Y = if fy > epsilon { fy.powf(1. / 3.) - 16. / 116. } else { ((24389. / 27.) / 116.) * fy };

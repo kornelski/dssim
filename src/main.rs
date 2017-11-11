@@ -22,12 +22,14 @@ extern crate lodepng;
 extern crate dssim;
 extern crate imgref;
 extern crate rgb;
+extern crate rayon;
 
 use std::env;
 use std::path::{Path, PathBuf};
 use getopts::Options;
 use dssim::*;
 use imgref::*;
+use rayon::prelude::*;
 
 fn usage(argv0: &str) {
     eprintln!("\
@@ -72,7 +74,7 @@ fn main() {
 
     let map_output_file_tmp = matches.opt_str("o");
     let map_output_file = map_output_file_tmp.as_ref();
-    let mut files: Vec<PathBuf> = matches.free.iter().map(|p| p.into()).collect();
+    let files: Vec<PathBuf> = matches.free.iter().map(|p| p.into()).collect();
 
     if files.len() < 2 {
         eprintln!("You must specify at least 2 files to compare\n");
@@ -80,37 +82,31 @@ fn main() {
         std::process::exit(1);
     }
 
-    let file1 = files.remove(0);
-
-    let orig_rgba = match load(&file1) {
-        Ok(image) => image,
-        Err(err) => {
-            eprintln!("Can't read {}: {}", file1.display(), err);
-            std::process::exit(1);
-        },
-    };
-
     let mut attr = dssim::Dssim::new();
-    let original = attr.create_image(&orig_rgba).expect("orig image creation");
 
-    for file2 in files {
+    let files = files.par_iter().map(|file| -> Result<_, String> {
+        let bitmap = load(&file).map_err(|e| format!("Can't load {}, because: {}", file.display(), e))?;
+        let image = attr.create_image(&bitmap).ok_or_else(|| format!("Can't use {}, internal error", file.display()))?;
+        Ok((file, bitmap, image))
+    }).collect::<Result<Vec<_>,_>>();
 
-        let mod_rgba = match load(&file2) {
-            Ok(image) => image,
+    let mut files = match files {
+        Ok(f) => f,
             Err(err) => {
-                eprintln!("Can't read {}: {}", file2.display(), err);
+            eprintln!("{}", err);
                 std::process::exit(1);
             },
         };
 
+    let (file1, orig_rgba, original) = files.remove(0);
+
+    for (file2, mod_rgba, modified) in files {
         if orig_rgba.width() != mod_rgba.width() || orig_rgba.height() != mod_rgba.height() {
             eprintln!("Image {} has a different size ({}x{}) than {} ({}x{})\n",
                 file2.display(), mod_rgba.width(), mod_rgba.height(),
                 file1.display(), orig_rgba.width(), orig_rgba.height());
             std::process::exit(1);
         }
-
-        let modified = attr.create_image(&mod_rgba).expect("mod image creation");
 
         if map_output_file.is_some() {
             attr.set_save_ssim_maps(8);
@@ -121,7 +117,7 @@ fn main() {
         println!("{:.6}\t{}", dssim, file2.display());
 
         if map_output_file.is_some() {
-            for (n, map_meta) in ssim_maps.iter().enumerate() {
+            ssim_maps.par_iter().enumerate().for_each(|(n, map_meta)| {
                 let avgssim = map_meta.ssim as f32;
                 let out: Vec<_> = map_meta.data().expect("map should have data").iter().map(|ssim|{
                     let max = 1_f32 - ssim;
@@ -138,7 +134,7 @@ fn main() {
                     eprintln!("Can't write {}: {:?}", map_output_file.unwrap(), write_res);
                     std::process::exit(1);
                 }
-            }
+            });
         }
     }
 }

@@ -10,7 +10,7 @@ license = "AGPL-3.0"
 name = "dssim"
 readme = "README.md"
 repository = "https://github.com/pornel/dssim.git"
-version = "2.8.0"
+version = "2.9.0"
 
 [[bin]]
 doctest = false
@@ -22,6 +22,7 @@ getopts = "0.2.15"
 imgref = "1.3.0"
 itertools = "0.7.2"
 lodepng = "2.0.4"
+rayon = "0.9.0"
 rgb = "0.8.1"
 unzip3 = "0.1.0"
 

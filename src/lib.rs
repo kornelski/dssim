@@ -1,5 +1,6 @@
 extern crate rgb;
 extern crate imgref;
+extern crate rayon;
 mod dssim;
 mod image;
 mod blur;
