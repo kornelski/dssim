@@ -119,7 +119,7 @@ fn main() {
         if map_output_file.is_some() {
             ssim_maps.par_iter().enumerate().for_each(|(n, map_meta)| {
                 let avgssim = map_meta.ssim as f32;
-                let out: Vec<_> = map_meta.data().expect("map should have data").iter().map(|ssim|{
+                let out: Vec<_> = map_meta.map.pixels().map(|ssim|{
                     let max = 1_f32 - ssim;
                     let maxsq = max * max;
                     rgb::RGBA8 {
@@ -129,7 +129,7 @@ fn main() {
                         a: 255,
                     }
                 }).collect();
-                let write_res = lodepng::encode32_file(format!("{}-{}.png", map_output_file.unwrap(), n), &out, map_meta.width as usize, map_meta.height as usize);
+                let write_res = lodepng::encode32_file(format!("{}-{}.png", map_output_file.unwrap(), n), &out, map_meta.map.width(), map_meta.map.height());
                 if write_res.is_err() {
                     eprintln!("Can't write {}: {:?}", map_output_file.unwrap(), write_res);
                     std::process::exit(1);

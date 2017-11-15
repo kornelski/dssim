@@ -211,12 +211,13 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send 
         // crop odd pixels
         let bitmap = &self.buf[0..width * half_height * 2];
 
-        let scaled:Vec<_> = bitmap.chunks(width * 2).flat_map(|pair|{
+        let mut scaled = Vec::with_capacity(half_width * half_height);
+        scaled.extend(bitmap.chunks(width * 2).flat_map(|pair|{
             let (top, bot) = pair.split_at(half_width * 2);
             let bot = &bot[0..half_width * 2];
 
             return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| Average4::average4(a[0], a[1], b[0], b[1]))
-        }).collect();
+        }));
 
         assert_eq!(half_width * half_height, scaled.len());
         return Some(Img::new(scaled, half_width, half_height));
@@ -224,79 +225,69 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send 
 }
 
 #[allow(dead_code)]
-pub(crate) fn worst(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
-    let half_height = height / 2;
-    let half_width = width / 2;
+pub(crate) fn worst(input: ImgRef<f32>) -> ImgVec<f32> {
+    let half_height = input.height() / 2;
+    let half_width = input.width() / 2;
 
     if half_height < 4 || half_width < 4 {
-        return Img::new(input.iter().cloned().collect(), width, height);
+        return input.new_buf(input.buf.to_owned());
     }
 
-    // crop odd pixels
-    let bitmap = &input[0..width * half_height * 2];
-
-    let scaled:Vec<_> = bitmap.chunks(width * 2).flat_map(|pair|{
+    let mut scaled = Vec::with_capacity(half_width * half_height);
+    scaled.extend(input.buf.chunks(input.stride() * 2).take(half_height).flat_map(|pair|{
         let (top, bot) = pair.split_at(half_width * 2);
         let bot = &bot[0..half_width * 2];
 
         return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| {
             a[0].min(a[1]).min(b[0].min(b[1]))
         });
-    }).collect();
+    }));
 
     assert_eq!(half_width * half_height, scaled.len());
     Img::new(scaled, half_width, half_height)
 }
 
 #[allow(dead_code)]
-pub(crate) fn avgworst(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
-    let half_height = height / 2;
-    let half_width = width / 2;
+pub(crate) fn avgworst(input: ImgRef<f32>) -> ImgVec<f32> {
+    let half_height = input.height() / 2;
+    let half_width = input.width() / 2;
 
     if half_height < 4 || half_width < 4 {
-        return Img::new(input.iter().cloned().collect(), width, height);
+        return input.new_buf(input.buf.to_owned());
     }
 
-    // crop odd pixels
-    let bitmap = &input[0..width * half_height * 2];
-
-    let scaled:Vec<_> = bitmap.chunks(width * 2).flat_map(|pair|{
+    let mut scaled = Vec::with_capacity(half_width * half_height);
+    scaled.extend(input.buf.chunks(input.stride() * 2).take(half_height).flat_map(|pair|{
         let (top, bot) = pair.split_at(half_width * 2);
         let bot = &bot[0..half_width * 2];
 
         return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| {
             (a[0].min(a[1]).min(b[0].min(b[1])) + ((a[0] + a[1] + b[0] + b[1]) * 0.25))*0.5
         });
-    }).collect();
+    }));
 
     assert_eq!(half_width * half_height, scaled.len());
     Img::new(scaled, half_width, half_height)
 }
 
 #[allow(dead_code)]
-pub(crate) fn avg(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
-    let half_height = height / 2;
-    let half_width = width / 2;
+pub(crate) fn avg(input: ImgRef<f32>) -> ImgVec<f32> {
+    let half_height = input.height() / 2;
+    let half_width = input.width() / 2;
 
     if half_height < 4 || half_width < 4 {
-        return Img::new(
-            input.iter().cloned().collect(),
-            width,
-            height,
-        );
+        return input.new_buf(input.buf.to_owned());
     }
 
-    // crop odd pixels
-    let bitmap = &input[0..width * half_height * 2];
-
-    let scaled:Vec<_> = bitmap.chunks(width * 2).flat_map(|pair|{
+    let mut scaled = Vec::with_capacity(half_width * half_height);
+    scaled.extend(input.buf.chunks(input.stride() * 2).take(half_height).flat_map(|pair|{
         let (top, bot) = pair.split_at(half_width * 2);
         let bot = &bot[0..half_width * 2];
 
         return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| {
             (a[0] + a[1] + b[0] + b[1]) * 0.25
         });
-    }).collect();
+    }));
 
     assert_eq!(half_width * half_height, scaled.len());
     Img::new(scaled, half_width, half_height)

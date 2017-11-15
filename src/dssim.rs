@@ -20,10 +20,12 @@
  */
 
 extern crate itertools;
+extern crate imgref;
 
 use self::itertools::multizip;
 use blur;
 use image::*;
+use imgref::*;
 use rayon;
 use rayon::prelude::*;
 use std;
@@ -64,11 +66,10 @@ const DEFAULT_WEIGHTS: [f64; 5] = [0.0448, 0.2856, 0.3001, 0.2363, 0.1333];
 
 /// Detailed comparison result
 pub struct SsimMap {
-    pub width: usize,
-    pub height: usize,
+    /// SSIM scores
+    pub map: ImgVec<f32>,
     /// Average SSIM (not DSSIM)
     pub ssim: f64,
-    pub data: Vec<f32>,
 }
 
 /// Create new context for a comparison
@@ -145,7 +146,7 @@ impl Dssim {
     /// Create new context for comparisons
     pub fn new() -> Dssim {
         Dssim {
-            scale_weights: DEFAULT_WEIGHTS.iter().cloned().take(4).collect(),
+            scale_weights: DEFAULT_WEIGHTS[0..4].to_owned(),
             save_maps_scales: 0,
         }
     }
@@ -243,7 +244,7 @@ impl Dssim {
             let mut tmp = Vec::with_capacity(scale_width * scale_height);
             unsafe { tmp.set_len(scale_width * scale_height) };
 
-            let mut ssim_map = match original_image_scale.chan.len() {
+            let ssim_map = match original_image_scale.chan.len() {
                 3 => {
                     let (original_lab, (img1_img2_blur, modified_lab)) = rayon::join(
                     || Self::lab_chan(&original_image_scale),
@@ -261,25 +262,22 @@ impl Dssim {
                 _ => panic!(),
             };
 
-            let half = avgworst(&ssim_map.data[..], ssim_map.width, ssim_map.height);
-            let half = avg(&half.buf[..], half.width(), half.height());
-            let half = worst(&half.buf[..], half.width(), half.height());
+            let half = avgworst(ssim_map.as_ref());
+            let half = avg(half.as_ref());
+            let half = worst(half.as_ref());
 
             let sum = half.buf.iter().fold(0., |sum, i| sum + *i as f64);
             let score = sum / (half.buf.len() as f64);
 
-            ssim_map.width = half.width();
-            ssim_map.height = half.height();
-            ssim_map.data = half.buf;
-            ssim_map.ssim = score;
-
-            (score,
-            weight,
-            if self.save_maps_scales as usize > n {
-               Some(ssim_map)
+            let map = if self.save_maps_scales as usize > n {
+                Some(SsimMap {
+                    map: ssim_map,
+                    ssim: score,
+                })
             } else {
                 None
-            })
+            };
+            (score, weight, map)
         }).collect();
 
         let mut ssim_sum = 0.0;
@@ -315,7 +313,7 @@ impl Dssim {
         }
     }
 
-    fn compare_channel<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> SsimMap
+    fn compare_channel<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
         where L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
               f32: std::convert::From<L>
     {
@@ -331,9 +329,9 @@ impl Dssim {
         let mut map_out = Vec::with_capacity(width * height);
         unsafe { map_out.set_len(width * height) };
 
-        let mu_iter = original.mu.par_iter().cloned().zip(modified.mu.par_iter().cloned());
-        let sq_iter = original.img_sq_blur.par_iter().cloned().zip(modified.img_sq_blur.par_iter().cloned());
-        img1_img2_blur.par_iter().cloned().zip(mu_iter).zip(sq_iter).zip(map_out.par_iter_mut())
+        let mu_iter = original.mu.par_iter().cloned().zip_eq(modified.mu.par_iter().cloned());
+        let sq_iter = original.img_sq_blur.par_iter().cloned().zip_eq(modified.img_sq_blur.par_iter().cloned());
+        img1_img2_blur.par_iter().cloned().zip_eq(mu_iter).zip_eq(sq_iter).zip_eq(map_out.par_iter_mut())
         .for_each(|(((img1_img2_blur, (mu1, mu2)), (img1_sq_blur, img2_sq_blur)), map_out)| {
             let mu1mu1 = mu1 * mu1;
             let mu1mu2 = mu1 * mu2;
@@ -351,12 +349,7 @@ impl Dssim {
             *map_out = ssim;
         });
 
-        return SsimMap {
-            width: width,
-            height: height,
-            ssim: -1.,
-            data: map_out,
-        };
+        return ImgVec::new(map_out, width, height);
     }
 }
 
@@ -364,25 +357,6 @@ fn to_dssim(ssim: f64) -> f64 {
     debug_assert!(ssim > 0.0);
     return 1.0 / ssim.min(1.0) - 1.0;
 }
-
-impl SsimMap {
-    pub fn new() -> SsimMap {
-        SsimMap {
-            width: 0,
-            height: 0,
-            data: Vec::new(),
-            ssim: -1.,
-        }
-    }
-
-    pub fn data(&self) -> Option<&[f32]> {
-        if self.width == 0 {
-            return None;
-        }
-        return Some(&self.data[..]);
-    }
-}
-
 
 #[test]
 fn png_compare() {
