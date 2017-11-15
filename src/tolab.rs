@@ -15,8 +15,7 @@ const D65y: f64 = 1.0;
 const D65z: f64 = 1.089;
 
 pub type GBitmap = ImgVec<f32>;
-
-pub trait ToLAB {
+pub(crate) trait ToLAB {
     fn to_lab(&self) -> (f32, f32, f32);
 }
 
@@ -40,6 +39,9 @@ impl ToLAB for RGBLU {
     }
 }
 
+/// Convert image to L\*a\*b\* planar
+///
+/// It should return 1 (gray) or 3 (color) planes.
 pub trait ToLABBitmap {
     fn to_lab(&self) -> Vec<GBitmap>;
 }
@@ -50,7 +52,7 @@ impl ToLABBitmap for ImgVec<RGBAPLU> {
     }
 }
 
-impl ToLABBitmap for ImgVec<f32> {
+impl ToLABBitmap for GBitmap {
     fn to_lab(&self) -> Vec<GBitmap> {
         vec![
             Img::new(

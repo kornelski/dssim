@@ -28,7 +28,7 @@ You can save an image visualising the difference between the files:
 
     dssim -o difference.png file.png file-modified.png
 
-The `dssim.c` file is also usable as a C library.
+It's also usable [as a library](https://docs.rs/dssim).
 
 ### Interpreting the values
 

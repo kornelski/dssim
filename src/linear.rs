@@ -2,11 +2,18 @@ use super::image::RGBAPLU;
 use rgb::*;
 extern crate lodepng;
 
+/// See `GammaPixel` & `ToRGBAPLU`
 pub trait GammaComponent {
     fn max_value() -> usize;
     fn to_linear(&self, lut: &[f32]) -> f32;
 }
 
+/// Downsampling should be done in linear RGB color space.
+///
+/// Used by `ToRGBAPLU`
+///
+/// This trait provides gamma to linear conversion via lookup table,
+/// and there's implementation for sRGB for common RGB types.
 pub trait GammaPixel {
     type Component: GammaComponent;
     type Output;
@@ -28,10 +35,14 @@ fn to_linear(s: f32) -> f32 {
     }
 }
 
+/// RGBA Premultiplied Linear-light Unit scale
+///
+/// Convenience function `.to_rgbaplu()` to convert RGBA bitmaps to a format useful for DSSIM.
 pub trait ToRGBAPLU {
     fn to_rgbaplu(&self) -> Vec<RGBAPLU>;
 }
 
+/// Grayscale Linear-light Unit scale
 pub trait ToGLU {
     fn to_glu(&self) -> Vec<f32>;
 }

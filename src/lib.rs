@@ -1,3 +1,7 @@
+//! The library interface is awfully abstract, because it strives to efficiently, and very accurately,
+//! support several pixel types. It also allows replacing some parts of the algorithm with different implementations
+//! (if you need higher accuracy or higher speed).
+
 extern crate rgb;
 extern crate imgref;
 extern crate rayon;

@@ -1,12 +1,13 @@
 #![allow(dead_code)]
 
-use ::std::fmt;
-use ::std::cmp::Ordering;
-use ::std::ops::Sub;
-use ::std::ops::Add;
-use ::std::ops::Mul;
-use ::std::ops::Div;
+use std::fmt;
+use std::cmp::Ordering;
+use std::ops::Sub;
+use std::ops::Add;
+use std::ops::Mul;
+use std::ops::Div;
 
+/// Result of comparison as `f64`
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
 pub struct Dssim(f64);
 

@@ -35,7 +35,7 @@ trait Channable<T, I> {
     fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp: &mut [I]) -> Vec<T>;
 }
 
-pub struct DssimChan<T> {
+struct DssimChan<T> {
     pub width: usize,
     pub height: usize,
     pub img: Option<Vec<T>>,
@@ -44,6 +44,7 @@ pub struct DssimChan<T> {
     pub is_chroma: bool,
 }
 
+/// Configuration for the comparison
 pub struct Dssim {
     scale_weights: Vec<f64>,
     save_maps_scales: u8,
@@ -53,6 +54,7 @@ struct DssimChanScale<T> {
     chan: Vec<DssimChan<T>>,
 }
 
+/// Abstract wrapper for images. See `Dssim.create_image()`
 pub struct DssimImage<T> {
     scale: Vec<DssimChanScale<T>>,
 }
@@ -60,13 +62,16 @@ pub struct DssimImage<T> {
 // Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm
 const DEFAULT_WEIGHTS: [f64; 5] = [0.0448, 0.2856, 0.3001, 0.2363, 0.1333];
 
+/// Detailed comparison result
 pub struct SsimMap {
     pub width: usize,
     pub height: usize,
+    /// Average SSIM (not DSSIM)
     pub ssim: f64,
     pub data: Vec<f32>,
 }
 
+/// Create new context for a comparison
 pub fn new() -> Dssim {
     Dssim::new()
 }
@@ -137,6 +142,7 @@ impl Channable<f32, f32> for DssimChan<f32> {
 }
 
 impl Dssim {
+    /// Create new context for comparisons
     pub fn new() -> Dssim {
         Dssim {
             scale_weights: DEFAULT_WEIGHTS.iter().cloned().take(4).collect(),
@@ -144,15 +150,17 @@ impl Dssim {
         }
     }
 
+    /// Set how many scales will be used, and weights of each scale
     pub fn set_scales(&mut self, scales: &[f64]) {
         self.scale_weights = scales.to_vec();
     }
 
+    /// Set how many scales will be kept for saving
     pub fn set_save_ssim_maps(&mut self, num_scales: u8) {
         self.save_maps_scales = num_scales;
     }
 
-    pub fn create_scales<InBitmap, OutBitmap>(&self, src_img: &InBitmap) -> Vec<OutBitmap>
+    fn create_scales<InBitmap, OutBitmap>(&self, src_img: &InBitmap) -> Vec<OutBitmap>
         where
         InBitmap: Downsample<Output=OutBitmap>,
         OutBitmap: Downsample<Output=OutBitmap>,
@@ -176,11 +184,19 @@ impl Dssim {
         return downsampled;
     }
 
+    /// The input image is defined using the `imgref` crate, and the pixel type can be:
+    ///
+    /// * `ImgVec<RGBAPLU>` — RGBA premultiplied alpha, float scaled to 0..1
+    /// * `ImgVec<RGBLU>` — RGBA float scaled to 0..1
+    /// * `ImgVec<f32>` — linear light grayscale, float scaled to 0..1
+    ///
+    /// And there's `ToRGBAPLU` (`.to_rgbaplu()`) helper to convert the input pixels from
+    /// `[RGBA<u8>]`, `[RGBA<u16>]`, `[RGB<u8>]`, or `RGB<u16>`. See `main.rs` for example how it's done.
+    ///
+    /// You can implement `ToLABBitmap` and `Downsample` traits on your own image type.
     pub fn create_image<InBitmap, OutBitmap>(&self, src_img: &InBitmap) -> Option<DssimImage<f32>>
-        where InBitmap: ToLABBitmap + Send + Sync,
-              OutBitmap: ToLABBitmap + Send,
-              InBitmap: Downsample<Output = OutBitmap>,
-              OutBitmap: Downsample<Output = OutBitmap>
+        where InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
+              OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
     {
         let (lab1, mut all_sizes) = rayon::join(|| {
             src_img.to_lab()
@@ -213,6 +229,11 @@ impl Dssim {
         });
     }
 
+    /// Compare original with another image. See `create_image`
+    ///
+    /// The `SsimMap`s are returned only if you've enabled them first.
+    ///
+    /// `Val` is a fancy wrapper for `f64`
     pub fn compare(&mut self, original_image: &DssimImage<f32>, modified_image: DssimImage<f32>) -> (Val, Vec<SsimMap>) {
         let res: Vec<_> = self.scale_weights.par_iter().cloned().zip(
             modified_image.scale.into_par_iter().zip(original_image.scale.par_iter())

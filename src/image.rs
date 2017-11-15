@@ -4,10 +4,12 @@ use std;
 use rgb::*;
 use imgref::*;
 
-/// RGBA, but: premultiplied alpha, linear, f32 unit
+/// RGBA, but: premultiplied alpha, linear, f32 unit scale 0..1
 pub type RGBAPLU = RGBA<f32>;
+/// RGB, but linear, f32 unit scale 0..1
 pub type RGBLU = RGB<f32>;
 
+/// L\*a\*b\*b, but using float units (values are 100× smaller than in usual integer representation)
 #[derive(Debug, Copy, Clone)]
 pub struct LAB {
     pub l: f32,
@@ -82,7 +84,7 @@ impl std::ops::Sub<LAB> for LAB {
 }
 
 impl LAB {
-    pub fn avg(&self) -> f32 {
+    pub(crate) fn avg(&self) -> f32 {
         (self.l + self.a + self.b) / 3.0
     }
 }
@@ -110,38 +112,41 @@ impl std::ops::Div<LAB> for LAB {
     }
 }
 
-pub trait Sum4 {
-    fn sum4(a: Self, b: Self, c: Self, d: Self) -> Self;
+/// Component-wise averaging of pixel values used by `Downsample` to support arbitrary pixel types
+///
+/// Used to naively resample 4 high-res pixels into one low-res pixel
+pub trait Average4 {
+    fn average4(a: Self, b: Self, c: Self, d: Self) -> Self;
 }
 
-impl Sum4 for f32 {
-    fn sum4(a: Self, b: Self, c: Self, d: Self) -> Self {
+impl Average4 for f32 {
+    fn average4(a: Self, b: Self, c: Self, d: Self) -> Self {
         (a + b + c + d) * 0.25
     }
 }
 
-impl Sum4 for RGBAPLU {
-    fn sum4(a: Self, b: Self, c: Self, d: Self) -> Self {
+impl Average4 for RGBAPLU {
+    fn average4(a: Self, b: Self, c: Self, d: Self) -> Self {
         RGBAPLU {
-            r: Sum4::sum4(a.r, b.r, c.r, d.r),
-            g: Sum4::sum4(a.g, b.g, c.g, d.g),
-            b: Sum4::sum4(a.b, b.b, c.b, d.b),
-            a: Sum4::sum4(a.a, b.a, c.a, d.a),
+            r: Average4::average4(a.r, b.r, c.r, d.r),
+            g: Average4::average4(a.g, b.g, c.g, d.g),
+            b: Average4::average4(a.b, b.b, c.b, d.b),
+            a: Average4::average4(a.a, b.a, c.a, d.a),
         }
     }
 }
 
-impl Sum4 for RGBLU {
-    fn sum4(a: Self, b: Self, c: Self, d: Self) -> Self {
+impl Average4 for RGBLU {
+    fn average4(a: Self, b: Self, c: Self, d: Self) -> Self {
         RGBLU {
-            r: Sum4::sum4(a.r, b.r, c.r, d.r),
-            g: Sum4::sum4(a.g, b.g, c.g, d.g),
-            b: Sum4::sum4(a.b, b.b, c.b, d.b),
+            r: Average4::average4(a.r, b.r, c.r, d.r),
+            g: Average4::average4(a.g, b.g, c.g, d.g),
+            b: Average4::average4(a.b, b.b, c.b, d.b),
         }
     }
 }
 
-pub trait ToRGB {
+pub(crate) trait ToRGB {
     fn to_rgb(self, n: usize) -> RGBLU;
 }
 
@@ -171,22 +176,24 @@ impl ToRGB for RGBAPLU {
     }
 }
 
-
-//////////////////////////////
-
+/// You can customize how images are downsampled
+///
+/// Multi-scale DSSIM needs to scale images down. This is it. It's supposed to return the same type of image, but half the size.
+///
+/// There is a default implementation that just averages 4 neighboring pixels.
 pub trait Downsample {
     type Output;
     fn downsample(&self) -> Option<Self::Output>;
 }
 
-impl<T> Downsample for ImgVec<T> where T: Sum4 + Copy {
+impl<T> Downsample for ImgVec<T> where T: Average4 + Copy + Sync + Send {
     type Output = ImgVec<T>;
     fn downsample(&self) -> Option<Self::Output> {
         self.as_ref().downsample()
     }
 }
 
-impl<'a, T> Downsample for ImgRef<'a, T> where T: Sum4 + Copy {
+impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send {
     type Output = ImgVec<T>;
     fn downsample(&self) -> Option<Self::Output> {
         let width = self.width();
@@ -208,7 +215,7 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Sum4 + Copy {
             let (top, bot) = pair.split_at(half_width * 2);
             let bot = &bot[0..half_width * 2];
 
-            return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| Sum4::sum4(a[0], a[1], b[0], b[1]))
+            return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| Average4::average4(a[0], a[1], b[0], b[1]))
         }).collect();
 
         assert_eq!(half_width * half_height, scaled.len());
@@ -217,7 +224,7 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Sum4 + Copy {
 }
 
 #[allow(dead_code)]
-pub fn worst(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
+pub(crate) fn worst(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
     let half_height = height / 2;
     let half_width = width / 2;
 
@@ -242,7 +249,7 @@ pub fn worst(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
 }
 
 #[allow(dead_code)]
-pub fn avgworst(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
+pub(crate) fn avgworst(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
     let half_height = height / 2;
     let half_width = width / 2;
 
@@ -267,7 +274,7 @@ pub fn avgworst(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
 }
 
 #[allow(dead_code)]
-pub fn avg(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
+pub(crate) fn avg(input: &[f32], width: usize, height: usize) -> ImgVec<f32> {
     let half_height = height / 2;
     let half_width = width / 2;
 

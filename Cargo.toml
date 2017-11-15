@@ -2,7 +2,7 @@
 authors = ["Kornel <pornel@pornel.net>"]
 categories = ["multimedia::images", "command-line-utilities"]
 description = "Measures structural similarity between images using a multi-scale variant of the SSIM algorithm."
-documentation = "https://github.com/pornel/dssim#readme"
+documentation = "https://docs.rs/dssim"
 homepage = "https://kornel.ski/dssim"
 include = ["README.md", "Cargo.toml", "tests/*.png", "src/*.rs"]
 keywords = ["ssim", "image", "comparison"]
@@ -10,7 +10,7 @@ license = "AGPL-3.0"
 name = "dssim"
 readme = "README.md"
 repository = "https://github.com/pornel/dssim.git"
-version = "2.9.0"
+version = "2.9.1"
 
 [[bin]]
 doctest = false
