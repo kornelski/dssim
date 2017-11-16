@@ -50,6 +50,7 @@ static int read_image_jpeg(FILE *file, png24_image *image)
     if(retval != 1) {
         return 1;
     }
+    cinfo.out_color_space = JCS_RGB;
     jpeg_start_decompress(&cinfo);
 
     width=cinfo.output_width;
@@ -60,6 +61,11 @@ static int read_image_jpeg(FILE *file, png24_image *image)
     // grayscale images not handled currently
     if (bpp == 1) {
         fprintf(stderr, "Error: grayscale JPEG images not handled currently.");
+        return 1;
+    }
+
+    if (bpp != 3) {
+        fprintf(stderr, "Error: Unsupported number of channels (%i) given. ", bpp);
         return 1;
     }
 
