@@ -253,11 +253,11 @@ impl Dssim {
                         (img1_img2_blur, Self::lab_chan(&modified_image_scale))
                     });
 
-                    Self::compare_channel(&original_lab, &modified_lab, &img1_img2_blur)
+                    Self::compare_scale(&original_lab, &modified_lab, &img1_img2_blur)
                 },
                 1 => {
                     let img1_img2_blur = original_image_scale.chan[0].img1_img2_blur(&mut modified_image_scale.chan[0], &mut tmp[0 .. scale_width*scale_height]);
-                    Self::compare_channel(&original_image_scale.chan[0], &modified_image_scale.chan[0], &img1_img2_blur)
+                    Self::compare_scale(&original_image_scale.chan[0], &modified_image_scale.chan[0], &img1_img2_blur)
                 },
                 _ => panic!(),
             };
@@ -313,7 +313,7 @@ impl Dssim {
         }
     }
 
-    fn compare_channel<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
+    fn compare_scale<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
         where L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
               f32: std::convert::From<L>
     {
