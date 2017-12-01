@@ -1,5 +1,6 @@
 use super::image::RGBAPLU;
 use rgb::*;
+use rgb::alt::*;
 extern crate lodepng;
 
 /// See `GammaPixel` & `ToRGBAPLU`
@@ -82,7 +83,34 @@ impl<M> GammaPixel for RGBA<M> where M: Clone + Into<f32> + GammaComponent {
     }
 }
 
+impl<M> GammaPixel for BGRA<M> where M: Clone + Into<f32> + GammaComponent {
+    type Component = M;
+    type Output = RGBAPLU;
+    fn to_linear(&self, gamma_lut: &[f32]) -> RGBAPLU {
+        let a_unit = self.a.clone().into() / M::max_value() as f32;
+        RGBAPLU {
+            r: self.r.to_linear(gamma_lut) * a_unit,
+            g: self.g.to_linear(gamma_lut) * a_unit,
+            b: self.b.to_linear(gamma_lut) * a_unit,
+            a: a_unit,
+        }
+    }
+}
+
 impl<M> GammaPixel for RGB<M> where M: GammaComponent {
+    type Component = M;
+    type Output = RGBAPLU;
+    fn to_linear(&self, gamma_lut: &[f32]) -> RGBAPLU {
+        RGBAPLU {
+            r: self.r.to_linear(gamma_lut),
+            g: self.g.to_linear(gamma_lut),
+            b: self.b.to_linear(gamma_lut),
+            a: 1.0,
+        }
+    }
+}
+
+impl<M> GammaPixel for BGR<M> where M: GammaComponent {
     type Component = M;
     type Output = RGBAPLU;
     fn to_linear(&self, gamma_lut: &[f32]) -> RGBAPLU {
