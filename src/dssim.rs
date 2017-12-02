@@ -103,15 +103,15 @@ impl DssimChan<f32> {
 
         unsafe {
             if self.is_chroma {
-                blur::blur_in_place(&mut img[..], tmp, width, height);
+                blur::blur_in_place(ImgRefMut::new(img, width, height), tmp);
             }
 
             self.mu.reserve(self.width * self.height);
             self.mu.set_len(self.width * self.height);
-            blur::blur(&img[..], tmp, &mut self.mu[..], width, height);
+            blur::blur(ImgRef::new(img, width, height), tmp, ImgRefMut::new(&mut self.mu[..], width, height));
 
             self.img_sq_blur = img.iter().cloned().map(|i| i * i).collect();
-            blur::blur_in_place(&mut self.img_sq_blur[..], tmp, width, height);
+            blur::blur_in_place(ImgRefMut::new(&mut self.img_sq_blur[..], width, height), tmp);
         }
     }
 }
@@ -137,7 +137,7 @@ impl Channable<f32, f32> for DssimChan<f32> {
             *img2 *= *img1
         }
 
-        blur::blur_in_place(&mut modified_img[..], tmp32, self.width, self.height);
+        blur::blur_in_place(ImgRefMut::new(&mut modified_img[..], self.width, self.height), tmp32);
         return modified_img;
     }
 }

@@ -1,3 +1,4 @@
+
 const KERNEL: [f32; 9] = [
     1./16., 2./16., 1./16.,
     2./16., 4./16., 2./16.,
@@ -6,49 +7,46 @@ const KERNEL: [f32; 9] = [
 
 #[cfg(target_os = "macos")]
 mod mac {
+    use imgref::*;
     use std;
     use ffi::vImage_Buffer;
+    use ffi::vImagePixelCount;
     use ffi::vImageConvolve_PlanarF;
     use ffi::vImage_Flags::kvImageEdgeExtend;
     use super::KERNEL;
 
-    pub fn blur(src: &[f32], tmp: &mut [f32], dst: &mut [f32], width: usize, height: usize) {
-        assert_eq!(src.len(), width * height);
-        assert_eq!(dst.len(), width * height);
-
+    pub fn blur(src: ImgRef<f32>, tmp: &mut [f32], dst: ImgRefMut<f32>) {
         let srcbuf = vImage_Buffer {
-            width: width as u64,
-            height: height as u64,
-            rowBytes: width * std::mem::size_of::<f32>(),
-            data: src.as_ptr(),
+            width: src.width() as vImagePixelCount,
+            height: src.height() as vImagePixelCount,
+            rowBytes: src.stride() * std::mem::size_of::<f32>(),
+            data: src.buf.as_ptr(),
         };
         let mut dstbuf = vImage_Buffer {
-            width: width as u64,
-            height: height as u64,
-            rowBytes: width * std::mem::size_of::<f32>(),
-            data: dst.as_mut_ptr(),
+            width: dst.width() as vImagePixelCount,
+            height: dst.height() as vImagePixelCount,
+            rowBytes: dst.stride() * std::mem::size_of::<f32>(),
+            data: dst.buf.as_mut_ptr(),
         };
 
-        do_blur(&srcbuf, tmp, &mut dstbuf, width, height);
+        do_blur(&srcbuf, tmp, &mut dstbuf, src.width(), src.height());
     }
 
-    pub fn blur_in_place(srcdst: &mut [f32], tmp: &mut [f32], width: usize, height: usize) {
-        assert_eq!(srcdst.len(), width * height);
-
+    pub fn blur_in_place(srcdst: ImgRefMut<f32>, tmp: &mut [f32]) {
         let srcbuf = vImage_Buffer {
-            width: width as u64,
-            height: height as u64,
-            rowBytes: width * std::mem::size_of::<f32>(),
-            data: srcdst.as_ptr(),
+            width: srcdst.width() as vImagePixelCount,
+            height: srcdst.height() as vImagePixelCount,
+            rowBytes: srcdst.stride() * std::mem::size_of::<f32>(),
+            data: srcdst.buf.as_ptr(),
         };
         let mut dstbuf = vImage_Buffer {
-            width: width as u64,
-            height: height as u64,
-            rowBytes: width * std::mem::size_of::<f32>(),
-            data: srcdst.as_mut_ptr(),
+            width: srcdst.width() as vImagePixelCount,
+            height: srcdst.height() as vImagePixelCount,
+            rowBytes: srcdst.stride() * std::mem::size_of::<f32>(),
+            data: srcdst.buf.as_mut_ptr(),
         };
 
-        do_blur(&srcbuf, tmp, &mut dstbuf, width, height);
+        do_blur(&srcbuf, tmp, &mut dstbuf, srcdst.width(), srcdst.height());
     }
 
     pub fn do_blur(srcbuf: &vImage_Buffer<*const f32>, tmp: &mut [f32], dstbuf: &mut vImage_Buffer<*mut f32>, width: usize, height: usize) {
@@ -56,8 +54,8 @@ mod mac {
 
         unsafe {
             let mut tmpwrbuf = vImage_Buffer {
-                width: width as u64,
-                height: height as u64,
+                width: width as vImagePixelCount,
+                height: height as vImagePixelCount,
                 rowBytes: width * std::mem::size_of::<f32>(),
                 data: tmp.as_mut_ptr(),
             };
@@ -65,8 +63,8 @@ mod mac {
             assert_eq!(0, res);
 
             let tmprbuf = vImage_Buffer {
-                width: width as u64,
-                height: height as u64,
+                width: width as vImagePixelCount,
+                height: height as vImagePixelCount,
                 rowBytes: width * std::mem::size_of::<f32>(),
                 data: tmp.as_ptr(),
             };
@@ -78,6 +76,8 @@ mod mac {
 
 #[cfg(not(target_os = "macos"))]
 mod portable {
+    use imgref::*;
+
     use std::cmp::min;
     use super::KERNEL;
 
@@ -106,18 +106,29 @@ mod portable {
         next[c0]*KERNEL[6] + next[c1]*KERNEL[7] + next[c2]*KERNEL[8]
     }
 
-    pub fn blur(src: &[f32], tmp: &mut [f32], dst: &mut [f32], width: usize, height: usize) {
-        do_blur(src, tmp, width, height);
-        do_blur(tmp, dst, width, height);
+    pub fn blur(src: ImgRef<f32>, tmp: &mut [f32], dst: ImgRefMut<f32>) {
+        {
+            let tmp_dst = ImgRefMut::new(tmp, dst.width(), dst.height());
+            do_blur(src, tmp_dst);
+        }
+        let tmp_src = ImgRef::new(tmp, src.width(), src.height());
+        do_blur(tmp_src, dst);
     }
 
-    pub fn do_blur(src: &[f32], dst: &mut [f32], width: usize, height: usize) {
-        assert!(width > 0);
-        assert!(width < 1<<24);
-        assert!(height > 0);
-        assert!(height < 1<<24);
-        assert!(src.len() >= width*height);
-        assert!(dst.len() >= width*height);
+    pub fn do_blur(src: ImgRef<f32>, dst: ImgRefMut<f32>) {
+        assert_eq!(src.width(), dst.width());
+        assert_eq!(src.height(), dst.height());
+        assert!(src.width() > 0);
+        assert!(src.width() < 1<<24);
+        assert!(src.height() > 0);
+        assert!(src.height() < 1<<24);
+
+        let width = src.width();
+        let height = src.height();
+        let src_stride = src.stride();
+        let dst_stride = dst.stride();
+        let src = &src.buf[..];
+        let dst = &mut dst.buf[..];
 
         let mut prev = &src[0..width];
         let mut curr = prev;
@@ -125,9 +136,10 @@ mod portable {
         for y in 0..height {
             prev = curr;
             curr = next;
-            next = if y+1 < height {&src[(y+1)*width..(y+2)*width]} else {curr};
+            let next_start = (y+1)*src_stride;
+            next = if y+1 < height {&src[next_start..next_start+width]} else {curr};
 
-            let mut dstrow = &mut dst[y*width..y*width+width];
+            let mut dstrow = &mut dst[y*dst_stride..y*dst_stride+width];
 
             dstrow[0] = do3(prev, curr, next, 0, width);
             for i in 1..width-1 {
@@ -139,9 +151,13 @@ mod portable {
         }
     }
 
-    pub fn blur_in_place(srcdst: &mut [f32], tmp: &mut [f32], width: usize, height: usize) {
-        do_blur(srcdst, tmp, width, height);
-        do_blur(tmp, srcdst, width, height);
+    pub fn blur_in_place(srcdst: ImgRefMut<f32>, tmp: &mut [f32]) {
+        {
+            let tmp_dst = ImgRefMut::new(tmp, srcdst.width(), srcdst.height());
+            do_blur(srcdst.new_buf(&srcdst.buf[..]), tmp_dst);
+        }
+        let tmp_src = ImgRef::new(tmp, srcdst.width(), srcdst.height());
+        do_blur(tmp_src, srcdst);
     }
 }
 
@@ -152,6 +168,9 @@ pub use self::mac::*;
 #[cfg(not(target_os = "macos"))]
 pub use self::portable::*;
 
+#[cfg(test)]
+use imgref::*;
+
 #[test]
 fn blur_zero() {
     let src = vec![0.25];
@@ -161,8 +180,8 @@ fn blur_zero() {
 
     let mut src2 = src.clone();
 
-    blur(&src[..], &mut tmp[..], &mut dst[..], 1, 1);
-    blur_in_place(&mut src2[..], &mut tmp[..], 1, 1);
+    blur(ImgRef::new(&src[..], 1,1), &mut tmp[..], ImgRefMut::new(&mut dst[..], 1, 1));
+    blur_in_place(ImgRefMut::new(&mut src2[..], 1, 1), &mut tmp[..]);
 
     assert_eq!(src2, dst);
     assert_eq!(0.25, dst[0]);
@@ -170,22 +189,37 @@ fn blur_zero() {
 
 #[test]
 fn blur_one() {
-    let src = vec![
-    0.,0.,0.,0.,0.,
-    0.,0.,0.,0.,0.,
-    0.,0.,1.,0.,0.,
-    0.,0.,0.,0.,0.,
-    0.,0.,0.,0.,0.,
-    ];
+    blur_one_compare(Img::new(vec![
+        0.,0.,0.,0.,0.,
+        0.,0.,0.,0.,0.,
+        0.,0.,1.,0.,0.,
+        0.,0.,0.,0.,0.,
+        0.,0.,0.,0.,0.,
+    ], 5, 5));
+}
+
+#[test]
+fn blur_one_stride() {
+    blur_one_compare(Img::new_stride(vec![
+        0.,0.,0.,0.,0., 333., -11.,
+        0.,0.,0.,0.,0., 333., -11.,
+        0.,0.,1.,0.,0., 333., -11.,
+        0.,0.,0.,0.,0., 333., -11.,
+        0.,0.,0.,0.,0., 333.,
+    ], 5, 5, 7));
+}
+
+#[cfg(test)]
+fn blur_one_compare(src: ImgVec<f32>) {
     let mut tmp = vec![-55.; 5*5];
     let mut dst = vec![999.; 5*5];
 
     let mut src2 = src.clone();
 
-    blur(&src[..], &mut tmp[..], &mut dst[..], 5, 5);
-    blur_in_place(&mut src2[..], &mut tmp[..], 5, 5);
+    blur(src.as_ref(), &mut tmp[..], ImgRefMut::new(&mut dst[..], 5, 5));
+    blur_in_place(src2.as_mut(), &mut tmp[..]);
 
-    assert_eq!(src2, dst);
+    assert_eq!(src2.pixels().collect::<Vec<_>>(), dst);
 
     assert_eq!(1./256., dst[0]);
     assert_eq!(1./256., dst[5*5-1]);
@@ -193,7 +227,6 @@ fn blur_one() {
                  2./16.*2./16. + 4./16.*4./16. + 2./16.*2./16. +
                  1./16.*1./16. + 2./16.*2./16. + 1./16.*1./16.;
     assert_eq!(center, dst[2*5+2]);
-
 }
 
 #[test]
@@ -209,8 +242,8 @@ fn blur_two() {
 
     let mut src2 = src.clone();
 
-    blur(&src[..], &mut tmp[..], &mut dst[..], 4, 4);
-    blur_in_place(&mut src2[..], &mut tmp[..], 4, 4);
+    blur(ImgRef::new(&src[..], 4,4), &mut tmp[..], ImgRefMut::new(&mut dst[..], 4, 4));
+    blur_in_place(ImgRefMut::new(&mut src2[..], 4,4), &mut tmp[..]);
 
     assert_eq!(src2, dst);
 

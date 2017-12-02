@@ -196,6 +196,7 @@ impl<T> Downsample for ImgVec<T> where T: Average4 + Copy + Sync + Send {
 impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send {
     type Output = ImgVec<T>;
     fn downsample(&self) -> Option<Self::Output> {
+        let stride = self.stride();
         let width = self.width();
         let height = self.height();
 
@@ -203,17 +204,13 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send 
             return None;
         }
 
-        assert_eq!(width * height, self.buf.len());
-
         let half_height = height / 2;
         let half_width = width / 2;
 
-        // crop odd pixels
-        let bitmap = &self.buf[0..width * half_height * 2];
-
         let mut scaled = Vec::with_capacity(half_width * half_height);
-        scaled.extend(bitmap.chunks(width * 2).flat_map(|pair|{
-            let (top, bot) = pair.split_at(half_width * 2);
+        scaled.extend(self.buf.chunks(stride * 2).take(half_height).flat_map(|pair|{
+            let (top, bot) = pair.split_at(stride);
+            let top = &top[0..half_width * 2];
             let bot = &bot[0..half_width * 2];
 
             return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| Average4::average4(a[0], a[1], b[0], b[1]))
@@ -226,6 +223,7 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send 
 
 #[allow(dead_code)]
 pub(crate) fn worst(input: ImgRef<f32>) -> ImgVec<f32> {
+    let stride = input.stride();
     let half_height = input.height() / 2;
     let half_width = input.width() / 2;
 
@@ -234,8 +232,9 @@ pub(crate) fn worst(input: ImgRef<f32>) -> ImgVec<f32> {
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
-    scaled.extend(input.buf.chunks(input.stride() * 2).take(half_height).flat_map(|pair|{
-        let (top, bot) = pair.split_at(half_width * 2);
+    scaled.extend(input.buf.chunks(stride * 2).take(half_height).flat_map(|pair|{
+        let (top, bot) = pair.split_at(stride);
+        let top = &top[0..half_width * 2];
         let bot = &bot[0..half_width * 2];
 
         return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| {
@@ -249,6 +248,7 @@ pub(crate) fn worst(input: ImgRef<f32>) -> ImgVec<f32> {
 
 #[allow(dead_code)]
 pub(crate) fn avgworst(input: ImgRef<f32>) -> ImgVec<f32> {
+    let stride = input.stride();
     let half_height = input.height() / 2;
     let half_width = input.width() / 2;
 
@@ -257,8 +257,9 @@ pub(crate) fn avgworst(input: ImgRef<f32>) -> ImgVec<f32> {
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
-    scaled.extend(input.buf.chunks(input.stride() * 2).take(half_height).flat_map(|pair|{
-        let (top, bot) = pair.split_at(half_width * 2);
+    scaled.extend(input.buf.chunks(stride * 2).take(half_height).flat_map(|pair|{
+        let (top, bot) = pair.split_at(stride);
+        let top = &top[0..half_width * 2];
         let bot = &bot[0..half_width * 2];
 
         return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| {
@@ -272,6 +273,7 @@ pub(crate) fn avgworst(input: ImgRef<f32>) -> ImgVec<f32> {
 
 #[allow(dead_code)]
 pub(crate) fn avg(input: ImgRef<f32>) -> ImgVec<f32> {
+    let stride = input.stride();
     let half_height = input.height() / 2;
     let half_width = input.width() / 2;
 
@@ -280,8 +282,9 @@ pub(crate) fn avg(input: ImgRef<f32>) -> ImgVec<f32> {
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
-    scaled.extend(input.buf.chunks(input.stride() * 2).take(half_height).flat_map(|pair|{
-        let (top, bot) = pair.split_at(half_width * 2);
+    scaled.extend(input.buf.chunks(stride * 2).take(half_height).flat_map(|pair|{
+        let (top, bot) = pair.split_at(stride);
+        let top = &top[0..half_width * 2];
         let bot = &bot[0..half_width * 2];
 
         return top.chunks(2).zip(bot.chunks(2)).map(|(a,b)| {
