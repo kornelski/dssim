@@ -19,7 +19,7 @@ path = "src/main.rs"
 
 [dependencies]
 getopts = "0.2.15"
-imgref = "1.3.0"
+imgref = "1.3.2"
 itertools = "0.7.2"
 lodepng = "2.0.4"
 rayon = "0.9.0"

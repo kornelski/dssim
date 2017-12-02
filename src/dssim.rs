@@ -40,7 +40,7 @@ trait Channable<T, I> {
 struct DssimChan<T> {
     pub width: usize,
     pub height: usize,
-    pub img: Option<Vec<T>>,
+    pub img: Option<ImgVec<T>>,
     pub mu: Vec<T>,
     pub img_sq_blur: Vec<T>,
     pub is_chroma: bool,
@@ -78,13 +78,13 @@ pub fn new() -> Dssim {
 }
 
 impl<T> DssimChan<T> {
-    pub fn new(bitmap: Vec<T>, width: usize, height: usize, is_chroma: bool) -> DssimChan<T> {
+    pub fn new(bitmap: ImgVec<T>, is_chroma: bool) -> DssimChan<T> {
         DssimChan {
+            width: bitmap.width(),
+            height: bitmap.height(),
+            mu: Vec::with_capacity(bitmap.width() * bitmap.height()),
             img: Some(bitmap),
-            mu: Vec::with_capacity(width * height),
             img_sq_blur: Vec::new(),
-            width: width,
-            height: height,
             is_chroma: is_chroma,
         }
     }
@@ -97,20 +97,19 @@ impl DssimChan<f32> {
         let tmp = &mut tmp[0..width * height];
 
         let img = self.img.as_mut().unwrap();
-        assert_eq!(img.len(), self.width * self.height);
         assert!(width > 1);
         assert!(height > 1);
 
         unsafe {
             if self.is_chroma {
-                blur::blur_in_place(ImgRefMut::new(img, width, height), tmp);
+                blur::blur_in_place(img.as_mut(), tmp);
             }
 
             self.mu.reserve(self.width * self.height);
             self.mu.set_len(self.width * self.height);
-            blur::blur(ImgRef::new(img, width, height), tmp, ImgRefMut::new(&mut self.mu[..], width, height));
+            blur::blur(img.as_ref(), tmp, ImgRefMut::new(&mut self.mu[..], width, height));
 
-            self.img_sq_blur = img.iter().cloned().map(|i| i * i).collect();
+            self.img_sq_blur = img.pixels().map(|i| i * i).collect();
             blur::blur_in_place(ImgRefMut::new(&mut self.img_sq_blur[..], width, height), tmp);
         }
     }
@@ -131,14 +130,26 @@ impl Channable<LAB, f32> for [DssimChan<f32>] {
 
 impl Channable<f32, f32> for DssimChan<f32> {
     fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<f32> {
-        let mut modified_img = modified.img.take().unwrap();
+        let modified_img = modified.img.take().unwrap();
+        let width = modified_img.width();
+        let height = modified_img.height();
 
-        for (img2, img1) in modified_img.iter_mut().zip(self.img.as_ref().unwrap().iter()) {
-            *img2 *= *img1
+        let mut out = Vec::with_capacity(width * height);
+
+        for (row1, row2) in self.img.as_ref().unwrap().rows().take(height).zip(modified_img.rows().take(height)) {
+            let width = width;
+            debug_assert_eq!(width, row1.len());
+            debug_assert_eq!(width, row2.len());
+            let row1 = &row1[0..width];
+            let row2 = &row2[0..width];
+            for (px1, px2) in row1.iter().cloned().zip(row2.iter().cloned()) {
+                out.push(px1 * px2);
+            }
         }
 
-        blur::blur_in_place(ImgRefMut::new(&mut modified_img[..], self.width, self.height), tmp32);
-        return modified_img;
+        debug_assert_eq!(out.len(), width * height);
+        blur::blur_in_place(ImgRefMut::new(&mut out, width, height), tmp32);
+        return out;
     }
 }
 
@@ -213,7 +224,7 @@ impl Dssim {
                     chan: s.into_par_iter().enumerate().map(|(n,l)| {
                         let w = l.width();
                         let h = l.height();
-                        let mut ch = DssimChan::new(l.buf, w, h, n > 0);
+                        let mut ch = DssimChan::new(l, n > 0);
 
                         let mut tmp = {
                             let pixels = w * h;
@@ -304,7 +315,8 @@ impl Dssim {
             img_sq_blur: multizip((l.img_sq_blur.iter().cloned(), a.img_sq_blur.iter().cloned(), b.img_sq_blur.iter().cloned()))
                 .map(|(l,a,b)|LAB {l,a,b}).collect(),
             img: if let (&Some(ref l),&Some(ref a),&Some(ref b)) = (&l.img, &a.img, &b.img) {
-                Some(multizip((l.iter().cloned(), a.iter().cloned(), b.iter().cloned())).map(|(l,a,b)|LAB {l,a,b}).collect())
+                let buf = multizip((l.pixels(), a.pixels(), b.pixels())).map(|(l,a,b)|LAB {l,a,b}).collect();
+                Some(ImgVec::new(buf, l.width(), l.height()))
             } else {None},
             mu: multizip((l.mu.iter().cloned(), a.mu.iter().cloned(), b.mu.iter().cloned())).map(|(l,a,b)|LAB {l,a,b}).collect(),
             is_chroma: false,
@@ -328,6 +340,12 @@ impl Dssim {
 
         let mut map_out = Vec::with_capacity(width * height);
         unsafe { map_out.set_len(width * height) };
+
+        debug_assert_eq!(original.mu.len(), modified.mu.len());
+        debug_assert_eq!(original.img_sq_blur.len(), modified.img_sq_blur.len());
+        debug_assert_eq!(img1_img2_blur.len(), map_out.len());
+        debug_assert_eq!(img1_img2_blur.len(), original.mu.len());
+        debug_assert_eq!(img1_img2_blur.len(), original.img_sq_blur.len());
 
         let mu_iter = original.mu.par_iter().cloned().zip_eq(modified.mu.par_iter().cloned());
         let sq_iter = original.img_sq_blur.par_iter().cloned().zip_eq(modified.img_sq_blur.par_iter().cloned());
@@ -385,5 +403,10 @@ fn png_compare() {
     assert!(0.000000000000001 > res);
     assert!(res < 0.000000000000001);
     assert_eq!(res, res);
+
+    let sub_img1 = d.create_image(&Img::new(buf1, file1.width, file1.height).sub_image(2,3,44,33)).unwrap();
+    let sub_img2 = d.create_image(&Img::new(buf1, file2.width, file2.height).sub_image(17,9,44,33)).unwrap();
+    let (res, _) = d.compare(&sub_img1, sub_img2);
+    assert!(res > 0.1);
 }
 
