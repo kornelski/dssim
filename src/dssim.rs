@@ -136,7 +136,7 @@ impl Channable<f32, f32> for DssimChan<f32> {
 
         let mut out = Vec::with_capacity(width * height);
 
-        for (row1, row2) in self.img.as_ref().unwrap().rows().take(height).zip(modified_img.rows().take(height)) {
+        for (row1, row2) in self.img.as_ref().unwrap().rows().zip(modified_img.rows()) {
             let width = width;
             debug_assert_eq!(width, row1.len());
             debug_assert_eq!(width, row2.len());
