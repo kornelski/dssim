@@ -424,3 +424,24 @@ fn png_compare() {
     assert!(res < 0.01);
 }
 
+#[test]
+fn poison() {
+    let a = RGBAPLU::new(1.,1.,1.,1.);
+    let b = RGBAPLU::new(0.,0.,0.,0.);
+    let n = 1./0.;
+    let n = RGBAPLU::new(n,n,n,n);
+    let buf = vec![
+      b,a,a,b,n,n,
+      a,b,b,a,n,n,
+      b,a,a,b,n,
+    ];
+    let img = ImgVec::new_stride(buf, 4, 3, 6);
+    assert!(img.pixels().all(|p| p.r.is_finite() && p.a.is_finite()));
+    assert!(img.as_ref().pixels().all(|p| p.g.is_finite() && p.b.is_finite()));
+
+    let mut d = new();
+    let sub_img1 = d.create_image(&img.as_ref()).unwrap();
+    let sub_img2 = d.create_image(&img.as_ref()).unwrap();
+    let (res, _) = d.compare(&sub_img1, sub_img2);
+    assert!(res < 0.000001);
+}

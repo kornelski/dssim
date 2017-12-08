@@ -55,7 +55,7 @@ impl ToLABBitmap for ImgVec<RGBAPLU> {
 impl ToLABBitmap for GBitmap {
     fn to_lab(&self) -> Vec<GBitmap> {
         vec![
-            Img::new(
+            self.new_buf(
                 self.buf.par_iter().cloned().map(|fy| {
                     let epsilon: f32 = 216. / 24389.;
                     // http://www.brucelindbloom.com/LContinuity.html
@@ -63,8 +63,6 @@ impl ToLABBitmap for GBitmap {
 
                     return Y * 1.16;
                 }).collect(),
-                self.width(),
-                self.height(),
             )
         ]
     }
@@ -73,7 +71,6 @@ impl ToLABBitmap for GBitmap {
 impl<'a> ToLABBitmap for ImgRef<'a, RGBAPLU> {
     fn to_lab(&self) -> Vec<GBitmap> {
         let width = self.width();
-        let height = self.height();
         let mut x=11; // offset so that block-based compressors don't align
         let mut y=11;
 
@@ -88,23 +85,21 @@ impl<'a> ToLABBitmap for ImgRef<'a, RGBAPLU> {
         }).unzip3();
 
         return vec![
-            Img::new(l, width, height),
-            Img::new(a, width, height),
-            Img::new(b, width, height),
+            self.new_buf(l),
+            self.new_buf(a),
+            self.new_buf(b),
         ];
     }
 }
 
 impl<'a> ToLABBitmap for ImgRef<'a, RGBLU> {
     fn to_lab(&self) -> Vec<GBitmap> {
-        let width = self.width();
-        let height = self.height();
         let (l, a, b) = self.buf.iter().map(|px| px.to_lab()).unzip3();
 
         return vec![
-            Img::new(l, width, height),
-            Img::new(a, width, height),
-            Img::new(b, width, height),
+            self.new_buf(l),
+            self.new_buf(a),
+            self.new_buf(b),
         ];
     }
 }
