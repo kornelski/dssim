@@ -82,7 +82,7 @@ impl<T> DssimChan<T> {
         DssimChan {
             width: bitmap.width(),
             height: bitmap.height(),
-            mu: Vec::with_capacity(bitmap.width() * bitmap.height()),
+            mu: Vec::new(),
             img: Some(bitmap),
             img_sq_blur: Vec::new(),
             is_chroma: is_chroma,
@@ -120,7 +120,7 @@ impl DssimChan<f32> {
 }
 
 impl Channable<LAB, f32> for [DssimChan<f32>] {
-    fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<LAB> {
+    fn img1_img2_blur(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<LAB> {
 
         let blurred:Vec<_> = self.iter().zip(modified.iter_mut()).map(|(o,m)|{
             o.img1_img2_blur(m, tmp32)
@@ -133,7 +133,7 @@ impl Channable<LAB, f32> for [DssimChan<f32>] {
 }
 
 impl Channable<f32, f32> for DssimChan<f32> {
-    fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<f32> {
+    fn img1_img2_blur(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<f32> {
         let modified_img = modified.img.take().unwrap();
         let width = modified_img.width();
         let height = modified_img.height();
@@ -263,7 +263,7 @@ impl Dssim {
             let ssim_map = match original_image_scale.chan.len() {
                 3 => {
                     let (original_lab, (img1_img2_blur, modified_lab)) = rayon::join(
-                    || Self::lab_chan(&original_image_scale),
+                    || Self::lab_chan(original_image_scale),
                     || {
                         let img1_img2_blur = original_image_scale.chan.img1_img2_blur(&mut modified_image_scale.chan, &mut tmp[0 .. scale_width*scale_height]);
                         (img1_img2_blur, Self::lab_chan(&modified_image_scale))
