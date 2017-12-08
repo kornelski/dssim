@@ -94,11 +94,12 @@ impl DssimChan<f32> {
     fn preprocess(&mut self, tmp: &mut [f32]) {
         let width = self.width;
         let height = self.height;
-        let tmp = &mut tmp[0..width * height];
+        assert!(width > 0);
+        assert!(height > 0);
 
         let img = self.img.as_mut().unwrap();
-        assert!(width > 1);
-        assert!(height > 1);
+        debug_assert_eq!(width * height, img.pixels().count());
+        debug_assert!(img.pixels().all(|i| i.is_finite()));
 
         unsafe {
             if self.is_chroma {
@@ -109,7 +110,10 @@ impl DssimChan<f32> {
             self.mu.set_len(self.width * self.height);
             blur::blur(img.as_ref(), tmp, ImgRefMut::new(&mut self.mu[..], width, height));
 
-            self.img_sq_blur = img.pixels().map(|i| i * i).collect();
+            self.img_sq_blur = img.pixels().map(|i| {
+                debug_assert!(i <= 1.0 && i >= 0.0);
+                i * i
+            }).collect();
             blur::blur_in_place(ImgRefMut::new(&mut self.img_sq_blur[..], width, height), tmp);
         }
     }
@@ -137,12 +141,13 @@ impl Channable<f32, f32> for DssimChan<f32> {
         let mut out = Vec::with_capacity(width * height);
 
         for (row1, row2) in self.img.as_ref().unwrap().rows().zip(modified_img.rows()) {
-            let width = width;
             debug_assert_eq!(width, row1.len());
             debug_assert_eq!(width, row2.len());
             let row1 = &row1[0..width];
             let row2 = &row2[0..width];
             for (px1, px2) in row1.iter().cloned().zip(row2.iter().cloned()) {
+                debug_assert!(px1 <= 1.0 && px1 >= 0.0);
+                debug_assert!(px2 <= 1.0 && px2 >= 0.0);
                 out.push(px1 * px2);
             }
         }
@@ -315,7 +320,10 @@ impl Dssim {
             img_sq_blur: multizip((l.img_sq_blur.iter().cloned(), a.img_sq_blur.iter().cloned(), b.img_sq_blur.iter().cloned()))
                 .map(|(l,a,b)|LAB {l,a,b}).collect(),
             img: if let (&Some(ref l),&Some(ref a),&Some(ref b)) = (&l.img, &a.img, &b.img) {
-                let buf = multizip((l.pixels(), a.pixels(), b.pixels())).map(|(l,a,b)|LAB {l,a,b}).collect();
+                let buf = multizip((l.pixels(), a.pixels(), b.pixels())).map(|(l,a,b)|{
+                    debug_assert!(l.is_finite() && a.is_finite() && b.is_finite());
+                    LAB {l,a,b}
+                }).collect();
                 Some(ImgVec::new(buf, l.width(), l.height()))
             } else {None},
             mu: multizip((l.mu.iter().cloned(), a.mu.iter().cloned(), b.mu.iter().cloned())).map(|(l,a,b)|LAB {l,a,b}).collect(),
@@ -364,6 +372,7 @@ impl Dssim {
             let ssim = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
                        ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
 
+            debug_assert!(ssim > 0.0);
             *map_out = ssim;
         });
 
@@ -405,8 +414,13 @@ fn png_compare() {
     assert_eq!(res, res);
 
     let sub_img1 = d.create_image(&Img::new(buf1, file1.width, file1.height).sub_image(2,3,44,33)).unwrap();
-    let sub_img2 = d.create_image(&Img::new(buf1, file2.width, file2.height).sub_image(17,9,44,33)).unwrap();
+    let sub_img2 = d.create_image(&Img::new(buf2, file2.width, file2.height).sub_image(17,9,44,33)).unwrap();
     let (res, _) = d.compare(&sub_img1, sub_img2);
     assert!(res > 0.1);
+
+    let sub_img1 = d.create_image(&Img::new(buf1, file1.width, file1.height).sub_image(22,8,61,40)).unwrap();
+    let sub_img2 = d.create_image(&Img::new(buf2, file2.width, file2.height).sub_image(22,8,61,40)).unwrap();
+    let (res, _) = d.compare(&sub_img1, sub_img2);
+    assert!(res < 0.01);
 }
 

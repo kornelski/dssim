@@ -122,6 +122,7 @@ mod portable {
         assert!(src.width() < 1<<24);
         assert!(src.height() > 0);
         assert!(src.height() < 1<<24);
+        debug_assert!(src.pixels().all(|p| p.is_finite()));
 
         let width = src.width();
         let height = src.height();
@@ -200,12 +201,13 @@ fn blur_one() {
 
 #[test]
 fn blur_one_stride() {
+    let nan = 1./0.;
     blur_one_compare(Img::new_stride(vec![
-        0.,0.,0.,0.,0., 333., -11.,
-        0.,0.,0.,0.,0., 333., -11.,
-        0.,0.,1.,0.,0., 333., -11.,
-        0.,0.,0.,0.,0., 333., -11.,
-        0.,0.,0.,0.,0., 333.,
+        0.,0.,0.,0.,0., nan, -11.,
+        0.,0.,0.,0.,0., 333., nan,
+        0.,0.,1.,0.,0., nan, -11.,
+        0.,0.,0.,0.,0., 333., nan,
+        0.,0.,0.,0.,0., nan,
     ], 5, 5, 7));
 }
 
