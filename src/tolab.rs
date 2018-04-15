@@ -50,6 +50,13 @@ impl ToLABBitmap for ImgVec<RGBAPLU> {
     }
 }
 
+impl ToLABBitmap for ImgVec<RGBLU> {
+    #[inline]
+    fn to_lab(&self) -> Vec<GBitmap> {
+        self.as_ref().to_lab()
+    }
+}
+
 impl ToLABBitmap for GBitmap {
     fn to_lab(&self) -> Vec<GBitmap> {
         let width = self.width();

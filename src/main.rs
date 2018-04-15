@@ -153,3 +153,11 @@ fn image_gray() {
     let (diff, _) = attr.compare(&g1, g3);
     assert!(diff < 0.00001);
 }
+
+#[test]
+fn rgblu_input() {
+    let ctx = Dssim::new();
+    let im: ImgVec<RGBLU> = Img::new(vec![rgb::RGB::new(0.,0.,0.)], 1, 1);
+    let imr: ImgRef<RGBLU> = im.as_ref();
+    ctx.create_image(&imr);
+}
