@@ -301,7 +301,7 @@ static void regular_1d_blur(const dssim_px_t *src, dssim_px_t *restrict tmp1, ds
 /*
  * blurs (approximate of gaussian)
  */
-static void blur(const dssim_px_t *restrict src, dssim_px_t *restrict tmp, dssim_px_t *restrict dst,
+static void blur(const dssim_px_t *restrict src, dssim_px_t *restrict tmp, dssim_px_t *dst,
                  const int width, const int height)
 {
     assert(src);
