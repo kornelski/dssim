@@ -37,7 +37,7 @@ trait Channable<T, I> {
     fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp: &mut [I]) -> Vec<T>;
 }
 
-struct DssimChan<T> {
+pub struct DssimChan<T> {
     pub width: usize,
     pub height: usize,
     pub img: Option<ImgVec<T>>,
@@ -52,13 +52,13 @@ pub struct Dssim {
     save_maps_scales: u8,
 }
 
-struct DssimChanScale<T> {
-    chan: Vec<DssimChan<T>>,
+pub struct DssimChanScale<T> {
+    pub chan: Vec<DssimChan<T>>,
 }
 
 /// Abstract wrapper for images. See `Dssim.create_image()`
 pub struct DssimImage<T> {
-    scale: Vec<DssimChanScale<T>>,
+    pub scale: Vec<DssimChanScale<T>>,
 }
 
 // Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm
