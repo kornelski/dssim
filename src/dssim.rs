@@ -369,16 +369,13 @@ impl Dssim {
             let sigma2_sq: f32 = (img2_sq_blur - mu2mu2).into();
             let sigma12: f32 = (img1_img2_blur - mu1mu2).into();
 
-            // these values become slightly negative for mysterious reasons
-            let sigma1_sq = sigma1_sq.max(0.);
-            let sigma2_sq = sigma2_sq.max(0.);
-            let sigma12 = sigma12.max(0.);
+            let sigma1_sq = sigma1_sq.abs();
+            let sigma2_sq = sigma2_sq.abs();
 
             let ssim = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
                        ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
 
-            debug_assert!(ssim > 0.0);
-            *map_out = ssim;
+            *map_out = ssim.max(std::f32::EPSILON);
         });
 
         return ImgVec::new(map_out, width, height);
@@ -386,7 +383,6 @@ impl Dssim {
 }
 
 fn to_dssim(ssim: f64) -> f64 {
-    debug_assert!(ssim > 0.0);
     return 1.0 / ssim.min(1.0) - 1.0;
 }
 
