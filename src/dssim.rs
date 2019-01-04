@@ -251,7 +251,7 @@ impl Dssim {
     /// The `SsimMap`s are returned only if you've enabled them first.
     ///
     /// `Val` is a fancy wrapper for `f64`
-    pub fn compare(&mut self, original_image: &DssimImage<f32>, modified_image: DssimImage<f32>) -> (Val, Vec<SsimMap>) {
+    pub fn compare(&self, original_image: &DssimImage<f32>, modified_image: DssimImage<f32>) -> (Val, Vec<SsimMap>) {
         let res: Vec<_> = self.scale_weights.par_iter().cloned().zip(
             modified_image.scale.into_par_iter().zip(original_image.scale.par_iter())
         ).enumerate().map(|(n, (weight, (mut modified_image_scale, original_image_scale)))| {
@@ -393,7 +393,7 @@ fn png_compare() {
     use imgref::*;
     use linear::*;
 
-    let mut d = new();
+    let d = new();
     let file1 = lodepng::decode32_file("tests/test1-sm.png").unwrap();
     let file2 = lodepng::decode32_file("tests/test2-sm.png").unwrap();
 
@@ -440,7 +440,7 @@ fn poison() {
     assert!(img.pixels().all(|p| p.r.is_finite() && p.a.is_finite()));
     assert!(img.as_ref().pixels().all(|p| p.g.is_finite() && p.b.is_finite()));
 
-    let mut d = new();
+    let d = new();
     let sub_img1 = d.create_image(&img.as_ref()).unwrap();
     let sub_img2 = d.create_image(&img.as_ref()).unwrap();
     let (res, _) = d.compare(&sub_img1, sub_img2);
