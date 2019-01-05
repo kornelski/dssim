@@ -29,12 +29,13 @@ use imgref::*;
 use rayon;
 use rayon::prelude::*;
 use std;
+use std::borrow::Borrow;
 use std::ops;
 pub use val::Dssim as Val;
 pub use tolab::ToLABBitmap;
 
 trait Channable<T, I> {
-    fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp: &mut [I]) -> Vec<T>;
+    fn img1_img2_blur<'a>(&self, modified: &Self, tmp: &mut [I]) -> Vec<T>;
 }
 
 struct DssimChan<T> {
@@ -120,9 +121,9 @@ impl DssimChan<f32> {
 }
 
 impl Channable<LAB, f32> for [DssimChan<f32>] {
-    fn img1_img2_blur(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<LAB> {
+    fn img1_img2_blur(&self, modified: &Self, tmp32: &mut [f32]) -> Vec<LAB> {
 
-        let blurred:Vec<_> = self.iter().zip(modified.iter_mut()).map(|(o,m)|{
+        let blurred:Vec<_> = self.iter().zip(modified.iter()).map(|(o,m)|{
             o.img1_img2_blur(m, tmp32)
         }).collect();
 
@@ -133,8 +134,8 @@ impl Channable<LAB, f32> for [DssimChan<f32>] {
 }
 
 impl Channable<f32, f32> for DssimChan<f32> {
-    fn img1_img2_blur(&self, modified: &mut Self, tmp32: &mut [f32]) -> Vec<f32> {
-        let modified_img = modified.img.take().unwrap();
+    fn img1_img2_blur(&self, modified: &Self, tmp32: &mut [f32]) -> Vec<f32> {
+        let modified_img = modified.img.as_ref().unwrap();
         let width = modified_img.width();
         let height = modified_img.height();
 
@@ -251,10 +252,11 @@ impl Dssim {
     /// The `SsimMap`s are returned only if you've enabled them first.
     ///
     /// `Val` is a fancy wrapper for `f64`
-    pub fn compare(&self, original_image: &DssimImage<f32>, modified_image: DssimImage<f32>) -> (Val, Vec<SsimMap>) {
+    pub fn compare<M: Borrow<DssimImage<f32>>>(&self, original_image: &DssimImage<f32>, modified_image: M) -> (Val, Vec<SsimMap>) {
+        let modified_image = modified_image.borrow();
         let res: Vec<_> = self.scale_weights.par_iter().cloned().zip(
-            modified_image.scale.into_par_iter().zip(original_image.scale.par_iter())
-        ).enumerate().map(|(n, (weight, (mut modified_image_scale, original_image_scale)))| {
+            modified_image.scale.par_iter().zip(original_image.scale.par_iter())
+        ).enumerate().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
             let scale_width = original_image_scale.chan[0].width;
             let scale_height = original_image_scale.chan[0].height;
             let mut tmp = Vec::with_capacity(scale_width * scale_height);
@@ -265,14 +267,14 @@ impl Dssim {
                     let (original_lab, (img1_img2_blur, modified_lab)) = rayon::join(
                     || Self::lab_chan(original_image_scale),
                     || {
-                        let img1_img2_blur = original_image_scale.chan.img1_img2_blur(&mut modified_image_scale.chan, &mut tmp[0 .. scale_width*scale_height]);
+                        let img1_img2_blur = original_image_scale.chan.img1_img2_blur(&modified_image_scale.chan, &mut tmp[0 .. scale_width*scale_height]);
                         (img1_img2_blur, Self::lab_chan(&modified_image_scale))
                     });
 
                     Self::compare_scale(&original_lab, &modified_lab, &img1_img2_blur)
                 },
                 1 => {
-                    let img1_img2_blur = original_image_scale.chan[0].img1_img2_blur(&mut modified_image_scale.chan[0], &mut tmp[0 .. scale_width*scale_height]);
+                    let img1_img2_blur = original_image_scale.chan[0].img1_img2_blur(&modified_image_scale.chan[0], &mut tmp[0 .. scale_width*scale_height]);
                     Self::compare_scale(&original_image_scale.chan[0], &modified_image_scale.chan[0], &img1_img2_blur)
                 },
                 _ => panic!(),
