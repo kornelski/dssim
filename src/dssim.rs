@@ -418,12 +418,14 @@ fn png_compare() {
 
     let sub_img1 = d.create_image(&Img::new(buf1, file1.width, file1.height).sub_image(2,3,44,33)).unwrap();
     let sub_img2 = d.create_image(&Img::new(buf2, file2.width, file2.height).sub_image(17,9,44,33)).unwrap();
+    // Test passing second image directly
     let (res, _) = d.compare(&sub_img1, sub_img2);
     assert!(res > 0.1);
 
     let sub_img1 = d.create_image(&Img::new(buf1, file1.width, file1.height).sub_image(22,8,61,40)).unwrap();
     let sub_img2 = d.create_image(&Img::new(buf2, file2.width, file2.height).sub_image(22,8,61,40)).unwrap();
-    let (res, _) = d.compare(&sub_img1, sub_img2);
+    // Test passing second image as reference
+    let (res, _) = d.compare(&sub_img1, &sub_img2);
     assert!(res < 0.01);
 }
 
