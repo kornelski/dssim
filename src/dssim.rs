@@ -37,6 +37,7 @@ trait Channable<T, I> {
     fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp: &mut [I]) -> Vec<T>;
 }
 
+#[derive(Clone)]
 struct DssimChan<T> {
     pub width: usize,
     pub height: usize,
@@ -47,16 +48,19 @@ struct DssimChan<T> {
 }
 
 /// Configuration for the comparison
+#[derive(Clone, Debug)]
 pub struct Dssim {
     scale_weights: Vec<f64>,
     save_maps_scales: u8,
 }
 
+#[derive(Clone)]
 struct DssimChanScale<T> {
     chan: Vec<DssimChan<T>>,
 }
 
 /// Abstract wrapper for images. See `Dssim.create_image()`
+#[derive(Clone)]
 pub struct DssimImage<T> {
     scale: Vec<DssimChanScale<T>>,
 }
@@ -65,6 +69,7 @@ pub struct DssimImage<T> {
 const DEFAULT_WEIGHTS: [f64; 5] = [0.0448, 0.2856, 0.3001, 0.2363, 0.1333];
 
 /// Detailed comparison result
+#[derive(Clone)]
 pub struct SsimMap {
     /// SSIM scores
     pub map: ImgVec<f32>,
