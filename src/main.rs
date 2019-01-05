@@ -141,7 +141,7 @@ fn main() {
 
 #[test]
 fn image_gray() {
-    let mut attr = dssim::Dssim::new();
+    let attr = dssim::Dssim::new();
 
     let g1 = attr.create_image(&load("tests/gray1-rgba.png").unwrap()).unwrap();
     let g2 = attr.create_image(&load("tests/gray1-pal.png").unwrap()).unwrap();
