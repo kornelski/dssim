@@ -377,10 +377,8 @@ impl Dssim {
             let sigma1_sq = sigma1_sq.abs();
             let sigma2_sq = sigma2_sq.abs();
 
-            let ssim = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
+            *map_out = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
                        ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
-
-            *map_out = ssim.max(std::f32::EPSILON);
         });
 
         return ImgVec::new(map_out, width, height);
@@ -388,7 +386,7 @@ impl Dssim {
 }
 
 fn to_dssim(ssim: f64) -> f64 {
-    return 1.0 / ssim.min(1.0) - 1.0;
+    return 1.0 / ssim.max(std::f64::EPSILON) - 1.0;
 }
 
 #[test]
