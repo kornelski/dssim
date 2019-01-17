@@ -85,7 +85,7 @@ impl std::ops::Sub<LAB> for LAB {
 
 impl LAB {
     pub(crate) fn avg(&self) -> f32 {
-        (self.l + self.a + self.b) / 3.0
+        self.l * 0.5 + self.a * 0.25 + self.b * 0.25
     }
 }
 
