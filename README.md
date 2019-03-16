@@ -60,11 +60,11 @@ TID2013 Category | Spearman correlation
 --- | ---
 Noise  | -0.930
 Actual | -0.937
-Simple | -0.945
+Simple | -0.946
 Exotic | -0.844
-New    | -0.800
-Color  | -0.808
-Full   | -0.860
+New    | -0.802
+Color  | -0.814
+Full   | -0.861
 
 [1]: http://www.ponomarenko.info/tid2013.htm
 
