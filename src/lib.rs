@@ -3,9 +3,6 @@
 //! (if you need higher accuracy or higher speed).
 #![doc(html_logo_url = "https://kornel.ski/dssim/logo.png")]
 
-extern crate rgb;
-extern crate imgref;
-extern crate rayon;
 mod dssim;
 mod image;
 mod blur;
@@ -13,6 +10,6 @@ mod ffi;
 mod val;
 mod linear;
 mod tolab;
-pub use dssim::*;
-pub use image::*;
-pub use linear::*;
+pub use crate::dssim::*;
+pub use crate::image::*;
+pub use crate::linear::*;

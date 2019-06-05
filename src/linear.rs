@@ -1,7 +1,6 @@
 use super::image::RGBAPLU;
 use rgb::*;
 use rgb::alt::*;
-extern crate lodepng;
 
 /// See `GammaPixel` & `ToRGBAPLU`
 pub trait GammaComponent {

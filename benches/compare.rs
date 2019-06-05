@@ -1,9 +1,6 @@
 #![feature(test)]
 
-extern crate dssim;
-extern crate imgref;
 extern crate test;
-extern crate lodepng;
 use dssim::*;
 use imgref::*;
 use test::Bencher;
@@ -15,7 +12,7 @@ fn load(path: &str) -> Result<ImgVec<RGBAPLU>, lodepng::Error> {
 
 #[bench]
 fn compare(bench: &mut Bencher) {
-    let mut attr = dssim::Dssim::new();
+    let attr = dssim::Dssim::new();
     let other = &load("tests/test1-sm.png").unwrap();
     let orig = attr.create_image(&load("tests/test2-sm.png").unwrap()).unwrap();
 

@@ -9,13 +9,13 @@ const KERNEL: [f32; 9] = [
 mod mac {
     use imgref::*;
     use std;
-    use ffi::vImage_Buffer;
-    use ffi::vImagePixelCount;
-    use ffi::vImageConvolve_PlanarF;
-    use ffi::vImage_Flags::kvImageEdgeExtend;
+    use crate::ffi::vImage_Buffer;
+    use crate::ffi::vImagePixelCount;
+    use crate::ffi::vImageConvolve_PlanarF;
+    use crate::ffi::vImage_Flags::kvImageEdgeExtend;
     use super::KERNEL;
 
-    pub fn blur(src: ImgRef<f32>, tmp: &mut [f32], dst: ImgRefMut<f32>) {
+    pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [f32], dst: ImgRefMut<'_, f32>) {
         let srcbuf = vImage_Buffer {
             width: src.width() as vImagePixelCount,
             height: src.height() as vImagePixelCount,
@@ -32,7 +32,7 @@ mod mac {
         do_blur(&srcbuf, tmp, &mut dstbuf, src.width(), src.height());
     }
 
-    pub fn blur_in_place(srcdst: ImgRefMut<f32>, tmp: &mut [f32]) {
+    pub fn blur_in_place(srcdst: ImgRefMut<'_, f32>, tmp: &mut [f32]) {
         let srcbuf = vImage_Buffer {
             width: srcdst.width() as vImagePixelCount,
             height: srcdst.height() as vImagePixelCount,

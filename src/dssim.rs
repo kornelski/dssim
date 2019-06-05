@@ -19,19 +19,17 @@
  * If not, see <http://www.gnu.org/licenses/agpl.txt>.
  */
 
-extern crate itertools;
-extern crate imgref;
 
-use self::itertools::multizip;
-use blur;
-use image::*;
+use itertools::multizip;
+use crate::blur;
+use crate::image::*;
 use imgref::*;
 use rayon;
 use rayon::prelude::*;
 use std;
 use std::ops;
-pub use val::Dssim as Val;
-pub use tolab::ToLABBitmap;
+pub use crate::val::Dssim as Val;
+pub use crate::tolab::ToLABBitmap;
 
 trait Channable<T, I> {
     fn img1_img2_blur<'a>(&self, modified: &mut Self, tmp: &mut [I]) -> Vec<T>;
@@ -391,10 +389,9 @@ fn to_dssim(ssim: f64) -> f64 {
 
 #[test]
 fn png_compare() {
-    extern crate lodepng;
 
     use imgref::*;
-    use linear::*;
+    use crate::linear::*;
 
     let d = new();
     let file1 = lodepng::decode32_file("tests/test1-sm.png").unwrap();

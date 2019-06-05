@@ -17,12 +17,6 @@
  * If not, see <http://www.gnu.org/licenses/agpl.txt>.
  */
 
-extern crate getopts;
-extern crate lodepng;
-extern crate dssim;
-extern crate imgref;
-extern crate rgb;
-extern crate rayon;
 
 use std::env;
 use std::path::{Path, PathBuf};
@@ -158,6 +152,6 @@ fn image_gray() {
 fn rgblu_input() {
     let ctx = Dssim::new();
     let im: ImgVec<RGBLU> = Img::new(vec![rgb::RGB::new(0.,0.,0.)], 1, 1);
-    let imr: ImgRef<RGBLU> = im.as_ref();
+    let imr: ImgRef<'_, RGBLU> = im.as_ref();
     ctx.create_image(&imr);
 }

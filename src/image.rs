@@ -222,7 +222,7 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send 
 }
 
 #[allow(dead_code)]
-pub(crate) fn worst(input: ImgRef<f32>) -> ImgVec<f32> {
+pub(crate) fn worst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     let stride = input.stride();
     let half_height = input.height() / 2;
     let half_width = input.width() / 2;
@@ -247,7 +247,7 @@ pub(crate) fn worst(input: ImgRef<f32>) -> ImgVec<f32> {
 }
 
 #[allow(dead_code)]
-pub(crate) fn avgworst(input: ImgRef<f32>) -> ImgVec<f32> {
+pub(crate) fn avgworst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     let stride = input.stride();
     let half_height = input.height() / 2;
     let half_width = input.width() / 2;
@@ -272,7 +272,7 @@ pub(crate) fn avgworst(input: ImgRef<f32>) -> ImgVec<f32> {
 }
 
 #[allow(dead_code)]
-pub(crate) fn avg(input: ImgRef<f32>) -> ImgVec<f32> {
+pub(crate) fn avg(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     let stride = input.stride();
     let half_height = input.height() / 2;
     let half_width = input.width() / 2;

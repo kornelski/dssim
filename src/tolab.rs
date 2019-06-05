@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use image::RGBAPLU;
-use image::RGBLU;
-use image::ToRGB;
+use crate::image::RGBAPLU;
+use crate::image::RGBLU;
+use crate::image::ToRGB;
 use imgref::*;
 use rayon::prelude::*;
 
