@@ -185,7 +185,7 @@ fn blur_zero() {
     blur_in_place(ImgRefMut::new(&mut src2[..], 1, 1), &mut tmp[..]);
 
     assert_eq!(src2, dst);
-    assert_eq!(0.25, dst[0]);
+    assert!((0.25 - dst[0]).abs() < 0.00001);
 }
 
 #[test]
@@ -223,12 +223,24 @@ fn blur_one_compare(src: ImgVec<f32>) {
 
     assert_eq!(src2.pixels().collect::<Vec<_>>(), dst);
 
-    assert_eq!(1./256., dst[0]);
-    assert_eq!(1./256., dst[5*5-1]);
-    let center = 1./16.*1./16. + 2./16.*2./16. + 1./16.*1./16. +
-                 2./16.*2./16. + 4./16.*4./16. + 2./16.*2./16. +
-                 1./16.*1./16. + 2./16.*2./16. + 1./16.*1./16.;
-    assert_eq!(center, dst[2*5+2]);
+    assert!((1./110. - dst[0]).abs() < 0.0001, "{:?}", dst);
+    assert!((1./110. - dst[5*5-1]).abs() < 0.0001, "{:?}", dst);
+    assert!((0.11354011 - dst[2*5+2]).abs() < 0.0001);
+}
+
+#[test]
+fn blur_1x1() {
+    let src = vec![1.];
+    let mut src2 = src.clone();
+
+    let mut tmp = vec![-999.; 1];
+    let mut dst = vec![55.; 1];
+
+    blur(ImgRef::new(&src[..], 1,1), &mut tmp[..], ImgRefMut::new(&mut dst[..], 1, 1));
+    blur_in_place(ImgRefMut::new(&mut src2[..], 1,1), &mut tmp[..]);
+
+    assert!((dst[0] - 1.).abs() < 0.00001);
+    assert!((src2[0] - 1.).abs() < 0.00001);
 }
 
 #[test]
@@ -249,25 +261,25 @@ fn blur_two() {
 
     assert_eq!(src2, dst);
 
-    let z00 = 0.*1./16. + 0.*2./16. + 1.*1./16. +
-              0.*2./16. + 0.*4./16. + 1.*2./16. +
-              1.*1./16. + 1.*2./16. + 1.*1./16.;
-    let z01 =                                   0.*1./16. + 1.*2./16. + 1.*1./16. +
-                                                0.*2./16. + 1.*4./16. + 1.*2./16. +
-                                                1.*1./16. + 1.*2./16. + 1.*1./16.;
+    let z00 = 0.*KERNEL[0] + 0.*KERNEL[1] + 1.*KERNEL[2] +
+              0.*KERNEL[3] + 0.*KERNEL[4] + 1.*KERNEL[5] +
+              1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
+    let z01 =                                   0.*KERNEL[0] + 1.*KERNEL[1] + 1.*KERNEL[2] +
+                                                0.*KERNEL[3] + 1.*KERNEL[4] + 1.*KERNEL[5] +
+                                                1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
 
-    let z10 = 0.*1./16. + 0.*2./16. + 1.*1./16. +
-              1.*2./16. + 1.*4./16. + 1.*2./16. +
-              1.*1./16. + 1.*2./16. + 1.*1./16.;
-    let z11 =                                   0.*1./16. + 1.*2./16. + 1.*1./16. +
-                                                1.*2./16. + 1.*4./16. + 1.*2./16. +
-                                                1.*1./16. + 1.*2./16. + 1.*1./16.;
-    let exp = z00*1./16. + z00*2./16. + z01*1./16. +
-              z00*2./16. + z00*4./16. + z01*2./16. +
-              z10*1./16. + z10*2./16. + z11*1./16.;
+    let z10 = 0.*KERNEL[0] + 0.*KERNEL[1] + 1.*KERNEL[2] +
+              1.*KERNEL[3] + 1.*KERNEL[4] + 1.*KERNEL[5] +
+              1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
+    let z11 =                                   0.*KERNEL[0] + 1.*KERNEL[1] + 1.*KERNEL[2] +
+                                                1.*KERNEL[3] + 1.*KERNEL[4] + 1.*KERNEL[5] +
+                                                1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
+    let exp = z00*KERNEL[0] + z00*KERNEL[1] + z01*KERNEL[2] +
+              z00*KERNEL[3] + z00*KERNEL[4] + z01*KERNEL[5] +
+              z10*KERNEL[6] + z10*KERNEL[7] + z11*KERNEL[8];
 
-    assert_eq!(1., dst[3]);
-    assert_eq!(1., dst[3 * 4]);
-    assert_eq!(1., dst[4 * 4 - 1]);
+    assert!((1. - dst[3]).abs() < 0.0001, "{}", dst[3]);
+    assert!((1. - dst[3 * 4]).abs() < 0.0001, "{}", dst[3 * 4]);
+    assert!((1. - dst[4 * 4 - 1]).abs() < 0.0001, "{}", dst[4 * 4 - 1]);
     assert_eq!(exp, dst[0]);
 }
