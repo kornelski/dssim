@@ -8,7 +8,7 @@ The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded
 
 ## Features
 
-* Comparison is done in in L\*a\*b\* color space (D65 white point, sRGB gamma) with chroma subsampling. Other implementations use "RGB" or grayscale without gamma correction.
+* Comparison is done in L\*a\*b\* color space (D65 white point, sRGB gamma) with chroma subsampling. Other implementations use "RGB" or grayscale without gamma correction.
 * Supports alpha channel.
 * No OpenCV or MATLAB needed.
    - DSSIM [version 1.x](https://github.com/pornel/dssim/tree/dssim1-c) uses C (C99) and `libpng` or Cocoa on macOS.
