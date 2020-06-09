@@ -338,7 +338,7 @@ impl Dssim {
 
     fn compare_scale<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
         where L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
-              f32: std::convert::From<L>
+              f64: std::convert::From<L>
     {
         assert_eq!(original.width, modified.width);
         assert_eq!(original.height, modified.height);
@@ -365,18 +365,18 @@ impl Dssim {
             let mu1mu1 = mu1 * mu1;
             let mu1mu2 = mu1 * mu2;
             let mu2mu2 = mu2 * mu2;
-            let mu1_sq: f32 = mu1mu1.into();
-            let mu2_sq: f32 = mu2mu2.into();
-            let mu1_mu2: f32 = mu1mu2.into();
-            let sigma1_sq: f32 = (img1_sq_blur - mu1mu1).into();
-            let sigma2_sq: f32 = (img2_sq_blur - mu2mu2).into();
-            let sigma12: f32 = (img1_img2_blur - mu1mu2).into();
+            let mu1_sq: f64 = mu1mu1.into();
+            let mu2_sq: f64 = mu2mu2.into();
+            let mu1_mu2: f64 = mu1mu2.into();
+            let sigma1_sq: f64 = (img1_sq_blur - mu1mu1).into();
+            let sigma2_sq: f64 = (img2_sq_blur - mu2mu2).into();
+            let sigma12: f64 = (img1_img2_blur - mu1mu2).into();
 
             let sigma1_sq = sigma1_sq.abs();
             let sigma2_sq = sigma2_sq.abs();
 
-            *map_out = (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
-                       ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
+            *map_out = ((2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
+                       ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))) as f32;
         });
 
         return ImgVec::new(map_out, width, height);

@@ -32,9 +32,9 @@ impl std::ops::Mul<LAB> for f32 {
     type Output = LAB;
     fn mul(self, other: LAB) -> Self::Output {
         LAB {
-            l: self * other.l,
-            a: self * other.a,
-            b: self * other.b,
+            l: (self as f64 * other.l as f64) as f32,
+            a: (self as f64 * other.a as f64) as f32,
+            b: (self as f64 * other.b as f64) as f32,
         }
     }
 }
@@ -43,9 +43,9 @@ impl std::ops::Mul<f32> for LAB {
     type Output = LAB;
     fn mul(self, other: f32) -> Self::Output {
         LAB {
-            l: self.l * other,
-            a: self.a * other,
-            b: self.b * other,
+            l: (self.l as f64 * other as f64) as f32,
+            a: (self.a as f64 * other as f64) as f32,
+            b: (self.b as f64 * other as f64) as f32,
         }
     }
 }
@@ -54,9 +54,9 @@ impl std::ops::Add<LAB> for LAB {
     type Output = LAB;
     fn add(self, other: Self::Output) -> Self::Output {
         LAB {
-            l: self.l + other.l,
-            a: self.a + other.a,
-            b: self.b + other.b,
+            l: (self.l as f64 + other.l as f64) as f32,
+            a: (self.a as f64 + other.a as f64) as f32,
+            b: (self.b as f64 + other.b as f64) as f32,
         }
     }
 }
@@ -65,9 +65,9 @@ impl std::ops::Add<f32> for LAB {
     type Output = LAB;
     fn add(self, other: f32) -> Self::Output {
         LAB {
-            l: self.l + other,
-            a: self.a + other,
-            b: self.b + other,
+            l: (self.l as f64 + other as f64) as f32,
+            a: (self.a as f64 + other as f64) as f32,
+            b: (self.b as f64 + other as f64) as f32,
         }
     }
 }
@@ -76,16 +76,16 @@ impl std::ops::Sub<LAB> for LAB {
     type Output = LAB;
     fn sub(self, other: LAB) -> Self::Output {
         LAB {
-            l: self.l - other.l,
-            a: self.a - other.a,
-            b: self.b - other.b,
+            l: (self.l as f64 - other.l as f64) as f32,
+            a: (self.a as f64 - other.a as f64) as f32,
+            b: (self.b as f64 - other.b as f64) as f32,
         }
     }
 }
 
 impl LAB {
     pub(crate) fn avg(&self) -> f32 {
-        (self.l + self.a + self.b) / 3.0
+        ((self.l as f64 + self.a as f64 + self.b as f64) / 3.0) as f32
     }
 }
 
@@ -105,9 +105,9 @@ impl std::ops::Div<LAB> for LAB {
     type Output = LAB;
     fn div(self, other: Self::Output) -> Self::Output {
         LAB {
-            l: self.l / other.l,
-            a: self.a / other.a,
-            b: self.b / other.b,
+            l: (self.l as f64 / other.l as f64) as f32,
+            a: (self.a as f64 / other.a as f64) as f32,
+            b: (self.b as f64 / other.b as f64) as f32,
         }
     }
 }
@@ -121,7 +121,7 @@ pub trait Average4 {
 
 impl Average4 for f32 {
     fn average4(a: Self, b: Self, c: Self, d: Self) -> Self {
-        (a + b + c + d) * 0.25
+        ((a as f64 + b as f64 + c as f64 + d as f64) * 0.25) as f32
     }
 }
 
@@ -222,7 +222,7 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send 
 }
 
 #[allow(dead_code)]
-pub(crate) fn worst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
+pub(crate) fn worst(input: ImgRef<'_, f64>) -> ImgVec<f64> {
     let stride = input.stride();
     let half_height = input.height() / 2;
     let half_width = input.width() / 2;
@@ -247,13 +247,13 @@ pub(crate) fn worst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
 }
 
 #[allow(dead_code)]
-pub(crate) fn avgworst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
+pub(crate) fn avgworst(input: ImgRef<'_, f32>) -> ImgVec<f64> {
     let stride = input.stride();
     let half_height = input.height() / 2;
     let half_width = input.width() / 2;
 
     if half_height < 4 || half_width < 4 {
-        return input.new_buf(input.buf().to_vec());
+        return input.new_buf(input.buf().iter().map(|x| *x as f64).collect());
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
@@ -263,7 +263,11 @@ pub(crate) fn avgworst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
         let bot = &bot[0..half_width * 2];
 
         return top.chunks_exact(2).zip(bot.chunks_exact(2)).map(|(a,b)| {
-            (a[0].min(a[1]).min(b[0].min(b[1])) + ((a[0] + a[1] + b[0] + b[1]) * 0.25))*0.5
+            let a0 = a[0] as f64;
+            let a1 = a[1] as f64;
+            let b0 = b[0] as f64;
+            let b1 = b[1] as f64;
+            (a0.min(a1).min(b0.min(b1)) + ((a0 + a1 + b0 + b1) * 0.25))*0.5
         });
     }));
 
@@ -272,7 +276,7 @@ pub(crate) fn avgworst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
 }
 
 #[allow(dead_code)]
-pub(crate) fn avg(input: ImgRef<'_, f32>) -> ImgVec<f32> {
+pub(crate) fn avg(input: ImgRef<'_, f64>) -> ImgVec<f64> {
     let stride = input.stride();
     let half_height = input.height() / 2;
     let half_width = input.width() / 2;
