@@ -18,20 +18,20 @@ pub(crate) trait ToLAB {
 
 impl ToLAB for RGBLU {
     fn to_lab(&self) -> (f32, f32, f32) {
-        let fx = ((self.r as f64 * 0.4124 + self.g as f64 * 0.3576 + self.b as f64 * 0.1805) / D65x) as f32;
-        let fy = ((self.r as f64 * 0.2126 + self.g as f64 * 0.7152 + self.b as f64 * 0.0722) / D65y) as f32;
-        let fz = ((self.r as f64 * 0.0193 + self.g as f64 * 0.1192 + self.b as f64 * 0.9505) / D65z) as f32;
+        let fx = (self.r as f64 * 0.4124 + self.g as f64 * 0.3576 + self.b as f64 * 0.1805) / D65x;
+        let fy = (self.r as f64 * 0.2126 + self.g as f64 * 0.7152 + self.b as f64 * 0.0722) / D65y;
+        let fz = (self.r as f64 * 0.0193 + self.g as f64 * 0.1192 + self.b as f64 * 0.9505) / D65z;
 
-        let epsilon: f32 = 216. / 24389.;
-        let k = ((24389. / 27.) / 116.) as f32; // http://www.brucelindbloom.com/LContinuity.html
+        let epsilon: f64 = 216. / 24389.;
+        let k = 24389. / (27. * 116.); // http://www.brucelindbloom.com/LContinuity.html
         let X = if fx > epsilon {fx.powf(1./3.) - 16./116.} else {k * fx};
         let Y = if fy > epsilon {fy.powf(1./3.) - 16./116.} else {k * fy};
         let Z = if fz > epsilon {fz.powf(1./3.) - 16./116.} else {k * fz};
 
         return (
-            Y * 1.16,
-            (86.2/ 220.0 + 500.0/ 220.0 * (X - Y)), /* 86 is a fudge to make the value positive */
-            (107.9/ 220.0 + 200.0/ 220.0 * (Y - Z)), /* 107 is a fudge to make the value positive */
+            (Y * 1.16) as f32,
+            ((86.2/ 220.0 + 500.0/ 220.0 * (X - Y))) as f32, /* 86 is a fudge to make the value positive */
+            ((107.9/ 220.0 + 200.0/ 220.0 * (Y - Z))) as f32, /* 107 is a fudge to make the value positive */
         );
     }
 }
