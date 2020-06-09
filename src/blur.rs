@@ -15,35 +15,35 @@ mod mac {
     use crate::ffi::vImage_Flags::kvImageEdgeExtend;
     use super::KERNEL;
 
-    pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [f32], dst: ImgRefMut<'_, f32>) {
+    pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [f32], mut dst: ImgRefMut<'_, f32>) {
         let srcbuf = vImage_Buffer {
             width: src.width() as vImagePixelCount,
             height: src.height() as vImagePixelCount,
             rowBytes: src.stride() * std::mem::size_of::<f32>(),
-            data: src.buf.as_ptr(),
+            data: src.buf().as_ptr(),
         };
         let mut dstbuf = vImage_Buffer {
             width: dst.width() as vImagePixelCount,
             height: dst.height() as vImagePixelCount,
             rowBytes: dst.stride() * std::mem::size_of::<f32>(),
-            data: dst.buf.as_mut_ptr(),
+            data: dst.buf_mut().as_mut_ptr(),
         };
 
         do_blur(&srcbuf, tmp, &mut dstbuf, src.width(), src.height());
     }
 
-    pub fn blur_in_place(srcdst: ImgRefMut<'_, f32>, tmp: &mut [f32]) {
+    pub fn blur_in_place(mut srcdst: ImgRefMut<'_, f32>, tmp: &mut [f32]) {
         let srcbuf = vImage_Buffer {
             width: srcdst.width() as vImagePixelCount,
             height: srcdst.height() as vImagePixelCount,
             rowBytes: srcdst.stride() * std::mem::size_of::<f32>(),
-            data: srcdst.buf.as_ptr(),
+            data: srcdst.buf().as_ptr(),
         };
         let mut dstbuf = vImage_Buffer {
             width: srcdst.width() as vImagePixelCount,
             height: srcdst.height() as vImagePixelCount,
             rowBytes: srcdst.stride() * std::mem::size_of::<f32>(),
-            data: srcdst.buf.as_mut_ptr(),
+            data: srcdst.buf_mut().as_mut_ptr(),
         };
 
         do_blur(&srcbuf, tmp, &mut dstbuf, srcdst.width(), srcdst.height());

@@ -69,7 +69,7 @@ impl ToLABBitmap for GBitmap {
         // For output width == stride
         out.par_chunks_mut(width).enumerate().for_each(|(y, out_row)|{
             let start = y * self.stride();
-            let in_row = &self.buf[start..start + width];
+            let in_row = &self.buf()[start..start + width];
             let out_row = &mut out_row[0..width];
             let epsilon: f32 = 216. / 24389.;
             for x in 0..width {
@@ -105,7 +105,7 @@ fn rgb_to_lab<'a, T: Copy + Sync + Send + 'static, F>(img: ImgRef<'a, T>, cb: F)
     ).enumerate()
     .for_each(|(y, (l_row, (a_row, b_row)))| {
         let start = y * stride;
-        let in_row = &img.buf[start .. start + width];
+        let in_row = &img.buf()[start .. start + width];
         let l_row = &mut l_row[0..width];
         let a_row = &mut a_row[0..width];
         let b_row = &mut b_row[0..width];

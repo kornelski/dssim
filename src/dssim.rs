@@ -285,8 +285,8 @@ impl Dssim {
             let half = avg(half.as_ref());
             let half = worst(half.as_ref());
 
-            let sum = half.buf.iter().fold(0., |sum, i| sum + *i as f64);
-            let score = sum / (half.buf.len() as f64);
+            let sum = half.pixels().fold(0., |sum, i| sum + i as f64);
+            let score = sum / ((half.width()*half.height()) as f64);
 
             let map = if self.save_maps_scales as usize > n {
                 Some(SsimMap {
