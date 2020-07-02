@@ -8,7 +8,7 @@ The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded
 
 ## Features
 
-* Comparison is done in L\*a\*b\* color space (D65 white point, sRGB gamma) with chroma subsampling. Other implementations use "RGB" or grayscale without gamma correction.
+* Comparison is done in L\*a\*b\* color space (D65 white point, sRGB gamma). Other implementations use "RGB" or grayscale without gamma correction.
 * Supports alpha channel.
 * No OpenCV or MATLAB needed.
    - DSSIM [version 1.x](https://github.com/pornel/dssim/tree/dssim1-c) uses C (C99) and `libpng` or Cocoa on macOS.
@@ -29,6 +29,8 @@ You can save an image visualising the difference between the files:
     dssim -o difference.png file.png file-modified.png
 
 It's also usable [as a library](https://docs.rs/dssim).
+
+Please be careful about color profiles in the images. Different profiles, or lack of support for profiles, can make images appear different even when the pixels are the same.
 
 ### Interpreting the values
 
@@ -71,3 +73,12 @@ Full   | -0.861
 ## License
 
 DSSIM is dual-licensed under [AGPL](LICENSE) or [commercial](https://supso.org/projects/dssim) license.
+
+## The algorithm improvements in DSSIM
+
+* The comparison is done on multiple weighed scales (based on IWSSIM) to measure features of different sizes. A single-scale SSIM is biased towards differences smaller than its gaussian kernel.
+* Scaling is done in linear-light RGB to model physical effects of viewing distance/lenses. Scaling in sRGB or Lab would have incorrect gamma and mask distortions caused by chroma subsampling.
+* ab channels of Lab are compared with lower spatial precision to simulate eyes' higher sensitivity to brightness than color changes.
+* The lightness component of SSIM is ignored when comparing color channels.
+* SSIM score is pooled using a combination of local maximums and global averages. You can get per-pixel SSIM from the API to implement custom pooling.
+
