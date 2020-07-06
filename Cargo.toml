@@ -8,10 +8,9 @@ include = ["README.md", "Cargo.toml", "src/*.rs", "LICENSE"]
 keywords = ["ssim", "image", "comparison"]
 license = "AGPL-3.0"
 name = "dssim"
-publish = false
 readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
-version = "2.11.0"
+version = "2.11.1"
 edition = "2018"
 
 [[bin]]
@@ -23,10 +22,10 @@ path = "src/main.rs"
 getopts = "0.2.21"
 imgref = "1.6.1"
 itertools = "0.9.0"
-lodepng = "2.6.0"
-rayon = "1.3.0"
-rgb = "0.8.18"
-load_image = { version = "2.12.0", features = ["static"] }
+lodepng = "3.0.0"
+rayon = "1.3.1"
+rgb = "0.8.20"
+load_image = { version = "2.12.1", features = ["static"] }
 
 [lib]
 doctest = false
