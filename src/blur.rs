@@ -155,7 +155,7 @@ mod portable {
     pub fn blur_in_place(srcdst: ImgRefMut<f32>, tmp: &mut [f32]) {
         {
             let tmp_dst = ImgRefMut::new(tmp, srcdst.width(), srcdst.height());
-            do_blur(srcdst.new_buf(&srcdst.buf()), tmp_dst);
+            do_blur(srcdst.as_ref(), tmp_dst);
         }
         let tmp_src = ImgRef::new(tmp, srcdst.width(), srcdst.height());
         do_blur(tmp_src, srcdst);
