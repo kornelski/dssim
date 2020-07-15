@@ -128,8 +128,8 @@ mod portable {
         let height = src.height();
         let src_stride = src.stride();
         let dst_stride = dst.stride();
-        let src = &src.buf[..];
-        let dst = &mut dst.buf[..];
+        let src = src.buf();
+        let dst = dst.buf_mut();
 
         let mut prev = &src[0..width];
         let mut curr = prev;
@@ -140,7 +140,7 @@ mod portable {
             let next_start = (y+1)*src_stride;
             next = if y+1 < height {&src[next_start..next_start+width]} else {curr};
 
-            let mut dstrow = &mut dst[y*dst_stride..y*dst_stride+width];
+            let dstrow = &mut dst[y*dst_stride..y*dst_stride+width];
 
             dstrow[0] = do3(prev, curr, next, 0, width);
             for i in 1..width-1 {
@@ -155,7 +155,7 @@ mod portable {
     pub fn blur_in_place(srcdst: ImgRefMut<f32>, tmp: &mut [f32]) {
         {
             let tmp_dst = ImgRefMut::new(tmp, srcdst.width(), srcdst.height());
-            do_blur(srcdst.new_buf(&srcdst.buf[..]), tmp_dst);
+            do_blur(srcdst.new_buf(&srcdst.buf()), tmp_dst);
         }
         let tmp_src = ImgRef::new(tmp, srcdst.width(), srcdst.height());
         do_blur(tmp_src, srcdst);
