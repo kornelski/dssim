@@ -118,7 +118,7 @@ fn main() {
 
         let (dssim, ssim_maps) = attr.compare(&original, modified);
 
-        println!("{:.6}\t{}", dssim, file2.display());
+        println!("{:.8}\t{}", dssim, file2.display());
 
         if map_output_file.is_some() {
             ssim_maps.par_iter().enumerate().for_each(|(n, map_meta)| {

@@ -20,7 +20,7 @@ impl Dssim {
 
 impl fmt::Display for Dssim {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(fmt, "{:.6}", self.0)
+        write!(fmt, "{:.*}", fmt.precision().unwrap_or(6), self.0)
     }
 }
 
