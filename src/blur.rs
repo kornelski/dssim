@@ -115,7 +115,7 @@ mod portable {
         do_blur(tmp_src, dst);
     }
 
-    pub fn do_blur(src: ImgRef<f32>, dst: ImgRefMut<f32>) {
+    pub fn do_blur(src: ImgRef<f32>, mut dst: ImgRefMut<f32>) {
         assert_eq!(src.width(), dst.width());
         assert_eq!(src.height(), dst.height());
         assert!(src.width() > 0);
