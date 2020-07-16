@@ -74,7 +74,7 @@ dependencies = [
 
 [[package]]
 name = "dssim"
-version = "2.11.1"
+version = "2.11.2"
 dependencies = [
  "getopts 0.2.21 (registry+https://github.com/rust-lang/crates.io-index)",
  "imgref 1.6.1 (registry+https://github.com/rust-lang/crates.io-index)",
