@@ -396,8 +396,8 @@ fn png_compare() {
     use crate::linear::*;
 
     let d = new();
-    let file1 = lodepng::decode32_file("tests/test1-sm.png").unwrap();
-    let file2 = lodepng::decode32_file("tests/test2-sm.png").unwrap();
+    let file1 = lodepng::decode32_file("../tests/test1-sm.png").unwrap();
+    let file2 = lodepng::decode32_file("../tests/test2-sm.png").unwrap();
 
     let buf1 = &file1.buffer.to_rgbaplu()[..];
     let buf2 = &file2.buffer.to_rgbaplu()[..];
