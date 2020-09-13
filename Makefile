@@ -14,8 +14,8 @@ CFLAGS += -std=c99 `pkg-config libpng --cflags || pkg-config libpng16 --cflags` 
 
 
 ifdef USE_LIBJPEG
-LDFLAGS += -ljpeg
-CFLAGS += -DUSE_LIBJPEG
+CFLAGS += -DUSE_LIBJPEG `pkg-config libjpeg --cflags 2>/dev/null`
+LDFLAGS += `pkg-config libjpeg --libs 2>/dev/null || echo -ljpeg`
 endif
  
 LDFLAGS += `pkg-config libpng --libs || pkg-config libpng16 --libs` -lm -lz $(LDFLAGSADD)
