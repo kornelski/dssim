@@ -1,0 +1,1 @@
+option('jpeg', type: 'feature', value: 'auto', description: 'JPEG support')
