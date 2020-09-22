@@ -45,7 +45,7 @@ pkg.generate(libraries : libdssim,
              version : meson.project_version(),
              description : 'A structural similarity library.')
 
-png_dep = dependency('libpng')
+png_dep = dependency('libpng', version: '>=1.4')
 executable = executable ('dssim',
              dssim_sources,
              install: true,
