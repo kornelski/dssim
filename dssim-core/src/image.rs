@@ -4,9 +4,9 @@ use std;
 use rgb::*;
 use imgref::*;
 
-/// RGBA, but: premultiplied alpha, linear, f32 unit scale 0..1
+/// RGBA, but: premultiplied alpha, linear (using sRGB primaries, but not its gamma curve), f32 unit scale 0..1
 pub type RGBAPLU = RGBA<f32>;
-/// RGB, but linear, f32 unit scale 0..1
+/// RGB, but: linear (using sRGB primaries, but not its gamma curve), f32 unit scale 0..1
 pub type RGBLU = RGB<f32>;
 
 /// L\*a\*b\*b, but using float units (values are 100× smaller than in usual integer representation)

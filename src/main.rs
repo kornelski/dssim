@@ -19,9 +19,9 @@
 
 
 use std::env;
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use getopts::Options;
-use load_image::*;
+
 use dssim::*;
 use imgref::*;
 use rayon::prelude::*;
@@ -40,20 +40,6 @@ fn to_byte(i: f32) -> u8 {
     if i <= 0.0 {0}
     else if i >= 255.0/256.0 {255}
     else {(i * 256.0) as u8}
-}
-
-fn load<P: AsRef<Path>>(path: P) -> Result<ImgVec<RGBAPLU>, lodepng::Error> {
-    let img = load_image::load_image(path.as_ref(), false)?;
-    match img.bitmap {
-        ImageData::RGB8(ref bitmap) => Ok(Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
-        ImageData::RGB16(ref bitmap) => Ok(Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
-        ImageData::RGBA8(ref bitmap) => Ok(Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
-        ImageData::RGBA16(ref bitmap) => Ok(Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
-        ImageData::GRAY8(ref bitmap) => Ok(Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
-        ImageData::GRAY16(ref bitmap) => Ok(Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
-        ImageData::GRAYA8(ref bitmap) => Ok(Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
-        ImageData::GRAYA16(ref bitmap) => Ok(Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
-    }
 }
 
 fn main() {
@@ -89,9 +75,8 @@ fn main() {
     let mut attr = dssim::Dssim::new();
 
     let files = files.par_iter().map(|file| -> Result<_, String> {
-        let bitmap = load(&file).map_err(|e| format!("Can't load {}, because: {}", file.display(), e))?;
-        let image = attr.create_image(&bitmap).ok_or_else(|| format!("Can't use {}, internal error", file.display()))?;
-        Ok((file, bitmap, image))
+        let image = dssim::load_image(&attr, &file).map_err(|e| format!("Can't load {}, because: {}", file.display(), e))?;
+        Ok((file, image))
     }).collect::<Result<Vec<_>,_>>();
 
     let mut files = match files {
@@ -102,13 +87,13 @@ fn main() {
             },
         };
 
-    let (file1, orig_rgba, original) = files.remove(0);
+    let (file1, original) = files.remove(0);
 
-    for (file2, mod_rgba, modified) in files {
-        if orig_rgba.width() != mod_rgba.width() || orig_rgba.height() != mod_rgba.height() {
+    for (file2, modified) in files {
+        if original.width() != modified.width() || original.height() != modified.height() {
             eprintln!("Image {} has a different size ({}x{}) than {} ({}x{})\n",
-                file2.display(), mod_rgba.width(), mod_rgba.height(),
-                file1.display(), orig_rgba.width(), orig_rgba.height());
+                file2.display(), modified.width(), modified.height(),
+                file1.display(), original.width(), original.height());
             std::process::exit(1);
         }
 
@@ -147,10 +132,10 @@ fn main() {
 fn image_gray() {
     let attr = dssim::Dssim::new();
 
-    let g1 = attr.create_image(&load("tests/gray1-rgba.png").unwrap()).unwrap();
-    let g2 = attr.create_image(&load("tests/gray1-pal.png").unwrap()).unwrap();
-    let g3 = attr.create_image(&load("tests/gray1-gray.png").unwrap()).unwrap();
-    let g4 = attr.create_image(&load("tests/gray1.jpg").unwrap()).unwrap();
+    let g1 = dssim::load_image(&attr, "tests/gray1-rgba.png").unwrap();
+    let g2 = dssim::load_image(&attr, "tests/gray1-pal.png").unwrap();
+    let g3 = dssim::load_image(&attr, "tests/gray1-gray.png").unwrap();
+    let g4 = dssim::load_image(&attr, "tests/gray1.jpg").unwrap();
 
     let (diff, _) = attr.compare(&g1, g2);
     assert!(diff < 0.00001);
@@ -166,9 +151,9 @@ fn image_gray() {
 fn image_gray_profile() {
     let attr = dssim::Dssim::new();
 
-    let gp1 = attr.create_image(&load("tests/gray-profile.png").unwrap()).unwrap();
-    let gp2 = attr.create_image(&load("tests/gray-profile2.png").unwrap()).unwrap();
-    let gp3 = attr.create_image(&load("tests/gray-profile.jpg").unwrap()).unwrap();
+    let gp1 = dssim::load_image(&attr, "tests/gray-profile.png").unwrap();
+    let gp2 = dssim::load_image(&attr, "tests/gray-profile2.png").unwrap();
+    let gp3 = dssim::load_image(&attr, "tests/gray-profile.jpg").unwrap();
 
     let (diff, _) = attr.compare(&gp1, gp2);
     assert!(diff < 0.0003, "{}", diff);
@@ -181,16 +166,16 @@ fn image_gray_profile() {
 fn image_load1() {
 
     let attr = dssim::Dssim::new();
-    let prof_jpg = attr.create_image(&load("tests/profile.jpg").unwrap()).unwrap();
-    let prof_png = attr.create_image(&load("tests/profile.png").unwrap()).unwrap();
+    let prof_jpg = dssim::load_image(&attr, "tests/profile.jpg").unwrap();
+    let prof_png = dssim::load_image(&attr, "tests/profile.png").unwrap();
     let (diff, _) = attr.compare(&prof_jpg, prof_png);
     assert!(diff <= 0.002);
 
-    let strip_jpg = attr.create_image(&load("tests/profile-stripped.jpg").unwrap()).unwrap();
+    let strip_jpg = dssim::load_image(&attr, "tests/profile-stripped.jpg").unwrap();
     let (diff, _) = attr.compare(&strip_jpg, prof_jpg);
     assert!(diff > 0.013);
 
-    let strip_png = attr.create_image(&load("tests/profile-stripped.png").unwrap()).unwrap();
+    let strip_png = dssim::load_image(&attr, "tests/profile-stripped.png").unwrap();
     let (diff, _) = attr.compare(&strip_jpg, strip_png);
     assert!(diff > 0.014);
 }

@@ -58,10 +58,22 @@ struct DssimChanScale<T> {
     chan: Vec<DssimChan<T>>,
 }
 
-/// Abstract wrapper for images. See `Dssim.create_image()`
+/// Abstract wrapper for images. See [`Dssim::create_image()`]
 #[derive(Clone)]
 pub struct DssimImage<T> {
     scale: Vec<DssimChanScale<T>>,
+}
+
+impl<T> DssimImage<T> {
+    #[inline]
+    pub fn width(&self) -> usize {
+        self.scale[0].chan[0].width
+    }
+
+    #[inline]
+    pub fn height(&self) -> usize {
+        self.scale[0].chan[0].height
+    }
 }
 
 // Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm
@@ -207,12 +219,12 @@ impl Dssim {
 
     /// The input image is defined using the `imgref` crate, and the pixel type can be:
     ///
-    /// * `ImgVec<RGBAPLU>` — RGBA premultiplied alpha, float scaled to 0..1
-    /// * `ImgVec<RGBLU>` — RGBA float scaled to 0..1
+    /// * `ImgVec<RGBAPLU>` — RGBA premultiplied alpha, linear, float scaled to 0..1
+    /// * `ImgVec<RGBLU>` — RGBA linear, float scaled to 0..1
     /// * `ImgVec<f32>` — linear light grayscale, float scaled to 0..1
     ///
-    /// And there's `ToRGBAPLU` (`.to_rgbaplu()`) helper to convert the input pixels from
-    /// `[RGBA<u8>]`, `[RGBA<u16>]`, `[RGB<u8>]`, or `RGB<u16>`. See `main.rs` for example how it's done.
+    /// And there's [`ToRGBAPLU::to_rgbaplu()`][crate::ToRGBAPLU::to_rgbaplu()] trait to convert the input pixels from
+    /// `[RGBA<u8>]`, `[RGBA<u16>]`, `[RGB<u8>]`, or `RGB<u16>`. See `lib.rs` for example how it's done.
     ///
     /// You can implement `ToLABBitmap` and `Downsample` traits on your own image type.
     pub fn create_image<InBitmap, OutBitmap>(&self, src_img: &InBitmap) -> Option<DssimImage<f32>>
