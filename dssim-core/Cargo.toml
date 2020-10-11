@@ -1,6 +1,6 @@
 [package]
 authors = ["Kornel <pornel@pornel.net>"]
-categories = ["multimedia::images", "command-line-utilities"]
+categories = ["multimedia::images"]
 description = "Library that measures structural similarity between images using a multi-scale variant of the SSIM algorithm."
 documentation = "https://docs.rs/dssim-core"
 homepage = "https://kornel.ski/dssim"
