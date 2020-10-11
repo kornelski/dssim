@@ -21,9 +21,6 @@
 use std::env;
 use std::path::{PathBuf};
 use getopts::Options;
-
-use dssim::*;
-use imgref::*;
 use rayon::prelude::*;
 
 fn usage(argv0: &str) {
@@ -182,6 +179,9 @@ fn image_load1() {
 
 #[test]
 fn rgblu_input() {
+    use dssim::*;
+    use imgref::*;
+
     let ctx = Dssim::new();
     let im: ImgVec<RGBLU> = Img::new(vec![rgb::RGB::new(0.,0.,0.)], 1, 1);
     let imr: ImgRef<'_, RGBLU> = im.as_ref();
