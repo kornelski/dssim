@@ -22,7 +22,7 @@ path = "src/main.rs"
 dssim-core = { path = "./dssim-core", version = "2.11.4" }
 imgref = "1.7.0"
 getopts = "0.2.21"
-rayon = "1.4.1"
+rayon = "1.5.0"
 rgb = "0.8.25"
 lodepng = "3.2.2"
 load_image = { version = "2.12.1", features = ["static"] }
