@@ -295,12 +295,10 @@ impl Dssim {
                 _ => panic!(),
             };
 
-            let half = avgworst(ssim_map.as_ref());
-            let half = avg(half.as_ref());
-            let half = worst(half.as_ref());
-
-            let sum = half.pixels().fold(0., |sum, i| sum + i as f64);
-            let score = sum / ((half.width()*half.height()) as f64);
+            let sum = ssim_map.pixels().fold(0., |sum, i| sum + i as f64);
+            let len = (ssim_map.width()*ssim_map.height()) as f64;
+            let avg = (sum / len).max(0.0).powf((0.5_f64).powf(n as f64));
+            let score = 1.0 - (ssim_map.pixels().fold(0., |sum, i| sum + (avg - i as f64).abs()) / len);
 
             let map = if self.save_maps_scales as usize > n {
                 Some(SsimMap {
