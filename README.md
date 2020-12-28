@@ -48,7 +48,7 @@ The version is printed when you run `dssim -h`.
 
 ## Build or Download
 
-You need Rust
+You need Rust 1.48 or later.
 
     cargo build --release
 
