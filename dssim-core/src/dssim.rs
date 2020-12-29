@@ -178,7 +178,7 @@ impl Dssim {
     /// Create new context for comparisons
     pub fn new() -> Dssim {
         Dssim {
-            scale_weights: DEFAULT_WEIGHTS[0..4].to_owned(),
+            scale_weights: DEFAULT_WEIGHTS[..].to_owned(),
             save_maps_scales: 0,
         }
     }

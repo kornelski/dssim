@@ -56,19 +56,20 @@ Will give you `./target/release/dssim`.
 
 ## Accuracy
 
-Scores for version 2.9 measured against [TID2013][1] database:
+Scores for version 2.11 [measured][2] against [TID2013][1] database:
 
-TID2013 Category | Spearman correlation
---- | ---
-Noise  | -0.930
-Actual | -0.937
-Simple | -0.946
-Exotic | -0.844
-New    | -0.802
-Color  | -0.814
-Full   | -0.861
+TID2013  | Spearman | Kendall
+---------|----------|--------
+Noise    |  -0.9309 | -0.7615
+Actual   |  -0.9380 | -0.7748
+Simple   |  -0.9459 | -0.7927
+Exotic   |  -0.8478 | -0.6549
+New      |  -0.8127 | -0.6335
+Color    |  -0.8259 | -0.6501
+Full     |  -0.8650 | -0.6839
 
 [1]: http://www.ponomarenko.info/tid2013.htm
+[2]: https://lib.rs/crates/tid2013stats
 
 ## License
 
