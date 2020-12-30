@@ -76,8 +76,8 @@ impl<T> DssimImage<T> {
     }
 }
 
-// Scales are taken from IW-SSIM, but this is not IW-SSIM algorithm
-const DEFAULT_WEIGHTS: [f64; 5] = [0.0448, 0.2856, 0.3001, 0.2363, 0.1333];
+// Weighed scales are inspired by the IW-SSIM, but details of the algorithm and weights are different
+const DEFAULT_WEIGHTS: [f64; 5] = [0.028, 0.197, 0.322, 0.298, 0.155];
 
 /// Detailed comparison result
 #[derive(Clone)]
@@ -414,7 +414,7 @@ fn png_compare() {
     let img2 = d.create_image(&Img::new(buf2, file2.width, file2.height)).unwrap();
 
     let (res, _) = d.compare(&img1, img2);
-    assert!((0.002747 - res).abs() < 0.0001, "res is {}", res);
+    assert!((0.002214 - res).abs() < 0.001, "res is {}", res);
 
     let img1b = d.create_image(&Img::new(buf1, file1.width, file1.height)).unwrap();
     let (res, _) = d.compare(&img1, img1b);
