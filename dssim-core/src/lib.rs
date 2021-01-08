@@ -6,10 +6,13 @@
 mod dssim;
 mod image;
 mod blur;
+/// cbindgen:ignore
 mod ffi;
 mod val;
 mod linear;
 mod tolab;
+mod c_api;
+
 pub use crate::dssim::*;
 pub use crate::image::*;
 pub use crate::linear::*;

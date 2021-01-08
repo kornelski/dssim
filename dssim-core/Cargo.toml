@@ -13,6 +13,9 @@ repository = "https://github.com/kornelski/dssim.git"
 version = "2.11.5"
 edition = "2018"
 
+[lib]
+crate-type = ["lib", "staticlib"]
+
 [dependencies]
 imgref = "1.7.0"
 itertools = "0.10.0"
