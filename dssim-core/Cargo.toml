@@ -10,14 +10,14 @@ license = "AGPL-3.0"
 name = "dssim-core"
 readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
-version = "2.11.5"
+version = "2.11.6"
 edition = "2018"
 
 [lib]
 crate-type = ["lib", "staticlib"]
 
 [dependencies]
-imgref = "1.7.0"
+imgref = "1.7.1"
 itertools = "0.10.0"
 rayon = "1.5.0"
 rgb = "0.8.25"

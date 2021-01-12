@@ -1,5 +1,5 @@
 /**
- * Use cargo build --release to create target/releaes/libdssim_core.a
+ * Use cargo build --release to create target/release/libdssim_core.a
  */
 
 #include <stdarg.h>

@@ -41,9 +41,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "const_fn"
-version = "0.4.4"
+version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd51eab21ab4fd6a3bf889e2d0958c0a6e3a61ad04260325e919e652a2a62826"
+checksum = "28b9d6de7f49e22cf97ad17fc4036ece69300032f45f78f30b4a4482cdc3f4a6"
 
 [[package]]
 name = "crc32fast"
@@ -102,7 +102,7 @@ dependencies = [
 
 [[package]]
 name = "dssim"
-version = "2.11.5"
+version = "2.11.6"
 dependencies = [
  "dssim-core",
  "getopts",
@@ -115,7 +115,7 @@ dependencies = [
 
 [[package]]
 name = "dssim-core"
-version = "2.11.5"
+version = "2.11.6"
 dependencies = [
  "imgref",
  "itertools",
@@ -195,9 +195,9 @@ dependencies = [
 
 [[package]]
 name = "imgref"
-version = "1.7.0"
+version = "1.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8767843be7909b5b3ffd9b52cdc042882b94e2cfe0c00abc4ce1c301cb1fcae"
+checksum = "07c89d38187142134cb61fc7a9040ba7f7cbe29fe22bb4b702a4d9a1752fada5"
 
 [[package]]
 name = "itertools"
@@ -247,9 +247,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.81"
+version = "0.2.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1482821306169ec4d07f6aca392a4681f66c75c9918aa49641a2595db64053cb"
+checksum = "89203f3fba0a3795506acaad8ebce3c80c0af93f994d5a1d7a0b1eeb23271929"
 
 [[package]]
 name = "load_image"
@@ -490,9 +490,9 @@ checksum = "d29ab0c6d3fc0ee92fe66e2d99f700eab17a8d57d1c1d3b748380fb20baa78cd"
 
 [[package]]
 name = "syn"
-version = "1.0.56"
+version = "1.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9802ddde94170d186eeee5005b798d9c159fa970403f1be19976d0cfb939b72"
+checksum = "cc60a3d73ea6594cd712d830cc1f0390fd71542d8c8cd24e70cc54cdfd5e05d5"
 dependencies = [
  "proc-macro2",
  "quote",
