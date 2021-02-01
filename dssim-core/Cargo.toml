@@ -23,7 +23,7 @@ rayon = "1.5.0"
 rgb = "0.8.25"
 
 [dev-dependencies]
-lodepng = "3.2.2"
+lodepng = "3.4.3"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
