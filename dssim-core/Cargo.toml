@@ -21,6 +21,7 @@ imgref = "1.7.1"
 itertools = "0.10.0"
 rayon = "1.5.0"
 rgb = "0.8.25"
+oklab = "1.0.0"
 
 [dev-dependencies]
 lodepng = "3.4.3"

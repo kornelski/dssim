@@ -61,13 +61,13 @@ Scores for version 3.0 [measured][2] against [TID2013][1] database:
 
 TID2013  | Spearman | Kendall
 ---------|----------|--------
-Noise    |  -0.9373 | -0.7752
-Actual   |  -0.9431 | -0.7875
-Simple   |  -0.9474 | -0.8010
-Exotic   |  -0.8454 | -0.6591
-New      |  -0.8673 | -0.6915
-Color    |  -0.8742 | -0.6977
-Full     |  -0.8719 | -0.6984
+Noise    |  -0.9377 | -0.7761
+Actual   |  -0.9441 | -0.7907
+Simple   |  -0.9469 | -0.8048
+Exotic   |  -0.8367 | -0.6511
+New      |  -0.8776 | -0.7011
+Color    |  -0.8792 | -0.7005
+Full     |  -0.8707 | -0.6982
 
 [1]: http://www.ponomarenko.info/tid2013.htm
 [2]: https://lib.rs/crates/tid2013stats
