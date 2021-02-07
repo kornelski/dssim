@@ -412,7 +412,7 @@ fn png_compare() {
     let img2 = d.create_image(&Img::new(buf2, file2.width, file2.height)).unwrap();
 
     let (res, _) = d.compare(&img1, img2);
-    assert!((0.002214 - res).abs() < 0.001, "res is {}", res);
+    assert!((0.001 - res).abs() < 0.0005, "res is {}", res);
 
     let img1b = d.create_image(&Img::new(buf1, file1.width, file1.height)).unwrap();
     let (res, _) = d.compare(&img1, img1b);

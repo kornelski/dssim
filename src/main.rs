@@ -170,11 +170,11 @@ fn image_load1() {
 
     let strip_jpg = dssim::load_image(&attr, "tests/profile-stripped.jpg").unwrap();
     let (diff, _) = attr.compare(&strip_jpg, prof_jpg);
-    assert!(diff > 0.011, "{}", diff);
+    assert!(diff > 0.008, "{}", diff);
 
     let strip_png = dssim::load_image(&attr, "tests/profile-stripped.png").unwrap();
     let (diff, _) = attr.compare(&strip_jpg, strip_png);
-    assert!(diff > 0.012, "{}", diff)
+    assert!(diff > 0.009, "{}", diff)
 }
 
 #[test]
