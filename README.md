@@ -1,8 +1,6 @@
 # RGBA Structural Similarity
 
-This tool computes (dis)similarity between two or more PNG images using an algorithm approximating human vision.
-
-Comparison is done using a derivation of [the SSIM algorithm](https://ece.uwaterloo.ca/~z70wang/research/ssim/).
+This tool computes (dis)similarity between two or more images using an algorithm approximating human vision. Comparison is done using a variant of [the SSIM algorithm](https://ece.uwaterloo.ca/~z70wang/research/ssim/).
 
 The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded) is amount of difference. Values are not directly comparable with other tools. [See below](#interpreting-the-values) on interpreting the values.
 
@@ -11,8 +9,10 @@ The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded
 * Improved algorithm
     * Compares at multiple weighed resolutions, and scaling is done in linear-light RGB. It's sensitive to distortions of various sizes and blends colors correctly to detect e.g. chroma subsampling errors.
     * Uses L\*a\*b\* color space for the SSIM algorithm. It measures brightness and color much better than metrics from average of RGB channels.
-    * Uses mean absolute deviation for pooling of SSIM values.
 * Supports alpha channel.
+* Supports images with color profiles.
+* Takes advantage of multi-core CPUs.
+* Can be used as a library in C, Rust, and WASM.
 * No OpenCV or MATLAB needed.
 
 ## Usage
@@ -31,7 +31,7 @@ You can save an image visualising the difference between the files:
 
 It's also usable [as a library](https://docs.rs/dssim).
 
-Please be careful about color profiles in the images. Different profiles, or lack of support for profiles, can make images appear different even when the pixels are the same.
+Please be mindful about color profiles in the images. Different profiles, or lack of support for profiles in other tools, can make images appear different even when the pixels are the same.
 
 ### Interpreting the values
 
@@ -44,12 +44,16 @@ If you're comparing two different image compression codecs, then ensure you eith
 
 [More about benchmarking image compression](https://kornel.ski/faircomparison).
 
-When you quote results, please include DSSIM version, since the scale has changed between versions.
+When you quote results, please include the DSSIM version. The scale has changed between versions.
 The version is printed when you run `dssim -h`.
 
-## Build or Download
+## Download
 
-You need Rust 1.48 or later.
+[Download from releases page](https://github.com/kornelski/dssim/releases). It's also available in Mac Homebrew and Ubuntu Snaps.
+
+### Build from source
+
+You'll need [Rust 1.48](https://rustup.rs) or later. Clone the repo and run:
 
     cargo build --release
 
@@ -80,7 +84,7 @@ DSSIM is dual-licensed under [AGPL](LICENSE) or [commercial](https://supso.org/p
 
 * The comparison is done on multiple weighed scales (based on IWSSIM) to measure features of different sizes. A single-scale SSIM is biased towards differences smaller than its gaussian kernel.
 * Scaling is done in linear-light RGB to model physical effects of viewing distance/lenses. Scaling in sRGB or Lab would have incorrect gamma and mask distortions caused by chroma subsampling.
-* ab channels of Lab are compared with lower spatial precision to simulate eyes' higher sensitivity to brightness than color changes.
+* a/b channels of Lab are compared with lower spatial precision to simulate eyes' higher sensitivity to brightness than color changes.
 * The lightness component of SSIM is ignored when comparing color channels.
-* SSIM score is pooled using a combination of local maximums and global averages. You can get per-pixel SSIM from the API to implement custom pooling.
+* SSIM score is pooled using mean absolute deviation. You can get per-pixel SSIM from the API to implement custom pooling.
 
