@@ -30,8 +30,8 @@ impl ToLAB for RGBLU {
 
         return (
             (Y * 1.16) as f32,
-            ((86.2/ 220.0 + 500.0/ 220.0 * (X - Y))) as f32, /* 86 is a fudge to make the value positive */
-            ((107.9/ 220.0 + 200.0/ 220.0 * (Y - Z))) as f32, /* 107 is a fudge to make the value positive */
+            1.1 * (86.2/ 220.0 + 500.0/ 220.0 * (X - Y)) as f32, /* 86 is a fudge to make the value positive */
+            1.1 * (107.9/ 220.0 + 200.0/ 220.0 * (Y - Z)) as f32, /* 107 is a fudge to make the value positive */
         );
     }
 }
