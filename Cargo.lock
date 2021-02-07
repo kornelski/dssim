@@ -108,7 +108,7 @@ dependencies = [
 
 [[package]]
 name = "dssim"
-version = "2.11.6"
+version = "3.0.0"
 dependencies = [
  "dssim-core",
  "getopts",
@@ -121,7 +121,7 @@ dependencies = [
 
 [[package]]
 name = "dssim-core"
-version = "2.11.6"
+version = "3.0.0"
 dependencies = [
  "imgref",
  "itertools",

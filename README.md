@@ -2,17 +2,18 @@
 
 This tool computes (dis)similarity between two or more PNG images using an algorithm approximating human vision.
 
-Comparison is done using [the SSIM algorithm](https://ece.uwaterloo.ca/~z70wang/research/ssim/) at multiple weighed resolutions.
+Comparison is done using a derivation of [the SSIM algorithm](https://ece.uwaterloo.ca/~z70wang/research/ssim/).
 
 The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded) is amount of difference. Values are not directly comparable with other tools. [See below](#interpreting-the-values) on interpreting the values.
 
 ## Features
 
-* Comparison is done in L\*a\*b\* color space (D65 white point, sRGB gamma). Other implementations use "RGB" or grayscale without gamma correction.
+* Improved algorithm
+    * Compares at multiple weighed resolutions, and scaling is done in linear-light RGB. It's sensitive to distortions of various sizes and blends colors correctly to detect e.g. chroma subsampling errors.
+    * Uses L\*a\*b\* color space for the SSIM algorithm. It measures brightness and color much better than metrics from average of RGB channels.
+    * Uses mean absolute deviation for pooling of SSIM values.
 * Supports alpha channel.
 * No OpenCV or MATLAB needed.
-   - DSSIM [version 1.x](https://github.com/pornel/dssim/tree/dssim1-c) uses C (C99) and `libpng` or Cocoa on macOS.
-   - DSSIM version 2.x is easy to build with [Rust](https://www.rust-lang.org/).
 
 ## Usage
 
@@ -56,17 +57,17 @@ Will give you `./target/release/dssim`.
 
 ## Accuracy
 
-Scores for version 2.11 [measured][2] against [TID2013][1] database:
+Scores for version 3.0 [measured][2] against [TID2013][1] database:
 
 TID2013  | Spearman | Kendall
 ---------|----------|--------
-Noise    |  -0.9336 | -0.7670
-Actual   |  -0.9405 | -0.7803
-Simple   |  -0.9479 | -0.7980
-Exotic   |  -0.8510 | -0.6628
-New      |  -0.8408 | -0.6619
-Color    |  -0.8537 | -0.6761
-Full     |  -0.8724 | -0.6953
+Noise    |  -0.9375 | -0.7756
+Actual   |  -0.9433 | -0.7879
+Simple   |  -0.9482 | -0.8032
+Exotic   |  -0.8449 | -0.6584
+New      |  -0.8585 | -0.6826
+Color    |  -0.8669 | -0.6904
+Full     |  -0.8683 | -0.6944
 
 [1]: http://www.ponomarenko.info/tid2013.htm
 [2]: https://lib.rs/crates/tid2013stats
