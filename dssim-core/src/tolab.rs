@@ -44,14 +44,14 @@ pub trait ToLABBitmap {
 }
 
 impl ToLABBitmap for ImgVec<RGBAPLU> {
-    #[inline]
+    #[inline(always)]
     fn to_lab(&self) -> Vec<GBitmap> {
         self.as_ref().to_lab()
     }
 }
 
 impl ToLABBitmap for ImgVec<RGBLU> {
-    #[inline]
+    #[inline(always)]
     fn to_lab(&self) -> Vec<GBitmap> {
         self.as_ref().to_lab()
     }
@@ -126,6 +126,7 @@ fn rgb_to_lab<'a, T: Copy + Sync + Send + 'static, F>(img: ImgRef<'a, T>, cb: F)
 }
 
 impl<'a> ToLABBitmap for ImgRef<'a, RGBAPLU> {
+    #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
         rgb_to_lab(*self, |px, n|{
             px.to_rgb(n).to_lab()
@@ -134,6 +135,7 @@ impl<'a> ToLABBitmap for ImgRef<'a, RGBAPLU> {
 }
 
 impl<'a> ToLABBitmap for ImgRef<'a, RGBLU> {
+    #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
         rgb_to_lab(*self, |px, _n|{
             px.to_lab()
