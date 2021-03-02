@@ -28,11 +28,11 @@ impl ToLAB for RGBLU {
         let Y = if fy > epsilon {fy.powf(1./3.) - 16./116.} else {k * fy};
         let Z = if fz > epsilon {fz.powf(1./3.) - 16./116.} else {k * fz};
 
-        return (
+        (
             (Y * 1.16) as f32,
             1.1 * (86.2/ 220.0 + 500.0/ 220.0 * (X - Y)) as f32, /* 86 is a fudge to make the value positive */
             1.1 * (107.9/ 220.0 + 200.0/ 220.0 * (Y - Z)) as f32, /* 107 is a fudge to make the value positive */
-        );
+        )
     }
 }
 
@@ -84,7 +84,7 @@ impl ToLABBitmap for GBitmap {
     }
 }
 
-fn rgb_to_lab<'a, T: Copy + Sync + Send + 'static, F>(img: ImgRef<'a, T>, cb: F) -> Vec<GBitmap>
+fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> Vec<GBitmap>
     where F: Fn(T, usize) -> (f32, f32, f32) + Sync + Send + 'static
 {
     let width = img.width();

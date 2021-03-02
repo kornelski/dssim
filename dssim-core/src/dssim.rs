@@ -24,16 +24,14 @@ use itertools::multizip;
 use crate::blur;
 use crate::image::*;
 use imgref::*;
-use rayon;
 use rayon::prelude::*;
-use std;
 use std::borrow::Borrow;
 use std::ops;
 pub use crate::val::Dssim as Val;
 pub use crate::tolab::ToLABBitmap;
 
 trait Channable<T, I> {
-    fn img1_img2_blur<'a>(&self, modified: &Self, tmp: &mut [I]) -> Vec<T>;
+    fn img1_img2_blur(&self, modified: &Self, tmp: &mut [I]) -> Vec<T>;
 }
 
 #[derive(Clone)]
@@ -93,15 +91,15 @@ pub fn new() -> Dssim {
     Dssim::new()
 }
 
-impl<T> DssimChan<T> {
-    pub fn new(bitmap: ImgVec<T>, is_chroma: bool) -> DssimChan<T> {
+impl DssimChan<f32> {
+    pub fn new(bitmap: ImgVec<f32>, is_chroma: bool) -> Self {
         DssimChan {
             width: bitmap.width(),
             height: bitmap.height(),
             mu: Vec::new(),
             img: Some(bitmap),
             img_sq_blur: Vec::new(),
-            is_chroma: is_chroma,
+            is_chroma,
         }
     }
 }
@@ -170,7 +168,7 @@ impl Channable<f32, f32> for DssimChan<f32> {
 
         debug_assert_eq!(out.len(), width * height);
         blur::blur_in_place(ImgRefMut::new(&mut out, width, height), tmp32);
-        return out;
+        out
     }
 }
 
@@ -214,7 +212,7 @@ impl Dssim {
             }
         }
 
-        return downsampled;
+        downsampled
     }
 
     /// The input image is defined using the `imgref` crate, and the pixel type can be:
@@ -322,7 +320,7 @@ impl Dssim {
             }
         }
 
-        return (to_dssim(ssim_sum / weight_sum).into(), ssim_maps);
+        (to_dssim(ssim_sum / weight_sum).into(), ssim_maps)
     }
 
     fn lab_chan(scale: &DssimChanScale<f32>) -> DssimChan<LAB> {
@@ -388,12 +386,12 @@ impl Dssim {
                        ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2));
         });
 
-        return ImgVec::new(map_out, width, height);
+        ImgVec::new(map_out, width, height)
     }
 }
 
 fn to_dssim(ssim: f64) -> f64 {
-    return 1.0 / ssim.max(std::f64::EPSILON) - 1.0;
+    1.0 / ssim.max(std::f64::EPSILON) - 1.0
 }
 
 #[test]

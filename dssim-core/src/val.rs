@@ -32,19 +32,11 @@ impl PartialEq<Dssim> for f64 {
     fn eq(&self, other: &Dssim) -> bool {
         *self == other.0
     }
-
-    fn ne(&self, other: &Dssim) -> bool {
-        *self != other.0
-    }
 }
 
 impl PartialEq<f64> for Dssim {
     fn eq(&self, other: &f64) -> bool {
         self.0 == *other
-    }
-
-    fn ne(&self, other: &f64) -> bool {
-        self.0 != *other
     }
 }
 

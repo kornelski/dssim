@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use std;
 use rgb::*;
 use imgref::*;
 
@@ -168,11 +167,7 @@ impl ToRGB for RGBAPLU {
             }
         }
 
-        RGBLU {
-            r: r,
-            g: g,
-            b: b,
-        }
+        RGBLU {r, g, b}
     }
 }
 
@@ -217,7 +212,7 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send 
         }));
 
         assert_eq!(half_width * half_height, scaled.len());
-        return Some(Img::new(scaled, half_width, half_height));
+        Some(Img::new(scaled, half_width, half_height))
     }
 }
 

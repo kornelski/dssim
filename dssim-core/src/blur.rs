@@ -8,7 +8,6 @@ const KERNEL: [f32; 9] = [
 #[cfg(target_os = "macos")]
 mod mac {
     use imgref::*;
-    use std;
     use crate::ffi::vImage_Buffer;
     use crate::ffi::vImagePixelCount;
     use crate::ffi::vImageConvolve_PlanarF;
