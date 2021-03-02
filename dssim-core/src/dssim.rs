@@ -93,6 +93,8 @@ pub fn new() -> Dssim {
 
 impl DssimChan<f32> {
     pub fn new(bitmap: ImgVec<f32>, is_chroma: bool) -> Self {
+        debug_assert!(bitmap.pixels().all(|i| i.is_finite() && i >= 0.0 && i <= 1.0));
+
         DssimChan {
             width: bitmap.width(),
             height: bitmap.height(),

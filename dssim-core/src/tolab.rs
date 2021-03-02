@@ -28,11 +28,13 @@ impl ToLAB for RGBLU {
         let Y = if fy > epsilon { fy.powf(1. / 3.) - 16. / 116. } else { k * fy };
         let Z = if fz > epsilon { fz.powf(1. / 3.) - 16. / 116. } else { k * fz };
 
-        (
-            (Y * 1.16) as f32,
-            1.1 * (86.2 / 220.0 + 500.0 / 220.0 * (X - Y)) as f32,  /* 86 is a fudge to make the value positive */
-            1.1 * (107.9 / 220.0 + 200.0 / 220.0 * (Y - Z)) as f32, /* 107 is a fudge to make the value positive */
-        )
+        let lab = (
+            (Y * 1.05) as f32, // 1.05 instead of 1.16 to boost color importance without pushing colors outside of 1.0 range
+            (86.2 / 220.0 + 500.0 / 220.0 * (X - Y)) as f32,  /* 86 is a fudge to make the value positive */
+            (107.9 / 220.0 + 200.0 / 220.0 * (Y - Z)) as f32, /* 107 is a fudge to make the value positive */
+        );
+        debug_assert!(lab.0 <= 1.0 && lab.1 <= 1.0 && lab.2 <= 1.0);
+        lab
     }
 }
 
