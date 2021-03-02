@@ -1,7 +1,7 @@
+use crate::Dssim;
 use crate::ToRGBAPLU;
 use imgref::ImgVec;
 use rgb::RGBA8;
-use crate::Dssim;
 
 pub type DssimImage = crate::DssimImage<f32>;
 
@@ -32,7 +32,7 @@ pub type DssimImage = crate::DssimImage<f32>;
     let img = ImgVec::new(pixels, width, height);
     match dssim.create_image(&img) {
         Some(img) => Box::into_raw(Box::new(img)),
-        None => std::ptr::null_mut()
+        None => std::ptr::null_mut(),
     }
 }
 

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
-use rgb::*;
 use imgref::*;
+use rgb::*;
 
 /// RGBA, but: premultiplied alpha, linear (using sRGB primaries, but not its gamma curve), f32 unit scale 0..1
 pub type RGBAPLU = RGBA<f32>;
@@ -167,7 +167,7 @@ impl ToRGB for RGBAPLU {
             }
         }
 
-        RGBLU {r, g, b}
+        RGBLU { r, g, b }
     }
 }
 
@@ -203,12 +203,12 @@ impl<'a, T> Downsample for ImgRef<'a, T> where T: Average4 + Copy + Sync + Send 
         let half_width = width / 2;
 
         let mut scaled = Vec::with_capacity(half_width * half_height);
-        scaled.extend(self.buf().chunks(stride * 2).take(half_height).flat_map(|pair|{
+        scaled.extend(self.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
             let (top, bot) = pair.split_at(stride);
             let top = &top[0..half_width * 2];
             let bot = &bot[0..half_width * 2];
 
-            return top.chunks_exact(2).zip(bot.chunks_exact(2)).map(|(a,b)| Average4::average4(a[0], a[1], b[0], b[1]))
+            return top.chunks_exact(2).zip(bot.chunks_exact(2)).map(|(a, b)| Average4::average4(a[0], a[1], b[0], b[1]));
         }));
 
         assert_eq!(half_width * half_height, scaled.len());
@@ -227,7 +227,7 @@ pub(crate) fn worst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
-    scaled.extend(input.buf().chunks(stride * 2).take(half_height).flat_map(|pair|{
+    scaled.extend(input.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
         let (top, bot) = pair.split_at(stride);
         let top = &top[0..half_width * 2];
         let bot = &bot[0..half_width * 2];
@@ -252,7 +252,7 @@ pub(crate) fn avgworst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
-    scaled.extend(input.buf().chunks(stride * 2).take(half_height).flat_map(|pair|{
+    scaled.extend(input.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
         let (top, bot) = pair.split_at(stride);
         let top = &top[0..half_width * 2];
         let bot = &bot[0..half_width * 2];
@@ -277,7 +277,7 @@ pub(crate) fn avg(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
-    scaled.extend(input.buf().chunks(stride * 2).take(half_height).flat_map(|pair|{
+    scaled.extend(input.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
         let (top, bot) = pair.split_at(stride);
         let top = &top[0..half_width * 2];
         let bot = &bot[0..half_width * 2];

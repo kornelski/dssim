@@ -192,9 +192,9 @@ impl Dssim {
     }
 
     fn create_scales<InBitmap, OutBitmap>(&self, src_img: &InBitmap) -> Vec<OutBitmap>
-        where
-        InBitmap: Downsample<Output=OutBitmap>,
-        OutBitmap: Downsample<Output=OutBitmap>,
+    where
+        InBitmap: Downsample<Output = OutBitmap>,
+        OutBitmap: Downsample<Output = OutBitmap>,
     {
         let num_scales = self.scale_weights.len();
 
@@ -226,8 +226,9 @@ impl Dssim {
     ///
     /// You can implement `ToLABBitmap` and `Downsample` traits on your own image type.
     pub fn create_image<InBitmap, OutBitmap>(&self, src_img: &InBitmap) -> Option<DssimImage<f32>>
-        where InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
-              OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
+    where
+        InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
+        OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
     {
         let (lab1, mut all_sizes) = rayon::join(|| {
             src_img.to_lab()
@@ -347,8 +348,9 @@ impl Dssim {
     }
 
     fn compare_scale<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
-        where L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
-              f32: std::convert::From<L>
+    where
+        L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
+        f32: std::convert::From<L>,
     {
         assert_eq!(original.width, modified.width);
         assert_eq!(original.height, modified.height);
@@ -396,9 +398,8 @@ fn to_dssim(ssim: f64) -> f64 {
 
 #[test]
 fn png_compare() {
-
-    use imgref::*;
     use crate::linear::*;
+    use imgref::*;
 
     let d = new();
     let file1 = lodepng::decode32_file("../tests/test1-sm.png").unwrap();

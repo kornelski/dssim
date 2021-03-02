@@ -17,11 +17,10 @@
  * If not, see <http://www.gnu.org/licenses/agpl.txt>.
  */
 
-
-use std::env;
-use std::path::{PathBuf};
 use getopts::Options;
 use rayon::prelude::*;
+use std::env;
+use std::path::PathBuf;
 
 fn usage(argv0: &str) {
     eprintln!("\
@@ -161,7 +160,6 @@ fn image_gray_profile() {
 
 #[test]
 fn image_load1() {
-
     let attr = dssim::Dssim::new();
     let prof_jpg = dssim::load_image(&attr, "tests/profile.jpg").unwrap();
     let prof_png = dssim::load_image(&attr, "tests/profile.png").unwrap();

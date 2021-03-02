@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
-use std::fmt;
 use std::cmp::Ordering;
-use std::ops::Sub;
+use std::fmt;
 use std::ops::Add;
-use std::ops::Mul;
 use std::ops::Div;
+use std::ops::Mul;
+use std::ops::Sub;
 
 /// Result of comparison as `f64`
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
@@ -60,7 +60,6 @@ impl<RHS: Into<f64>> Sub<RHS> for Dssim {
         self.0.sub(rval)
     }
 }
-
 
 impl Sub<Dssim> for f64 {
     type Output = f64;

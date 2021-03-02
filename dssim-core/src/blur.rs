@@ -77,8 +77,8 @@ mod mac {
 mod portable {
     use imgref::*;
 
-    use std::cmp::min;
     use super::KERNEL;
+    use std::cmp::min;
 
     #[inline]
     fn do3f(prev: &[f32], curr: &[f32], next: &[f32], i: usize) -> f32 {

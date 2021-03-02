@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
+use crate::image::ToRGB;
 use crate::image::RGBAPLU;
 use crate::image::RGBLU;
-use crate::image::ToRGB;
 use imgref::*;
 use rayon::prelude::*;
 
@@ -24,14 +24,14 @@ impl ToLAB for RGBLU {
 
         let epsilon: f64 = 216. / 24389.;
         let k = 24389. / (27. * 116.); // http://www.brucelindbloom.com/LContinuity.html
-        let X = if fx > epsilon {fx.powf(1./3.) - 16./116.} else {k * fx};
-        let Y = if fy > epsilon {fy.powf(1./3.) - 16./116.} else {k * fy};
-        let Z = if fz > epsilon {fz.powf(1./3.) - 16./116.} else {k * fz};
+        let X = if fx > epsilon { fx.powf(1. / 3.) - 16. / 116. } else { k * fx };
+        let Y = if fy > epsilon { fy.powf(1. / 3.) - 16. / 116. } else { k * fy };
+        let Z = if fz > epsilon { fz.powf(1. / 3.) - 16. / 116. } else { k * fz };
 
         (
             (Y * 1.16) as f32,
-            1.1 * (86.2/ 220.0 + 500.0/ 220.0 * (X - Y)) as f32, /* 86 is a fudge to make the value positive */
-            1.1 * (107.9/ 220.0 + 200.0/ 220.0 * (Y - Z)) as f32, /* 107 is a fudge to make the value positive */
+            1.1 * (86.2 / 220.0 + 500.0 / 220.0 * (X - Y)) as f32,  /* 86 is a fudge to make the value positive */
+            1.1 * (107.9 / 220.0 + 200.0 / 220.0 * (Y - Z)) as f32, /* 107 is a fudge to make the value positive */
         )
     }
 }
@@ -67,7 +67,7 @@ impl ToLABBitmap for GBitmap {
         unsafe { out.set_len(size) };
 
         // For output width == stride
-        out.par_chunks_mut(width).enumerate().for_each(|(y, out_row)|{
+        out.par_chunks_mut(width).enumerate().for_each(|(y, out_row)| {
             let start = y * self.stride();
             let in_row = &self.buf()[start..start + width];
             let out_row = &mut out_row[0..width];

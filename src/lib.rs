@@ -1,10 +1,10 @@
 //! See the [dssim-core](https://lib.rs/dssim-core) crate if you'd like to use only the library part.
 #![doc(html_logo_url = "https://kornel.ski/dssim/logo.png")]
 
-use std::path::Path;
-use load_image::*;
 pub use dssim_core::*;
 use imgref::*;
+use load_image::*;
+use std::path::Path;
 
 fn load(path: &Path) -> Result<ImgVec<RGBAPLU>, lodepng::Error> {
     let img = load_image::load_image(path, false)?;

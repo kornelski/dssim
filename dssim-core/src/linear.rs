@@ -1,6 +1,6 @@
 use super::image::RGBAPLU;
-use rgb::*;
 use rgb::alt::*;
+use rgb::*;
 
 /// See `GammaPixel` & `ToRGBAPLU`
 pub trait GammaComponent {

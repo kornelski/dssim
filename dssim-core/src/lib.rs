@@ -3,15 +3,15 @@
 //! (if you need higher accuracy or higher speed).
 #![doc(html_logo_url = "https://kornel.ski/dssim/logo.png")]
 
-mod dssim;
-mod image;
 mod blur;
+mod c_api;
+mod dssim;
 /// cbindgen:ignore
 mod ffi;
-mod val;
+mod image;
 mod linear;
 mod tolab;
-mod c_api;
+mod val;
 
 pub use crate::dssim::*;
 pub use crate::image::*;
