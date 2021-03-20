@@ -44,11 +44,6 @@ pub trait ToRGBAPLU {
     fn to_rgbaplu(&self) -> Vec<RGBAPLU>;
 }
 
-/// Grayscale Linear-light Unit scale
-pub trait ToGLU {
-    fn to_glu(&self) -> Vec<f32>;
-}
-
 impl GammaComponent for u8 {
     fn max_value() -> usize { 255 }
     #[inline(always)]
@@ -62,13 +57,6 @@ impl GammaComponent for u16 {
     #[inline(always)]
     fn to_linear(&self, lut: &[f32]) -> f32 {
         lut[*self as usize]
-    }
-}
-
-impl<M> ToGLU for [M] where M: GammaPixel<Output=f32> {
-    fn to_glu(&self) -> Vec<f32> {
-        let gamma_lut = M::make_lut();
-        self.iter().map(|px| px.to_linear(&gamma_lut)).collect()
     }
 }
 
