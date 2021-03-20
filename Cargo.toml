@@ -34,3 +34,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 members = [
     "dssim-core"
 ]
+
+[profile.dev]
+opt-level = 1
+debug = 1
+
+[profile.release]
+opt-level = 3
+lto = true
