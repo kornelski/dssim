@@ -20,15 +20,17 @@
  */
 
 
-use itertools::multizip;
+pub use crate::tolab::ToLABBitmap;
+pub use crate::val::Dssim as Val;
 use crate::blur;
 use crate::image::*;
+use crate::linear::ToRGBAPLU;
 use imgref::*;
+use itertools::multizip;
 use rayon::prelude::*;
+use rgb::{RGB, RGBA};
 use std::borrow::Borrow;
 use std::ops;
-pub use crate::val::Dssim as Val;
-pub use crate::tolab::ToLABBitmap;
 
 trait Channable<T, I> {
     fn img1_img2_blur(&self, modified: &Self, tmp: &mut [I]) -> Vec<T>;
@@ -215,6 +217,28 @@ impl Dssim {
         }
 
         downsampled
+    }
+
+    /// Create image from an array of RGBA pixels (sRGB, non-premultiplied, alpha last).
+    ///
+    /// If you have a slice of `u8`, then see `rgb` crate's `as_rgba()`.
+    pub fn create_image_rgba(&self, bitmap: &[RGBA<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+        if width * height < bitmap.len() {
+            return None;
+        }
+        let img = ImgVec::new(bitmap.to_rgbaplu(), width, height);
+        self.create_image(&img)
+    }
+
+    /// Create image from an array of packed RGB pixels (sRGB).
+    ///
+    /// If you have a slice of `u8`, then see `rgb` crate's `as_rgb()`.
+    pub fn create_image_rgb(&self, bitmap: &[RGB<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+        if width * height < bitmap.len() {
+            return None;
+        }
+        let img = ImgVec::new(bitmap.to_rgbaplu(), width, height);
+        self.create_image(&img)
     }
 
     /// The input image is defined using the `imgref` crate, and the pixel type can be:

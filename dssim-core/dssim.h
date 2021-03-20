@@ -28,13 +28,25 @@ struct Dssim *dssim_new(void);
 void dssim_free(struct Dssim *d);
 
 /**
- * Take sRGB RGBA pixels and preprocess them into image format that can be compared.
+ * Take sRGB RGBA pixels (non-premultiplied, alpha last) and preprocess them into image format that can be compared.
  *
  * Pixels are copied. Returns NULL on error.
  *
  * Call `dssim_free_image` to free memory when the image is no longer needed.
  */
 DssimImage *dssim_create_image_rgba(struct Dssim *dssim,
+                                    const uint8_t *pixels,
+                                    uint32_t width,
+                                    uint32_t height);
+
+/**
+ * Take sRGB RGB pixels and preprocess them into image format that can be compared.
+ *
+ * Pixels are copied. Returns NULL on error.
+ *
+ * Call `dssim_free_image` to free memory when the image is no longer needed.
+ */
+DssimImage *dssim_create_image_rgb(struct Dssim *dssim,
                                     const uint8_t *pixels,
                                     uint32_t width,
                                     uint32_t height);
@@ -49,6 +61,6 @@ void dssim_free_image(DssimImage *img);
  *
  * `img1` can be reused for multiple comparisons.
  *
- * Don't forget to free images and DSSIM context when done.
+ * Don't forget to free the images and the DSSIM context when done.
  */
 double dssim_compare(struct Dssim *dssim, const DssimImage *img1, const DssimImage *img2);
