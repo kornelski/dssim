@@ -237,7 +237,7 @@ impl Dssim {
         if width * height < bitmap.len() {
             return None;
         }
-        let img = ImgVec::new(bitmap.to_rgbaplu(), width, height);
+        let img = ImgVec::new(bitmap.to_rgblu(), width, height);
         self.create_image(&img)
     }
 

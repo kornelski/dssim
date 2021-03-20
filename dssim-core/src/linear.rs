@@ -1,6 +1,7 @@
-use super::image::RGBAPLU;
-use rgb::alt::*;
+use crate::image::RGBAPLU;
+use crate::image::RGBLU;
 use rgb::*;
+use rgb::alt::*;
 
 /// See `GammaPixel` & `ToRGBAPLU`
 pub trait GammaComponent {
@@ -42,6 +43,7 @@ fn to_linear(s: f32) -> f32 {
 /// Convenience function `.to_rgbaplu()` to convert RGBA bitmaps to a format useful for DSSIM.
 pub trait ToRGBAPLU {
     fn to_rgbaplu(&self) -> Vec<RGBAPLU>;
+    fn to_rgblu(&self) -> Vec<RGBLU>;
 }
 
 impl GammaComponent for u8 {
@@ -161,5 +163,10 @@ impl<P> ToRGBAPLU for [P] where P: GammaPixel<Output=RGBAPLU> {
     fn to_rgbaplu(&self) -> Vec<RGBAPLU> {
         let gamma_lut = P::make_lut();
         self.iter().map(|px| px.to_linear(&gamma_lut)).collect()
+    }
+
+    fn to_rgblu(&self) -> Vec<RGBLU> {
+        let gamma_lut = P::make_lut();
+        self.iter().map(|px| px.to_linear(&gamma_lut).rgb()).collect()
     }
 }
