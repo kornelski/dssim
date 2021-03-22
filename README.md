@@ -1,6 +1,6 @@
 # RGBA Structural Similarity
 
-This tool computes (dis)similarity between two or more PNG images using an algorithm approximating human vision. Comparison is done using a variant of [the SSIM algorithm](https://ece.uwaterloo.ca/~z70wang/research/ssim/).
+This tool computes (dis)similarity between two or more PNG &/or JPEG images using an algorithm approximating human vision. Comparison is done using a variant of [the SSIM algorithm](https://ece.uwaterloo.ca/~z70wang/research/ssim/).
 
 The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded) is amount of difference. Values are not directly comparable with other tools. [See below](#interpreting-the-values) on interpreting the values.
 
