@@ -17,13 +17,13 @@ edition = "2018"
 crate-type = ["lib", "staticlib"]
 
 [dependencies]
-imgref = "1.7.1"
+imgref = "1.9.0"
 itertools = "0.10.0"
 rayon = "1.5.0"
-rgb = "0.8.25"
+rgb = "0.8.27"
 
 [dev-dependencies]
-lodepng = "3.4.3"
+lodepng = "3.4.5"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
