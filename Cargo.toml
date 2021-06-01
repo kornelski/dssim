@@ -25,7 +25,7 @@ getopts = "0.2.21"
 rayon = "1.5.1"
 rgb = "0.8.27"
 lodepng = "3.4.6"
-load_image = { version = "2.15.0", features = ["lcms2-static"] }
+load_image = { version = "2.15.1", features = ["lcms2-static"] }
 
 [features]
 avif = ["load_image/avif"]

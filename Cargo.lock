@@ -362,9 +362,9 @@ dependencies = [
 
 [[package]]
 name = "load_image"
-version = "2.15.0"
+version = "2.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f779e352f4cc8b01e7b8b9e6d58417823f16f9d903dd8d89db9959a6f467feae"
+checksum = "8c9472f979cec300a30f657483e1efadd4082d1bd4220564eb2f19fd8ee13da2"
 dependencies = [
  "aom-decode",
  "imgref",
