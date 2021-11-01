@@ -23,7 +23,7 @@ dssim-core = { path = "./dssim-core", version = "3.1" }
 imgref = "1.9.0"
 getopts = "0.2.21"
 rayon = "1.5.1"
-rgb = "0.8.27"
+rgb = "0.8.29"
 lodepng = "3.4.6"
 load_image = { version = "2.15.0", features = ["lcms2-static"] }
 
