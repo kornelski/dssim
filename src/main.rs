@@ -16,7 +16,7 @@
  * You should have received a copy of the license along with DSSIM.
  * If not, see <http://www.gnu.org/licenses/agpl.txt>.
  */
-
+#![allow(clippy::manual_range_contains)]
 use getopts::Options;
 use rayon::prelude::*;
 use std::env;

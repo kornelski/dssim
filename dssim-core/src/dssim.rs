@@ -19,12 +19,11 @@
  * If not, see <http://www.gnu.org/licenses/agpl.txt>.
  */
 
-
-pub use crate::tolab::ToLABBitmap;
-pub use crate::val::Dssim as Val;
 use crate::blur;
 use crate::image::*;
 use crate::linear::ToRGBAPLU;
+pub use crate::tolab::ToLABBitmap;
+pub use crate::val::Dssim as Val;
 use imgref::*;
 use itertools::multizip;
 use rayon::prelude::*;
@@ -264,7 +263,7 @@ impl Dssim {
 
         all_sizes.insert(0, lab1);
 
-        return Some(DssimImage {
+        Some(DssimImage {
             scale: all_sizes.into_par_iter().map(|s| {
                 DssimChanScale {
                     chan: s.into_par_iter().enumerate().map(|(n,l)| {
@@ -284,7 +283,7 @@ impl Dssim {
                     }).collect(),
                 }
             }).collect(),
-        });
+        })
     }
 
     /// Compare original with another image. See `create_image`
@@ -308,7 +307,7 @@ impl Dssim {
                     || Self::lab_chan(original_image_scale),
                     || {
                         let img1_img2_blur = original_image_scale.chan.img1_img2_blur(&modified_image_scale.chan, &mut tmp[0 .. scale_width*scale_height]);
-                        (img1_img2_blur, Self::lab_chan(&modified_image_scale))
+                        (img1_img2_blur, Self::lab_chan(modified_image_scale))
                     });
 
                     Self::compare_scale(&original_lab, &modified_lab, &img1_img2_blur)

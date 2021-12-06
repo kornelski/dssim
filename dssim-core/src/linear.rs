@@ -1,7 +1,7 @@
 use crate::image::RGBAPLU;
 use crate::image::RGBLU;
-use rgb::*;
 use rgb::alt::*;
+use rgb::*;
 
 /// See `GammaPixel` & `ToRGBAPLU`
 pub trait GammaComponent {
@@ -144,7 +144,7 @@ impl<M> GammaPixel for GrayAlpha<M> where M: Copy + Clone + Into<f32> + GammaCom
     type Component = M;
     type Output = RGBAPLU;
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
-        let a_unit = self.1.clone().into() / M::max_value() as f32;
+        let a_unit = self.1.into() / M::max_value() as f32;
         let g = self.0.to_linear(gamma_lut);
         RGBAPLU {
             r: g * a_unit,

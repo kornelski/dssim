@@ -7,12 +7,12 @@ const KERNEL: [f32; 9] = [
 
 #[cfg(target_os = "macos")]
 mod mac {
-    use imgref::*;
-    use crate::ffi::vImage_Buffer;
-    use crate::ffi::vImagePixelCount;
-    use crate::ffi::vImageConvolve_PlanarF;
-    use crate::ffi::vImage_Flags::kvImageEdgeExtend;
     use super::KERNEL;
+    use crate::ffi::vImageConvolve_PlanarF;
+    use crate::ffi::vImagePixelCount;
+    use crate::ffi::vImage_Buffer;
+    use crate::ffi::vImage_Flags::kvImageEdgeExtend;
+    use imgref::*;
 
     pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [f32], mut dst: ImgRefMut<'_, f32>) {
         let srcbuf = vImage_Buffer {
