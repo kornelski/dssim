@@ -10,7 +10,7 @@ license = "AGPL-3.0"
 name = "dssim"
 readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
-version = "3.1.1"
+version = "3.1.2"
 edition = "2018"
 
 [[bin]]
@@ -23,9 +23,9 @@ dssim-core = { path = "./dssim-core", version = "3.1" }
 imgref = "1.9.1"
 getopts = "0.2.21"
 rayon = "1.5.1"
-rgb = "0.8.29"
+rgb = "0.8.31"
 lodepng = "3.4.7"
-load_image = { version = "2.15.1", features = ["lcms2-static"] }
+load_image = { version = "2.16.1", features = ["lcms2-static"] }
 
 [features]
 avif = ["load_image/avif"]
