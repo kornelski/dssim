@@ -53,7 +53,7 @@ The version is printed when you run `dssim -h`.
 
 ### Build from source
 
-You'll need [Rust 1.48](https://rustup.rs) or later. Clone the repo and run:
+You'll need [Rust 1.52](https://rustup.rs) or later. Clone the repo and run:
 
     cargo build --release
 
