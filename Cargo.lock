@@ -21,9 +21,9 @@ dependencies = [
 
 [[package]]
 name = "aom-decode"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8407f702fa3b52e0d378a8889145cb9c04e6301dd18fd68f3f46ea4afd0229aa"
+checksum = "1174da993a53a3fcc40bcf1af771bdb1e4a80984b36f73854d15de720961226a"
 dependencies = [
  "avif-parse",
  "imgref",
@@ -337,9 +337,9 @@ dependencies = [
 
 [[package]]
 name = "libaom-sys"
-version = "0.9.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1fe4568fa96310c3c6aa4619390f43c5910f59e7292ca44b49f5c901f904c24e"
+checksum = "7416297598808b71dc4b63f0c135b533eba7049124d99936e799329fa341a5a3"
 dependencies = [
  "cmake",
 ]
@@ -374,9 +374,9 @@ dependencies = [
 
 [[package]]
 name = "load_image"
-version = "2.16.1"
+version = "2.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d486802e2355b69746cb59510884790bb4f4ae11c4f89c6e3636811798a7b4b"
+checksum = "4dee1f83efa01291dbf6d87a6ad629aa8e3482b93d1ead8d4b1bd09d2167b67b"
 dependencies = [
  "aom-decode",
  "fallible_collections",
@@ -392,10 +392,11 @@ dependencies = [
 
 [[package]]
 name = "lodepng"
-version = "3.4.7"
+version = "3.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "24844d5c0b922ddd52fb5bf0964a4c7f8e799a946ec01bb463771eb04fc1a323"
+checksum = "2005fdb0f06c2527cc90faed577e5451e12f9f03a59de9772e421a1728e826ca"
 dependencies = [
+ "crc32fast",
  "fallible_collections",
  "flate2",
  "libc",
