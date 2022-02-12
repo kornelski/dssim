@@ -10,7 +10,7 @@ license = "AGPL-3.0"
 name = "dssim"
 readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
-version = "3.1.2"
+version = "3.2.0"
 edition = "2018"
 
 [[bin]]
@@ -24,13 +24,19 @@ imgref = "1.9.1"
 getopts = "0.2.21"
 rayon = "1.5.1"
 rgb = "0.8.31"
-lodepng = "3.4.7"
+lodepng = "3.5.2"
 load_image = { version = "2.16.1", features = ["lcms2-static"] }
 
 [features]
 avif = ["load_image/avif"]
 webp = ["load_image/webp"]
 webp-static = ["load_image/webp-static"]
+
+[package.metadata.release]
+consolidate-commits = true
+consolidate-pushes = true
+tag-message = ""
+tag-name = "{{version}}"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -46,4 +52,9 @@ debug = 1
 
 [profile.release]
 opt-level = 3
-lto = true
+lto = "fat"
+debug = false
+panic = "abort"
+
+[badges]
+maintenance = { status = "actively-developed" }
