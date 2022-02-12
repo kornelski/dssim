@@ -19,15 +19,17 @@ name = "dssim"
 path = "src/main.rs"
 
 [dependencies]
-dssim-core = { path = "./dssim-core", version = "3.1" }
+dssim-core = { path = "./dssim-core", version = "3.2", default-features = false }
 imgref = "1.9.1"
 getopts = "0.2.21"
-rayon = "1.5.1"
+rayon = { version = "1.5.1", optional = true }
 rgb = "0.8.31"
 lodepng = "3.5.2"
 load_image = { version = "2.16.1", features = ["lcms2-static"] }
 
 [features]
+default = ["threads", "dssim-core/default"]
+threads = ["rayon"]
 avif = ["load_image/avif"]
 webp = ["load_image/webp"]
 webp-static = ["load_image/webp-static"]

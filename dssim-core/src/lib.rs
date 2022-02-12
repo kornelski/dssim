@@ -14,6 +14,8 @@ mod image;
 mod linear;
 mod tolab;
 mod val;
+#[cfg(not(feature = "threads"))]
+mod lieon;
 
 pub use crate::dssim::*;
 pub use crate::image::*;

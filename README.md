@@ -88,3 +88,11 @@ DSSIM is dual-licensed under [AGPL](LICENSE) or [commercial](https://supso.org/p
 * The lightness component of SSIM is ignored when comparing color channels.
 * SSIM score is pooled using mean absolute deviation. You can get per-pixel SSIM from the API to implement custom pooling.
 
+
+## Compiling for WASM
+
+For compatibility with single-threaded WASM runtimes, disable the `threads` Cargo feature. It's enabled by default, so to disable it, disable default features:
+
+```toml
+dssim-core = { version = "3.2", default-features = false }
+```

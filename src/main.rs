@@ -18,6 +18,7 @@
  */
 #![allow(clippy::manual_range_contains)]
 use getopts::Options;
+#[cfg(feature = "threads")]
 use rayon::prelude::*;
 use std::env;
 use std::path::PathBuf;
@@ -70,7 +71,12 @@ fn main() {
 
     let mut attr = dssim::Dssim::new();
 
-    let files = files.par_iter().map(|file| -> Result<_, String> {
+    #[cfg(feature = "threads")]
+    let files_iter = files.par_iter();
+    #[cfg(not(feature = "threads"))]
+    let files_iter = files.iter();
+
+    let files = files_iter.map(|file| -> Result<_, String> {
         let image = dssim::load_image(&attr, &file).map_err(|e| format!("Can't load {}, because: {}", file.display(), e))?;
         Ok((file, image))
     }).collect::<Result<Vec<_>,_>>();
@@ -102,7 +108,12 @@ fn main() {
         println!("{:.8}\t{}", dssim, file2.display());
 
         if map_output_file.is_some() {
-            ssim_maps.par_iter().enumerate().for_each(|(n, map_meta)| {
+            #[cfg(feature = "threads")]
+            let ssim_maps_iter = ssim_maps.par_iter();
+            #[cfg(not(feature = "threads"))]
+            let ssim_maps_iter = ssim_maps.iter();
+
+            ssim_maps_iter.enumerate().for_each(|(n, map_meta)| {
                 let avgssim = map_meta.ssim as f32;
                 let out: Vec<_> = map_meta.map.pixels().map(|ssim|{
                     let max = 1_f32 - ssim;

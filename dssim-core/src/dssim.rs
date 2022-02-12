@@ -26,6 +26,8 @@ pub use crate::tolab::ToLABBitmap;
 pub use crate::val::Dssim as Val;
 use imgref::*;
 use itertools::multizip;
+#[cfg(not(feature = "threads"))]
+use crate::lieon as rayon;
 use rayon::prelude::*;
 use rgb::{RGB, RGBA};
 use std::borrow::Borrow;
@@ -293,8 +295,8 @@ impl Dssim {
     /// `Val` is a fancy wrapper for `f64`
     pub fn compare<M: Borrow<DssimImage<f32>>>(&self, original_image: &DssimImage<f32>, modified_image: M) -> (Val, Vec<SsimMap>) {
         let modified_image = modified_image.borrow();
-        let res: Vec<_> = self.scale_weights.par_iter().cloned().zip(
-            modified_image.scale.par_iter().zip(original_image.scale.par_iter())
+        let res: Vec<_> = self.scale_weights.as_slice().par_iter().cloned().zip(
+            modified_image.scale.as_slice().par_iter().zip(original_image.scale.as_slice().par_iter())
         ).enumerate().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
             let scale_width = original_image_scale.chan[0].width;
             let scale_height = original_image_scale.chan[0].height;
@@ -395,9 +397,9 @@ impl Dssim {
         debug_assert_eq!(img1_img2_blur.len(), original.mu.len());
         debug_assert_eq!(img1_img2_blur.len(), original.img_sq_blur.len());
 
-        let mu_iter = original.mu.par_iter().cloned().zip_eq(modified.mu.par_iter().cloned());
-        let sq_iter = original.img_sq_blur.par_iter().cloned().zip_eq(modified.img_sq_blur.par_iter().cloned());
-        img1_img2_blur.par_iter().cloned().zip_eq(mu_iter).zip_eq(sq_iter).zip_eq(map_out.par_iter_mut())
+        let mu_iter = original.mu.as_slice().par_iter().cloned().zip_eq(modified.mu.as_slice().par_iter().cloned());
+        let sq_iter = original.img_sq_blur.as_slice().par_iter().cloned().zip_eq(modified.img_sq_blur.as_slice().par_iter().cloned());
+        img1_img2_blur.par_iter().cloned().zip_eq(mu_iter).zip_eq(sq_iter).zip_eq(map_out.as_mut_slice().par_iter_mut())
         .for_each(|(((img1_img2_blur, (mu1, mu2)), (img1_sq_blur, img2_sq_blur)), map_out)| {
             let mu1mu1 = mu1 * mu1;
             let mu1mu2 = mu1 * mu2;

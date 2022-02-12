@@ -5,6 +5,8 @@ use crate::image::ToRGB;
 use crate::image::RGBAPLU;
 use crate::image::RGBLU;
 use imgref::*;
+#[cfg(not(feature = "threads"))]
+use crate::lieon as rayon;
 use rayon::prelude::*;
 
 const D65x: f64 = 0.9505;
@@ -69,7 +71,7 @@ impl ToLABBitmap for GBitmap {
         unsafe { out.set_len(size) };
 
         // For output width == stride
-        out.par_chunks_mut(width).enumerate().for_each(|(y, out_row)| {
+        out.as_mut_slice().par_chunks_mut(width).enumerate().for_each(|(y, out_row)| {
             let start = y * self.stride();
             let in_row = &self.buf()[start..start + width];
             let out_row = &mut out_row[0..width];
@@ -102,8 +104,8 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
     unsafe { out_b.set_len(size) };
 
     // For output width == stride
-    out_l.par_chunks_mut(width).zip(
-        out_a.par_chunks_mut(width).zip(out_b.par_chunks_mut(width))
+    out_l.as_mut_slice().par_chunks_mut(width).zip(
+        out_a.as_mut_slice().par_chunks_mut(width).zip(out_b.as_mut_slice().par_chunks_mut(width))
     ).enumerate()
     .for_each(|(y, (l_row, (a_row, b_row)))| {
         let start = y * stride;
