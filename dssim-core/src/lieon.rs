@@ -1,6 +1,7 @@
 //! Shim for single-threaded rayon replacement
 
 pub mod prelude {
+    pub use itertools::Itertools;
     pub use super::*;
 }
 

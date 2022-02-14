@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "dssim-core"
-version = "3.2.0"
+version = "3.2.1"
 dependencies = [
  "imgref",
  "itertools",
@@ -392,9 +392,9 @@ dependencies = [
 
 [[package]]
 name = "lodepng"
-version = "3.6.0"
+version = "3.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb66a20228888c9e2a0101748b3425b9d25f999a51a7c3f9bde7f11ae3a93b4a"
+checksum = "7f84e1fdcdbe8b3f0f9caaadb6b86d0e0647786e993f6ea70686f6837b989ec7"
 dependencies = [
  "crc32fast",
  "fallible_collections",
@@ -433,9 +433,9 @@ dependencies = [
 
 [[package]]
 name = "mozjpeg"
-version = "0.9.1"
+version = "0.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2331118f5be2fbf28b9bc79cf720fb92470215cfc5d45a9f07cb24cae301b04e"
+checksum = "75fce8c02d82d7dc473d6c156c52cc9f161e9eef0bca5145d87ad6c62a20ac3f"
 dependencies = [
  "arrayvec",
  "fallible_collections",
