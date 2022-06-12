@@ -5,7 +5,7 @@ const KERNEL: [f32; 9] = [
     0.095332, 0.118095, 0.095332,
 ];
 
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "no-macos-vimage")))]
 mod mac {
     use super::KERNEL;
     use crate::ffi::vImageConvolve_PlanarF;
@@ -15,21 +15,29 @@ mod mac {
     use imgref::*;
     use std::mem::MaybeUninit;
 
-    pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [MaybeUninit<f32>], mut dst: ImgRefMut<'_, f32>) {
+    pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [MaybeUninit<f32>]) -> ImgVec<f32> {
+        let width = src.width();
+        let height = src.height();
+
         let srcbuf = vImage_Buffer {
-            width: src.width() as vImagePixelCount,
-            height: src.height() as vImagePixelCount,
+            width: width as vImagePixelCount,
+            height: height as vImagePixelCount,
             rowBytes: src.stride() * std::mem::size_of::<f32>(),
             data: src.buf().as_ptr(),
         };
+        let mut dst_vec = Vec::with_capacity(width * height);
         let mut dstbuf = vImage_Buffer {
-            width: dst.width() as vImagePixelCount,
-            height: dst.height() as vImagePixelCount,
-            rowBytes: dst.stride() * std::mem::size_of::<f32>(),
-            data: dst.buf_mut().as_mut_ptr(),
+            width: width as vImagePixelCount,
+            height: height as vImagePixelCount,
+            rowBytes: width * std::mem::size_of::<f32>(),
+            data: dst_vec.spare_capacity_mut().as_mut_ptr().cast(),
         };
 
-        do_blur(&srcbuf, tmp, &mut dstbuf, src.width(), src.height());
+        do_blur(&srcbuf, tmp, &mut dstbuf, width, height);
+        unsafe {
+            dst_vec.set_len(dst_vec.capacity());
+        }
+        ImgVec::new(dst_vec, width, height)
     }
 
     pub fn blur_in_place(mut srcdst: ImgRefMut<'_, f32>, tmp: &mut [MaybeUninit<f32>]) {
@@ -74,7 +82,7 @@ mod mac {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(all(target_os = "macos", not(feature = "no-macos-vimage"))))]
 mod portable {
     use super::KERNEL;
     use imgref::*;
@@ -106,10 +114,17 @@ mod portable {
         next[c0]*KERNEL[6] + next[c1]*KERNEL[7] + next[c2]*KERNEL[8]
     }
 
-    pub fn blur(src: ImgRef<f32>, tmp: &mut [MaybeUninit<f32>], dst: ImgRefMut<f32>) {
-        let tmp_dst = ImgRefMut::new(tmp, dst.width(), dst.height());
+    pub fn blur(src: ImgRef<f32>, tmp: &mut [MaybeUninit<f32>]) -> ImgVec<f32> {
+        let width = src.width();
+        let height = src.height();
+        let tmp_dst = ImgRefMut::new(tmp, width, height);
         let tmp_src = do_blur(src, tmp_dst);
-        do_blur(tmp_src.as_ref(), as_maybe_uninit(dst));
+        let mut dst_vec = Vec::with_capacity(width * height);
+        do_blur(tmp_src.as_ref(), ImgRefMut::new(dst_vec.spare_capacity_mut(), width, height));
+        unsafe {
+            dst_vec.set_len(dst_vec.capacity());
+        }
+        ImgVec::new(dst_vec, width, height)
     }
 
     fn do_blur<'d>(src: ImgRef<f32>, mut dst: ImgRefMut<'d, MaybeUninit<f32>>) -> ImgRefMut<'d, f32> {
@@ -167,11 +182,10 @@ mod portable {
     }
 }
 
-
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "no-macos-vimage")))]
 pub use self::mac::*;
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(all(target_os = "macos", not(feature = "no-macos-vimage"))))]
 pub use self::portable::*;
 
 #[cfg(test)]
@@ -180,17 +194,14 @@ use imgref::*;
 #[test]
 fn blur_zero() {
     let src = vec![0.25];
-
-    let mut dst = vec![-99.; 1];
-
     let mut src2 = src.clone();
 
     let mut tmp = vec![-55.; 1]; tmp.clear();
-    blur(ImgRef::new(&src[..], 1,1), tmp.spare_capacity_mut(), ImgRefMut::new(&mut dst[..], 1, 1));
+    let dst = blur(ImgRef::new(&src[..], 1,1), tmp.spare_capacity_mut());
     blur_in_place(ImgRefMut::new(&mut src2[..], 1, 1), tmp.spare_capacity_mut());
 
-    assert_eq!(src2, dst);
-    assert!((0.25 - dst[0]).abs() < 0.00001);
+    assert_eq!(&src2, dst.buf());
+    assert!((0.25 - dst.buf()[0]).abs() < 0.00001);
 }
 
 #[test]
@@ -218,19 +229,17 @@ fn blur_one_stride() {
 
 #[cfg(test)]
 fn blur_one_compare(src: ImgVec<f32>) {
-    let mut dst = vec![999.; 5*5];
-
     let mut src2 = src.clone();
 
     let mut tmp = vec![-55.; 5*5]; tmp.clear();
-    blur(src.as_ref(), tmp.spare_capacity_mut(), ImgRefMut::new(&mut dst[..], 5, 5));
+    let dst = blur(src.as_ref(), tmp.spare_capacity_mut());
     blur_in_place(src2.as_mut(), tmp.spare_capacity_mut());
 
-    assert_eq!(src2.pixels().collect::<Vec<_>>(), dst);
+    assert_eq!(&src2.pixels().collect::<Vec<_>>(), dst.buf());
 
-    assert!((1./110. - dst[0]).abs() < 0.0001, "{:?}", dst);
-    assert!((1./110. - dst[5*5-1]).abs() < 0.0001, "{:?}", dst);
-    assert!((0.11354011 - dst[2*5+2]).abs() < 0.0001);
+    assert!((1./110. - dst.buf()[0]).abs() < 0.0001, "{:?}", dst);
+    assert!((1./110. - dst.buf()[5*5-1]).abs() < 0.0001, "{:?}", dst);
+    assert!((0.11354011 - dst.buf()[2*5+2]).abs() < 0.0001);
 }
 
 #[test]
@@ -238,13 +247,11 @@ fn blur_1x1() {
     let src = vec![1.];
     let mut src2 = src.clone();
 
-    let mut dst = vec![55.; 1];
-
     let mut tmp = vec![-999.; 1]; tmp.clear();
-    blur(ImgRef::new(&src[..], 1,1), tmp.spare_capacity_mut(), ImgRefMut::new(&mut dst[..], 1, 1));
+    let dst = blur(ImgRef::new(&src[..], 1,1), tmp.spare_capacity_mut());
     blur_in_place(ImgRefMut::new(&mut src2[..], 1,1), tmp.spare_capacity_mut());
 
-    assert!((dst[0] - 1.).abs() < 0.00001);
+    assert!((dst.buf()[0] - 1.).abs() < 0.00001);
     assert!((src2[0] - 1.).abs() < 0.00001);
 }
 
@@ -256,15 +263,13 @@ fn blur_two() {
     1.,1.,1.,1.,
     1.,1.,1.,1.,
     ];
-    let mut dst = vec![999.; 4*4];
-
     let mut src2 = src.clone();
 
     let mut tmp = vec![-55.; 4*4]; tmp.clear();
-    blur(ImgRef::new(&src[..], 4,4), tmp.spare_capacity_mut(), ImgRefMut::new(&mut dst[..], 4, 4));
+    let dst = blur(ImgRef::new(&src[..], 4,4), tmp.spare_capacity_mut());
     blur_in_place(ImgRefMut::new(&mut src2[..], 4,4), tmp.spare_capacity_mut());
 
-    assert_eq!(src2, dst);
+    assert_eq!(&src2, dst.buf());
 
     let z00 = 0.*KERNEL[0] + 0.*KERNEL[1] + 1.*KERNEL[2] +
               0.*KERNEL[3] + 0.*KERNEL[4] + 1.*KERNEL[5] +
@@ -283,8 +288,8 @@ fn blur_two() {
               z00*KERNEL[3] + z00*KERNEL[4] + z01*KERNEL[5] +
               z10*KERNEL[6] + z10*KERNEL[7] + z11*KERNEL[8];
 
-    assert!((1. - dst[3]).abs() < 0.0001, "{}", dst[3]);
-    assert!((1. - dst[3 * 4]).abs() < 0.0001, "{}", dst[3 * 4]);
-    assert!((1. - dst[4 * 4 - 1]).abs() < 0.0001, "{}", dst[4 * 4 - 1]);
-    assert_eq!(exp, dst[0]);
+    assert!((1. - dst.buf()[3]).abs() < 0.0001, "{}", dst.buf()[3]);
+    assert!((1. - dst.buf()[3 * 4]).abs() < 0.0001, "{}", dst.buf()[3 * 4]);
+    assert!((1. - dst.buf()[4 * 4 - 1]).abs() < 0.0001, "{}", dst.buf()[4 * 4 - 1]);
+    assert_eq!(exp, dst.buf()[0]);
 }

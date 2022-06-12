@@ -65,13 +65,10 @@ impl ToLABBitmap for GBitmap {
     fn to_lab(&self) -> Vec<GBitmap> {
         let width = self.width();
         let height = self.height();
-        let size = width * height;
-
-        let mut out = Vec::with_capacity(size);
-        unsafe { out.set_len(size) };
+        let mut out = Vec::with_capacity(width * height);
 
         // For output width == stride
-        out.as_mut_slice().par_chunks_mut(width).enumerate().for_each(|(y, out_row)| {
+        out.spare_capacity_mut().par_chunks_mut(width).enumerate().for_each(|(y, out_row)| {
             let start = y * self.stride();
             let in_row = &self.buf()[start..start + width];
             let out_row = &mut out_row[0..width];
@@ -80,10 +77,11 @@ impl ToLABBitmap for GBitmap {
                 let fy = in_row[x];
                 // http://www.brucelindbloom.com/LContinuity.html
                 let Y = if fy > epsilon { fy.powf(1. / 3.) - 16. / 116. } else { ((24389. / 27.) / 116.) * fy };
-                out_row[x] = Y * 1.16;
+                out_row[x].write(Y * 1.16);
             }
         });
 
+        unsafe { out.set_len(out.capacity()) };
         vec![Img::new(out, width, height)]
     }
 }
@@ -94,18 +92,14 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
     let width = img.width();
     let height = img.height();
     let stride = img.stride();
-    let size = width * height;
 
-    let mut out_l = Vec::with_capacity(size);
-    unsafe { out_l.set_len(size) };
-    let mut out_a = Vec::with_capacity(size);
-    unsafe { out_a.set_len(size) };
-    let mut out_b = Vec::with_capacity(size);
-    unsafe { out_b.set_len(size) };
+    let mut out_l = Vec::with_capacity(width * height);
+    let mut out_a = Vec::with_capacity(width * height);
+    let mut out_b = Vec::with_capacity(width * height);
 
     // For output width == stride
-    out_l.as_mut_slice().par_chunks_mut(width).zip(
-        out_a.as_mut_slice().par_chunks_mut(width).zip(out_b.as_mut_slice().par_chunks_mut(width))
+    out_l.spare_capacity_mut().par_chunks_mut(width).zip(
+        out_a.spare_capacity_mut().par_chunks_mut(width).zip(out_b.spare_capacity_mut().par_chunks_mut(width))
     ).enumerate()
     .for_each(|(y, (l_row, (a_row, b_row)))| {
         let start = y * stride;
@@ -116,11 +110,15 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
         for x in 0..width {
             let n = (x+11) ^ (y+11);
             let (l,a,b) = cb(in_row[x], n);
-            l_row[x] = l;
-            a_row[x] = a;
-            b_row[x] = b;
+            l_row[x].write(l);
+            a_row[x].write(a);
+            b_row[x].write(b);
         }
     });
+
+    unsafe { out_l.set_len(out_l.capacity()) };
+    unsafe { out_a.set_len(out_a.capacity()) };
+    unsafe { out_b.set_len(out_b.capacity()) };
 
     return vec![
         Img::new(out_l, width, height),

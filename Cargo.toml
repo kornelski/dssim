@@ -28,11 +28,12 @@ lodepng = "3.5.2"
 load_image = { version = "2.16.1", features = ["lcms2-static"] }
 
 [features]
-default = ["threads", "dssim-core/default"]
+default = ["threads", "dssim-core/default", "no-macos-vimage"]
 threads = ["rayon"]
 avif = ["load_image/avif"]
 webp = ["load_image/webp"]
 webp-static = ["load_image/webp-static"]
+no-macos-vimage = ["dssim-core/no-macos-vimage"]
 
 [package.metadata.release]
 consolidate-commits = true

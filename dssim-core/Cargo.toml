@@ -28,6 +28,7 @@ lodepng = "3.6.0"
 [features]
 default = ["threads"]
 threads = ["rayon"]
+no-macos-vimage = []
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
