@@ -93,9 +93,9 @@ mod portable {
     fn do3f(prev: &[f32], curr: &[f32], next: &[f32], i: usize) -> f32 {
         debug_assert!(i > 0);
 
-        let c0 = i-1;
+        let c0 = i - 1;
         let c1 = i;
-        let c2 = i+1;
+        let c2 = i + 1;
 
         unsafe {
             prev.get_unchecked(c0)*KERNEL[0] + prev.get_unchecked(c1)*KERNEL[1] + prev.get_unchecked(c2)*KERNEL[2] +
@@ -105,9 +105,9 @@ mod portable {
     }
 
     fn do3(prev: &[f32], curr: &[f32], next: &[f32], i: usize, width: usize) -> f32 {
-        let c0 = if i > 0 {i-1} else {0};
+        let c0 = if i > 0 { i - 1 } else { 0 };
         let c1 = i;
-        let c2 = min(i+1, width-1);
+        let c2 = min(i + 1, width - 1);
 
         prev[c0]*KERNEL[0] + prev[c1]*KERNEL[1] + prev[c2]*KERNEL[2] +
         curr[c0]*KERNEL[3] + curr[c1]*KERNEL[4] + curr[c2]*KERNEL[5] +
@@ -131,9 +131,9 @@ mod portable {
         assert_eq!(src.width(), dst.width());
         assert_eq!(src.height(), dst.height());
         assert!(src.width() > 0);
-        assert!(src.width() < 1<<24);
+        assert!(src.width() < 1 << 24);
         assert!(src.height() > 0);
-        assert!(src.height() < 1<<24);
+        assert!(src.height() < 1 << 24);
         debug_assert!(src.pixels().all(|p| p.is_finite()));
 
         let width = src.width();

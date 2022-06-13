@@ -1,8 +1,8 @@
 //! Shim for single-threaded rayon replacement
 
 pub mod prelude {
-    pub use itertools::Itertools;
     pub use super::*;
+    pub use itertools::Itertools;
 }
 
 pub trait ParSliceLie<T> {
@@ -67,7 +67,6 @@ impl<'a, T> ParIterMutLie<'a, T> for &'a mut [T] {
         self.iter_mut()
     }
 }
-
 
 impl<T> ParIntoIterLie<T> for Vec<T> {
     type IntoIter = std::vec::IntoIter<T>;
