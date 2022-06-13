@@ -90,18 +90,16 @@ mod portable {
     use std::mem::MaybeUninit;
 
     #[inline]
-    fn do3f(prev: &[f32], curr: &[f32], next: &[f32], i: usize) -> f32 {
+    unsafe fn do3f(prev: &[f32], curr: &[f32], next: &[f32], i: usize) -> f32 {
         debug_assert!(i > 0);
 
         let c0 = i - 1;
         let c1 = i;
         let c2 = i + 1;
 
-        unsafe {
-            prev.get_unchecked(c0)*KERNEL[0] + prev.get_unchecked(c1)*KERNEL[1] + prev.get_unchecked(c2)*KERNEL[2] +
-            curr.get_unchecked(c0)*KERNEL[3] + curr.get_unchecked(c1)*KERNEL[4] + curr.get_unchecked(c2)*KERNEL[5] +
-            next.get_unchecked(c0)*KERNEL[6] + next.get_unchecked(c1)*KERNEL[7] + next.get_unchecked(c2)*KERNEL[8]
-        }
+        prev.get_unchecked(c0)*KERNEL[0] + prev.get_unchecked(c1)*KERNEL[1] + prev.get_unchecked(c2)*KERNEL[2] +
+        curr.get_unchecked(c0)*KERNEL[3] + curr.get_unchecked(c1)*KERNEL[4] + curr.get_unchecked(c2)*KERNEL[5] +
+        next.get_unchecked(c0)*KERNEL[6] + next.get_unchecked(c1)*KERNEL[7] + next.get_unchecked(c2)*KERNEL[8]
     }
 
     fn do3(prev: &[f32], curr: &[f32], next: &[f32], i: usize, width: usize) -> f32 {
@@ -156,7 +154,9 @@ mod portable {
 
             dstrow[0].write(do3(prev, curr, next, 0, width));
             for i in 1..width-1 {
-                dstrow[i].write(do3f(prev, curr, next, i));
+                unsafe {
+                    dstrow[i].write(do3f(prev, curr, next, i));
+                }
             }
             if width > 1 {
                 dstrow[width-1].write(do3(prev, curr, next, width-1, width));
