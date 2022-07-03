@@ -10,8 +10,8 @@ license = "AGPL-3.0"
 name = "dssim-core"
 readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
-version = "3.2.2"
-edition = "2018"
+version = "3.2.3"
+edition = "2021"
 
 [lib]
 crate-type = ["lib", "staticlib"]
@@ -19,15 +19,15 @@ crate-type = ["lib", "staticlib"]
 [dependencies]
 imgref = "1.9.2"
 itertools = "0.10.3"
-rayon = { version = "1.5.1", optional = true }
-rgb = "0.8.31"
+rayon = { version = "1.5.3", optional = true }
+rgb = "0.8.33"
 
 [dev-dependencies]
-lodepng = "3.6.0"
+lodepng = "3.7.0"
 
 [features]
 default = ["threads"]
-threads = ["rayon"]
+threads = ["dep:rayon"]
 no-macos-vimage = []
 
 [package.metadata.docs.rs]
