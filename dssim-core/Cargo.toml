@@ -17,7 +17,7 @@ edition = "2021"
 crate-type = ["lib", "staticlib"]
 
 [dependencies]
-imgref = "1.9.2"
+imgref = "1.9.3"
 itertools = "0.10.3"
 rayon = { version = "1.5.3", optional = true }
 rgb = "0.8.33"

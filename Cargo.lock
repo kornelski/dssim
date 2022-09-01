@@ -278,9 +278,9 @@ dependencies = [
 
 [[package]]
 name = "imgref"
-version = "1.9.2"
+version = "1.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d6a8cd48d0dc604999b8beacfbfc2f4eb289a52af175029d4f79fb57b80c7d5"
+checksum = "320c73268859c28512b98b9379bcbc6421510154b6cf57d6df87a36617e853a6"
 
 [[package]]
 name = "itertools"

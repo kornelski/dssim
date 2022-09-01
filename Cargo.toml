@@ -20,7 +20,7 @@ path = "src/main.rs"
 
 [dependencies]
 dssim-core = { path = "./dssim-core", version = "3.2", default-features = false }
-imgref = "1.9.2"
+imgref = "1.9.3"
 getopts = "0.2.21"
 rayon = { version = "1.5.1", optional = true }
 rgb = "0.8.31"
