@@ -114,6 +114,7 @@ impl std::ops::Div<LAB> for LAB {
 /// Component-wise averaging of pixel values used by `Downsample` to support arbitrary pixel types
 ///
 /// Used to naively resample 4 high-res pixels into one low-res pixel
+#[doc(hidden)]
 pub trait Average4 {
     fn average4(a: Self, b: Self, c: Self, d: Self) -> Self;
 }
@@ -176,6 +177,7 @@ impl ToRGB for RGBAPLU {
 /// Multi-scale DSSIM needs to scale images down. This is it. It's supposed to return the same type of image, but half the size.
 ///
 /// There is a default implementation that just averages 4 neighboring pixels.
+#[doc(hidden)]
 pub trait Downsample {
     type Output;
     fn downsample(&self) -> Option<Self::Output>;

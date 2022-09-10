@@ -4,6 +4,7 @@ use rgb::alt::*;
 use rgb::*;
 
 /// See `GammaPixel` & `ToRGBAPLU`
+#[doc(hidden)]
 pub trait GammaComponent {
     type Lut;
     fn max_value() -> usize;
@@ -17,6 +18,7 @@ pub trait GammaComponent {
 ///
 /// This trait provides gamma to linear conversion via lookup table,
 /// and there's implementation for sRGB for common RGB types.
+#[doc(hidden)]
 pub trait GammaPixel {
     type Component: GammaComponent;
     type Output;
@@ -42,7 +44,9 @@ fn to_linear(s: f32) -> f32 {
 ///
 /// Convenience function `.to_rgbaplu()` to convert RGBA bitmaps to a format useful for DSSIM.
 pub trait ToRGBAPLU {
+    /// Convert with alpha channel preserved
     fn to_rgbaplu(&self) -> Vec<RGBAPLU>;
+    /// Discard alpha channel, if any
     fn to_rgblu(&self) -> Vec<RGBLU>;
 }
 
