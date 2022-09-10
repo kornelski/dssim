@@ -9,31 +9,35 @@ use imgref::*;
 use crate::lieon as rayon;
 use rayon::prelude::*;
 
-const D65x: f64 = 0.9505;
-const D65y: f64 = 1.0;
-const D65z: f64 = 1.089;
+const D65x: f32 = 0.9505;
+const D65z: f32 = 1.089;
 
 pub type GBitmap = ImgVec<f32>;
 pub(crate) trait ToLAB {
     fn to_lab(&self) -> (f32, f32, f32);
 }
 
+#[inline(always)]
+fn fma_matrix(r: f32, rx: f32, g: f32, gx: f32, b: f32, bx: f32) -> f32 {
+    b.mul_add(bx, g.mul_add(gx, r * rx))
+}
+
 impl ToLAB for RGBLU {
     fn to_lab(&self) -> (f32, f32, f32) {
-        let fx = (self.r as f64 * 0.4124 + self.g as f64 * 0.3576 + self.b as f64 * 0.1805) / D65x;
-        let fy = (self.r as f64 * 0.2126 + self.g as f64 * 0.7152 + self.b as f64 * 0.0722) / D65y;
-        let fz = (self.r as f64 * 0.0193 + self.g as f64 * 0.1192 + self.b as f64 * 0.9505) / D65z;
+        let fx = fma_matrix(self.r, 0.4124, self.g, 0.3576, self.b, 0.1805) / D65x;
+        let fy = fma_matrix(self.r, 0.2126, self.g, 0.7152, self.b, 0.0722); // D65y is 1.0
+        let fz = fma_matrix(self.r, 0.0193, self.g, 0.1192, self.b, 0.9505) / D65z;
 
-        let epsilon: f64 = 216. / 24389.;
+        let epsilon: f32 = 216. / 24389.;
         let k = 24389. / (27. * 116.); // http://www.brucelindbloom.com/LContinuity.html
         let X = if fx > epsilon { fx.cbrt() - 16. / 116. } else { k * fx };
         let Y = if fy > epsilon { fy.cbrt() - 16. / 116. } else { k * fy };
         let Z = if fz > epsilon { fz.cbrt() - 16. / 116. } else { k * fz };
 
         let lab = (
-            (Y * 1.05) as f32, // 1.05 instead of 1.16 to boost color importance without pushing colors outside of 1.0 range
-            (86.2 / 220.0 + 500.0 / 220.0 * (X - Y)) as f32,  /* 86 is a fudge to make the value positive */
-            (107.9 / 220.0 + 200.0 / 220.0 * (Y - Z)) as f32, /* 107 is a fudge to make the value positive */
+            (Y * 1.05), // 1.05 instead of 1.16 to boost color importance without pushing colors outside of 1.0 range
+            (86.2 / 220.0 + 500.0 / 220.0 * (X - Y)),  /* 86 is a fudge to make the value positive */
+            (107.9 / 220.0 + 200.0 / 220.0 * (Y - Z)), /* 107 is a fudge to make the value positive */
         );
         debug_assert!(lab.0 <= 1.0 && lab.1 <= 1.0 && lab.2 <= 1.0);
         lab
