@@ -65,10 +65,11 @@ impl ToLABBitmap for GBitmap {
     fn to_lab(&self) -> Vec<GBitmap> {
         let width = self.width();
         let height = self.height();
-        let mut out = Vec::with_capacity(width * height);
+        let area = width * height;
+        let mut out = Vec::with_capacity(area);
 
         // For output width == stride
-        out.spare_capacity_mut().par_chunks_mut(width).enumerate().for_each(|(y, out_row)| {
+        out.spare_capacity_mut().par_chunks_exact_mut(width).take(height).enumerate().for_each(|(y, out_row)| {
             let start = y * self.stride();
             let in_row = &self.buf()[start..start + width];
             let out_row = &mut out_row[0..width];
@@ -81,7 +82,7 @@ impl ToLABBitmap for GBitmap {
             }
         });
 
-        unsafe { out.set_len(out.capacity()) };
+        unsafe { out.set_len(area) };
         vec![Img::new(out, width, height)]
     }
 }
@@ -92,14 +93,16 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
     let width = img.width();
     let height = img.height();
     let stride = img.stride();
+    let area = width * height;
 
-    let mut out_l = Vec::with_capacity(width * height);
-    let mut out_a = Vec::with_capacity(width * height);
-    let mut out_b = Vec::with_capacity(width * height);
+    let mut out_l = Vec::with_capacity(area);
+    let mut out_a = Vec::with_capacity(area);
+    let mut out_b = Vec::with_capacity(area);
 
     // For output width == stride
-    out_l.spare_capacity_mut().par_chunks_mut(width).zip(
-        out_a.spare_capacity_mut().par_chunks_mut(width).zip(out_b.spare_capacity_mut().par_chunks_mut(width))
+    out_l.spare_capacity_mut().par_chunks_exact_mut(width).take(height).zip(
+        out_a.spare_capacity_mut().par_chunks_exact_mut(width).take(height).zip(
+            out_b.spare_capacity_mut().par_chunks_exact_mut(width).take(height))
     ).enumerate()
     .for_each(|(y, (l_row, (a_row, b_row)))| {
         let start = y * stride;
@@ -116,9 +119,9 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
         }
     });
 
-    unsafe { out_l.set_len(out_l.capacity()) };
-    unsafe { out_a.set_len(out_a.capacity()) };
-    unsafe { out_b.set_len(out_b.capacity()) };
+    unsafe { out_l.set_len(area) };
+    unsafe { out_a.set_len(area) };
+    unsafe { out_b.set_len(area) };
 
     return vec![
         Img::new(out_l, width, height),
