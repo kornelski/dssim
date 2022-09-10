@@ -10,7 +10,7 @@ license = "AGPL-3.0"
 name = "dssim"
 readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
-version = "3.2.1"
+version = "3.2.2"
 edition = "2018"
 
 [[bin]]
@@ -19,13 +19,13 @@ name = "dssim"
 path = "src/main.rs"
 
 [dependencies]
-dssim-core = { path = "./dssim-core", version = "3.2", default-features = false }
-imgref = "1.9.2"
+dssim-core = { path = "./dssim-core", version = "3.2.3", default-features = false }
+imgref = "1.9.3"
 getopts = "0.2.21"
-rayon = { version = "1.5.1", optional = true }
-rgb = "0.8.31"
-lodepng = "3.5.2"
-load_image = { version = "2.16.1", features = ["lcms2-static"] }
+rayon = { version = "1.5.3", optional = true }
+rgb = "0.8.33"
+lodepng = "3.7.0"
+load_image = { version = "2.16.4", features = ["lcms2-static"] }
 
 [features]
 default = ["threads", "dssim-core/default", "no-macos-vimage"]
