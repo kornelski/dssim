@@ -64,14 +64,14 @@ impl ToLABBitmap for ImgVec<RGBLU> {
 impl ToLABBitmap for GBitmap {
     fn to_lab(&self) -> Vec<GBitmap> {
         let width = self.width();
+        assert!(width > 0);
         let height = self.height();
         let area = width * height;
         let mut out = Vec::with_capacity(area);
 
         // For output width == stride
         out.spare_capacity_mut().par_chunks_exact_mut(width).take(height).enumerate().for_each(|(y, out_row)| {
-            let start = y * self.stride();
-            let in_row = &self.buf()[start..start + width];
+            let in_row = &self.rows().nth(y).unwrap()[0..width];
             let out_row = &mut out_row[0..width];
             let epsilon: f32 = 216. / 24389.;
             for x in 0..width {
@@ -91,8 +91,8 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
     where F: Fn(T, usize) -> (f32, f32, f32) + Sync + Send + 'static
 {
     let width = img.width();
+    assert!(width > 0);
     let height = img.height();
-    let stride = img.stride();
     let area = width * height;
 
     let mut out_l = Vec::with_capacity(area);
@@ -105,8 +105,7 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
             out_b.spare_capacity_mut().par_chunks_exact_mut(width).take(height))
     ).enumerate()
     .for_each(|(y, (l_row, (a_row, b_row)))| {
-        let start = y * stride;
-        let in_row = &img.buf()[start .. start + width];
+        let in_row = &img.rows().nth(y).unwrap()[0..width];
         let l_row = &mut l_row[0..width];
         let a_row = &mut a_row[0..width];
         let b_row = &mut b_row[0..width];
