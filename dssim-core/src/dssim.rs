@@ -33,6 +33,8 @@ use rgb::{RGB, RGBA};
 use std::borrow::Borrow;
 use std::mem::MaybeUninit;
 use std::ops;
+use std::ops::Deref;
+use std::sync::Arc;
 
 trait Channable<T, I> {
     fn img1_img2_blur(&self, modified: &Self, tmp: &mut [MaybeUninit<I>]) -> Vec<T>;
@@ -193,30 +195,6 @@ impl Dssim {
         self.save_maps_scales = num_scales;
     }
 
-    fn create_scales<InBitmap, OutBitmap>(&self, src_img: &InBitmap) -> Vec<OutBitmap>
-    where
-        InBitmap: Downsample<Output = OutBitmap>,
-        OutBitmap: Downsample<Output = OutBitmap>,
-    {
-        let num_scales = self.scale_weights.len();
-
-        let mut downsampled: Vec<OutBitmap> = Vec::with_capacity(num_scales);
-        for _ in 1..num_scales { // 1, because unscaled bitmap will be added
-            let s = if let Some(l) = downsampled.last() {
-                l.downsample()
-            } else {
-                src_img.downsample()
-            };
-            if let Some(s) = s {
-                downsampled.push(s);
-            } else {
-                break;
-            }
-        }
-
-        downsampled
-    }
-
     /// Create image from an array of RGBA pixels (sRGB, non-premultiplied, alpha last).
     ///
     /// If you have a slice of `u8`, then see `rgb` crate's `as_rgba()`.
@@ -254,30 +232,53 @@ impl Dssim {
         InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
         OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
     {
-        let (lab1, mut all_sizes) = rayon::join(|| {
-            src_img.to_lab()
-        }, || {
-            self.create_scales(src_img).into_par_iter().map(|s| s.to_lab()).collect::<Vec<_>>()
-        });
-
-        all_sizes.insert(0, lab1);
+        let num_scales = self.scale_weights.len();
+        let mut scale = Vec::with_capacity(num_scales);
+        Self::make_scales_recursive(num_scales, MaybeArc::Borrowed(src_img), &mut scale);
+        scale.reverse(); // depth-first made smallest scales first
 
         Some(DssimImage {
-            scale: all_sizes.into_par_iter().map(|s| {
+            scale,
+        })
+    }
+
+    fn make_scales_recursive<InBitmap, OutBitmap>(scales_left: usize, image: MaybeArc<InBitmap>, scales: &mut Vec<DssimChanScale<f32>>)
+    where
+        InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
+        OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
+    {
+        // Run to_lab and next downsampling in parallel
+        let (chan, _) = rayon::join({
+            let image = image.clone();
+            move || {
+                let lab = image.to_lab();
+                drop(image); // Free larger RGB image ASAP
                 DssimChanScale {
-                    chan: s.into_par_iter().enumerate().map(|(n,l)| {
+                    chan: lab.into_par_iter().enumerate().map(|(n,l)| {
                         let w = l.width();
                         let h = l.height();
                         let mut ch = DssimChan::new(l, n > 0);
 
                         let pixels = w * h;
                         let mut tmp = Vec::with_capacity(pixels);
-                        ch.preprocess(tmp.spare_capacity_mut());
+                        ch.preprocess(&mut tmp.spare_capacity_mut()[..pixels]);
                         ch
                     }).collect(),
                 }
-            }).collect(),
-        })
+            }
+        }, {
+            let scales = &mut *scales;
+            move || {
+                if scales_left > 0 {
+                    let down = image.downsample();
+                    drop(image);
+                    if let Some(downsampled) = down {
+                        Self::make_scales_recursive(scales_left - 1, MaybeArc::Owned(Arc::new(downsampled)), scales);
+                    }
+                }
+            }
+        });
+        scales.push(chan);
     }
 
     /// Compare original with another image. See `create_image`
@@ -446,6 +447,33 @@ fn png_compare() {
     let (res, _) = d.compare(&sub_img1, &sub_img2);
     assert!(res < 0.01);
 }
+
+enum MaybeArc<'a, T> {
+    Owned(Arc<T>),
+    Borrowed(&'a T),
+}
+
+impl<'a, T> Clone for MaybeArc<'a, T> {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Owned(t) => Self::Owned(t.clone()),
+            Self::Borrowed(t) => Self::Borrowed(t),
+        }
+    }
+}
+
+impl<'a, T> Deref for MaybeArc<'a, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Owned(t) => t,
+            Self::Borrowed(t) => t,
+        }
+    }
+}
+
+
 
 #[test]
 fn poison() {
