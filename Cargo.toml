@@ -29,7 +29,7 @@ load_image = { version = "2.16.4", features = ["lcms2-static"] }
 
 [features]
 default = ["threads", "dssim-core/default", "no-macos-vimage"]
-threads = ["rayon"]
+threads = ["rayon", "dssim-core/threads"]
 avif = ["load_image/avif"]
 webp = ["load_image/webp"]
 webp-static = ["load_image/webp-static"]
