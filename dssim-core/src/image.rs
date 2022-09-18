@@ -84,13 +84,13 @@ impl std::ops::Sub<LAB> for LAB {
 
 impl LAB {
     pub(crate) fn avg(&self) -> f32 {
-        (self.l + self.a + self.b) / 3.0
+        (self.l + self.a + self.b) * (1./3.)
     }
 }
 
 impl From<LAB> for f64 {
     fn from(other: LAB) -> f64 {
-        other.avg() as f64
+        (other.l as f64 + other.a as f64 + other.b as f64) * (1./3.)
     }
 }
 
