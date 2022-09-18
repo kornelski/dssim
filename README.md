@@ -53,15 +53,16 @@ The version is printed when you run `dssim -h`.
 
 ### Build from source
 
-You'll need [Rust 1.52](https://rustup.rs) or later. Clone the repo and run:
+You'll need [Rust 1.63](https://rustup.rs) or later. Clone the repo and run:
 
+    rustup update
     cargo build --release
 
 Will give you `./target/release/dssim`.
 
 ## Accuracy
 
-Scores for version 3.0 [measured][2] against [TID2013][1] database:
+Scores for version 3.2 [measured][2] against [TID2013][1] database:
 
 TID2013  | Spearman | Kendall
 ---------|----------|--------
@@ -85,9 +86,7 @@ DSSIM is dual-licensed under [AGPL](LICENSE) or [commercial](https://supso.org/p
 * The comparison is done on multiple weighed scales (based on IWSSIM) to measure features of different sizes. A single-scale SSIM is biased towards differences smaller than its gaussian kernel.
 * Scaling is done in linear-light RGB to model physical effects of viewing distance/lenses. Scaling in sRGB or Lab would have incorrect gamma and mask distortions caused by chroma subsampling.
 * a/b channels of Lab are compared with lower spatial precision to simulate eyes' higher sensitivity to brightness than color changes.
-* The lightness component of SSIM is ignored when comparing color channels.
 * SSIM score is pooled using mean absolute deviation. You can get per-pixel SSIM from the API to implement custom pooling.
-
 
 ## Compiling for WASM
 
