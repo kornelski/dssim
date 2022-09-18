@@ -288,8 +288,9 @@ impl Dssim {
     /// `Val` is a fancy wrapper for `f64`
     pub fn compare<M: Borrow<DssimImage<f32>>>(&self, original_image: &DssimImage<f32>, modified_image: M) -> (Val, Vec<SsimMap>) {
         let modified_image = modified_image.borrow();
-        let res: Vec<_> = self.scale_weights.as_slice().par_iter().cloned().zip(
-            modified_image.scale.as_slice().par_iter().zip(original_image.scale.as_slice().par_iter())
+        let res: Vec<_> = self.scale_weights.as_slice().par_iter().with_min_len(1).cloned().zip(
+                        modified_image.scale.as_slice().par_iter().with_min_len(1).zip(
+                        original_image.scale.as_slice().par_iter().with_min_len(1))
         ).enumerate().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
             let scale_width = original_image_scale.chan[0].width;
             let scale_height = original_image_scale.chan[0].height;
@@ -385,9 +386,9 @@ impl Dssim {
         debug_assert_eq!(img1_img2_blur.len(), original.mu.len());
         debug_assert_eq!(img1_img2_blur.len(), original.img_sq_blur.len());
 
-        let mu_iter = original.mu.as_slice().par_iter().cloned().zip_eq(modified.mu.as_slice().par_iter().cloned());
-        let sq_iter = original.img_sq_blur.as_slice().par_iter().cloned().zip_eq(modified.img_sq_blur.as_slice().par_iter().cloned());
-        let map_out = img1_img2_blur.par_iter().cloned().zip_eq(mu_iter).zip_eq(sq_iter)
+        let mu_iter = original.mu.as_slice().par_iter().with_min_len(1<<10).cloned().zip_eq(modified.mu.as_slice().par_iter().with_min_len(1<<10).cloned());
+        let sq_iter = original.img_sq_blur.as_slice().par_iter().with_min_len(1<<10).cloned().zip_eq(modified.img_sq_blur.as_slice().par_iter().with_min_len(1<<10).cloned());
+        let map_out = img1_img2_blur.par_iter().with_min_len(1<<10).cloned().zip_eq(mu_iter).zip_eq(sq_iter)
         .map(|((img1_img2_blur, (mu1, mu2)), (img1_sq_blur, img2_sq_blur))| {
             let mu1mu1 = mu1 * mu1;
             let mu1mu2 = mu1 * mu2;
