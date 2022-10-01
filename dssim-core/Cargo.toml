@@ -20,7 +20,7 @@ crate-type = ["lib", "staticlib"]
 imgref = "1.9.4"
 itertools = "0.10.3"
 rayon = { version = "1.5.3", optional = true }
-rgb = "0.8.33"
+rgb = "0.8.34"
 
 [dev-dependencies]
 lodepng = "3.7.0"
