@@ -25,12 +25,12 @@ use std::path::PathBuf;
 
 fn usage(argv0: &str) {
     eprintln!("\
-       Usage: {} original.png modified.png [modified.png...]\
-     \n   or: {} -o difference.png original.png modified.png\n\n\
+       Usage: {argv0} original.png modified.png [modified.png...]\
+     \n   or: {argv0} -o difference.png original.png modified.png\n\n\
        Compares first image against subsequent images, and outputs\n\
        1/SSIM-1 difference for each of them in order (0 = identical).\n\n\
        Images must have identical size, but may have different gamma & depth.\n\
-       \nVersion {} https://kornel.ski/dssim\n", argv0, argv0, env!("CARGO_PKG_VERSION"));
+       \nVersion {} https://kornel.ski/dssim\n", env!("CARGO_PKG_VERSION"));
 }
 
 fn to_byte(i: f32) -> u8 {
@@ -49,7 +49,7 @@ fn main() {
     let matches = match opts.parse(rest_args) {
         Ok(m) => m,
         Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{err}");
             std::process::exit(1);
         },
     };
@@ -77,14 +77,14 @@ fn main() {
     let files_iter = files.iter();
 
     let files = files_iter.map(|file| -> Result<_, String> {
-        let image = dssim::load_image(&attr, &file).map_err(|e| format!("Can't load {}, because: {}", file.display(), e))?;
+        let image = dssim::load_image(&attr, file).map_err(|e| format!("Can't load {}, because: {e}", file.display()))?;
         Ok((file, image))
     }).collect::<Result<Vec<_>,_>>();
 
     let mut files = match files {
         Ok(f) => f,
             Err(err) => {
-            eprintln!("{}", err);
+            eprintln!("{err}");
                 std::process::exit(1);
             },
         };
@@ -105,7 +105,7 @@ fn main() {
 
         let (dssim, ssim_maps) = attr.compare(&original, modified);
 
-        println!("{:.8}\t{}", dssim, file2.display());
+        println!("{dssim:.8}\t{}", file2.display());
 
         if map_output_file.is_some() {
             #[cfg(feature = "threads")]
@@ -125,9 +125,9 @@ fn main() {
                         a: 255,
                     }
                 }).collect();
-                let write_res = lodepng::encode32_file(format!("{}-{}.png", map_output_file.unwrap(), n), &out, map_meta.map.width(), map_meta.map.height());
+                let write_res = lodepng::encode32_file(format!("{}-{n}.png", map_output_file.unwrap()), &out, map_meta.map.width(), map_meta.map.height());
                 if write_res.is_err() {
-                    eprintln!("Can't write {}: {:?}", map_output_file.unwrap(), write_res);
+                    eprintln!("Can't write {}: {write_res:?}", map_output_file.unwrap());
                     std::process::exit(1);
                 }
             });
@@ -183,13 +183,13 @@ fn image_load1() {
 
     let strip_png = dssim::load_image(&attr, "tests/profile-stripped.png").unwrap();
     let (diff, _) = attr.compare(&strip_jpg, strip_png);
-    assert!(diff > 0.009, "{}", diff)
+    assert!(diff > 0.009, "{}", diff);
 }
 
 #[test]
 fn rgblu_input() {
-    use dssim::*;
-    use imgref::*;
+    use dssim::{Dssim, RGBLU};
+    use imgref::{Img, ImgRef, ImgVec};
 
     let ctx = Dssim::new();
     let im: ImgVec<RGBLU> = Img::new(vec![rgb::RGB::new(0.,0.,0.)], 1, 1);

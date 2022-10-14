@@ -3,8 +3,8 @@
 #![allow(clippy::manual_range_contains)]
 
 pub use dssim_core::*;
-use imgref::*;
-use load_image::*;
+use imgref::{Img, ImgExt};
+use load_image::ImageData;
 use std::path::Path;
 
 fn load(attr: &Dssim, path: &Path) -> Result<DssimImage<f32>, lodepng::Error> {
@@ -21,7 +21,7 @@ fn load(attr: &Dssim, path: &Path) -> Result<DssimImage<f32>, lodepng::Error> {
     }.expect("infallible"))
 }
 
-/// Load PNG or JPEG image from the given path. Applies color profiles and converts to sRGB.
+/// Load PNG or JPEG image from the given path. Applies color profiles and converts to `sRGB`.
 #[inline]
 pub fn load_image(attr: &Dssim, path: impl AsRef<Path>) -> Result<DssimImage<f32>, lodepng::Error> {
     load(attr, path.as_ref())

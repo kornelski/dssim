@@ -1,8 +1,8 @@
 #![feature(test)]
 
 extern crate test;
-use dssim::*;
-use imgref::*;
+use dssim::{RGBAPLU, ToRGBAPLU};
+use imgref::{Img, ImgVec};
 use test::Bencher;
 
 fn load(path: &str) -> Result<ImgVec<RGBAPLU>, lodepng::Error> {
