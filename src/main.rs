@@ -22,6 +22,10 @@ use getopts::Options;
 use rayon::prelude::*;
 use std::env;
 use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::SeqCst;
+
+mod ordqueue;
 
 fn usage(argv0: &str) {
     eprintln!("\
@@ -33,6 +37,7 @@ fn usage(argv0: &str) {
        \nVersion {} https://kornel.ski/dssim\n", env!("CARGO_PKG_VERSION"));
 }
 
+#[inline(always)]
 fn to_byte(i: f32) -> u8 {
     if i <= 0.0 {0}
     else if i >= 255.0/256.0 {255}
@@ -65,37 +70,51 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let map_output_file_tmp = matches.opt_str("o");
     let map_output_file = map_output_file_tmp.as_ref();
-    let files: Vec<PathBuf> = matches.free.iter().map(|p| p.into()).collect();
+
+    let files = matches.free;
 
     if files.len() < 2 {
         usage(&program);
         return Err("You must specify at least 2 files to compare".into());
     }
 
+    let (images_send, mut images_recv) = ordqueue::new(2);
+    let (filenames_send, filenames_recv) = crossbeam_channel::unbounded();
     let mut attr = dssim::Dssim::new();
+    if map_output_file.is_some() {
+        attr.set_save_ssim_maps(8);
+    }
 
-    #[cfg(feature = "threads")]
-    let files_iter = files.par_iter();
-    #[cfg(not(feature = "threads"))]
-    let files_iter = files.iter();
+    let decode_more = AtomicBool::new(true);
+    std::thread::scope(|scope| {
 
-    let mut files = files_iter.map(|file| -> Result<_, String> {
-        let image = dssim::load_image(&attr, file).map_err(|e| format!("Can't load {}, because: {e}", file.display()))?;
-        Ok((file, image))
-    }).collect::<Result<Vec<_>,_>>()?;
+    let decode_thread = || {
+        let images_send = images_send; // ensure it's moved, and attr isn't
+        filenames_recv.into_iter().take_while(|_| decode_more.load(SeqCst))
+        .try_for_each(|(i, file): (usize, PathBuf)| {
+            dssim::load_image(&attr, &file)
+                .map_err(|e| format!("Can't load {}, because: {e}", file.display()))
+                .and_then(|image| images_send.push(i, (file, image)).map_err(|_| "Aborted".into()))
+        })
+        .map_err(|e| { decode_more.store(false, SeqCst); e})
+    };
 
-    let (file1, original) = files.remove(0);
+    let threads = [
+        scope.spawn(decode_thread.clone()),
+        scope.spawn(decode_thread),
+    ];
 
-    for (file2, modified) in files {
+    files.into_iter().map(PathBuf::from).enumerate()
+        .try_for_each(move |f| filenames_send.send(f))?;
+
+    let (file1, original) = images_recv.next().unwrap();
+
+    for (file2, modified) in images_recv {
         if original.width() != modified.width() || original.height() != modified.height() {
             eprintln!("Image {} has a different size ({}x{}) than {} ({}x{})\n",
                 file2.display(), modified.width(), modified.height(),
                 file1.display(), original.width(), original.height());
             std::process::exit(1);
-        }
-
-        if map_output_file.is_some() {
-            attr.set_save_ssim_maps(8);
         }
 
         let (dssim, ssim_maps) = attr.compare(&original, modified);
@@ -127,7 +146,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             })?;
         }
     }
-    Ok(())
+
+    decode_more.store(false, SeqCst);
+    Ok(threads.into_iter().try_for_each(|t| t.join().unwrap())?)
+    })
 }
 
 #[test]

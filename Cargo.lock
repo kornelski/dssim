@@ -150,8 +150,9 @@ dependencies = [
 
 [[package]]
 name = "dssim"
-version = "3.2.4"
+version = "3.3.0"
 dependencies = [
+ "crossbeam-channel",
  "dssim-core",
  "getopts",
  "imgref",
