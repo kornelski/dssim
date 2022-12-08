@@ -1,5 +1,5 @@
 /*
- * © 2011-2017 Kornel Lesiński. All rights reserved.
+ * © 2011-2022 Kornel Lesiński. All rights reserved.
  *
  * This file is part of DSSIM.
  *
@@ -40,23 +40,27 @@ fn to_byte(i: f32) -> u8 {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    let (program, rest_args) = args.split_at(1);
+    if let Err(e) = run() {
+        eprintln!("error: {e}");
+        if let Some(s) = e.source() {
+            eprintln!("  {s}");
+        }
+        std::process::exit(1);
+    }
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let mut args = env::args();
+    let program = args.next().unwrap_or_default();
 
     let mut opts = Options::new();
     opts.optopt("o", "", "set output file name", "NAME");
     opts.optflag("h", "help", "print this help menu");
-    let matches = match opts.parse(rest_args) {
-        Ok(m) => m,
-        Err(err) => {
-            eprintln!("{err}");
-            std::process::exit(1);
-        },
-    };
+    let matches = opts.parse(args)?;
 
     if matches.opt_present("h") {
-        usage(&program[0]);
-        return;
+        usage(&program);
+        return Ok(());
     }
 
     let map_output_file_tmp = matches.opt_str("o");
@@ -64,9 +68,8 @@ fn main() {
     let files: Vec<PathBuf> = matches.free.iter().map(|p| p.into()).collect();
 
     if files.len() < 2 {
-        eprintln!("You must specify at least 2 files to compare\n");
-        usage(&program[0]);
-        std::process::exit(1);
+        usage(&program);
+        return Err("You must specify at least 2 files to compare".into());
     }
 
     let mut attr = dssim::Dssim::new();
@@ -76,18 +79,10 @@ fn main() {
     #[cfg(not(feature = "threads"))]
     let files_iter = files.iter();
 
-    let files = files_iter.map(|file| -> Result<_, String> {
+    let mut files = files_iter.map(|file| -> Result<_, String> {
         let image = dssim::load_image(&attr, file).map_err(|e| format!("Can't load {}, because: {e}", file.display()))?;
         Ok((file, image))
-    }).collect::<Result<Vec<_>,_>>();
-
-    let mut files = match files {
-        Ok(f) => f,
-            Err(err) => {
-            eprintln!("{err}");
-                std::process::exit(1);
-            },
-        };
+    }).collect::<Result<Vec<_>,_>>()?;
 
     let (file1, original) = files.remove(0);
 
@@ -107,13 +102,13 @@ fn main() {
 
         println!("{dssim:.8}\t{}", file2.display());
 
-        if map_output_file.is_some() {
+        if let Some(map_output_file) = map_output_file {
             #[cfg(feature = "threads")]
             let ssim_maps_iter = ssim_maps.par_iter();
             #[cfg(not(feature = "threads"))]
             let ssim_maps_iter = ssim_maps.iter();
 
-            ssim_maps_iter.enumerate().for_each(|(n, map_meta)| {
+            ssim_maps_iter.enumerate().try_for_each(|(n, map_meta)| {
                 let avgssim = map_meta.ssim as f32;
                 let out: Vec<_> = map_meta.map.pixels().map(|ssim|{
                     let max = 1_f32 - ssim;
@@ -125,14 +120,14 @@ fn main() {
                         a: 255,
                     }
                 }).collect();
-                let write_res = lodepng::encode32_file(format!("{}-{n}.png", map_output_file.unwrap()), &out, map_meta.map.width(), map_meta.map.height());
-                if write_res.is_err() {
-                    eprintln!("Can't write {}: {write_res:?}", map_output_file.unwrap());
-                    std::process::exit(1);
-                }
-            });
+                lodepng::encode32_file(format!("{map_output_file}-{n}.png"), &out, map_meta.map.width(), map_meta.map.height())
+                    .map_err(|e| {
+                        format!("Can't write {map_output_file}: {e}")
+                    })
+            })?;
         }
     }
+    Ok(())
 }
 
 #[test]
