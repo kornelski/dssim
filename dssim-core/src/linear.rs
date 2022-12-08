@@ -26,6 +26,7 @@ pub trait GammaPixel {
     fn to_linear(&self, gamma_lut: &<Self::Component as GammaComponent>::Lut) -> Self::Output;
 
     #[inline(always)]
+    #[must_use]
     fn make_lut() -> <Self::Component as GammaComponent>::Lut {
         <Self::Component as GammaComponent>::make_lut()
     }
@@ -62,7 +63,7 @@ impl GammaComponent for u8 {
     fn make_lut() -> Self::Lut {
         let mut out = [0.; 256];
         for (i, o) in out.iter_mut().enumerate() {
-            *o = to_linear(i as f32 / Self::max_value() as f32);
+            *o = to_linear(i as f32 / f32::from(Self::max_value()));
         }
         out
     }
@@ -80,7 +81,7 @@ impl GammaComponent for u16 {
     fn make_lut() -> Self::Lut {
         let mut out = [0.; 65536];
         for (i, o) in out.iter_mut().enumerate() {
-            *o = to_linear(i as f32 / Self::max_value() as f32);
+            *o = to_linear(i as f32 / f32::from(Self::max_value()));
         }
         out
     }

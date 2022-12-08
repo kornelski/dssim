@@ -90,7 +90,7 @@ impl LAB {
 
 impl From<LAB> for f64 {
     fn from(other: LAB) -> f64 {
-        (other.l as f64 + other.a as f64 + other.b as f64) * (1./3.)
+        (f64::from(other.l) + f64::from(other.a) + f64::from(other.b)) * (1./3.)
     }
 }
 

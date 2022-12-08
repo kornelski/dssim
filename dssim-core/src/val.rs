@@ -12,6 +12,7 @@ use std::ops::Sub;
 pub struct Dssim(f64);
 
 impl Dssim {
+    #[must_use]
     pub fn new(v: f64) -> Dssim {
         debug_assert!(v.is_finite());
         Dssim(v)

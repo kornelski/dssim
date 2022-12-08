@@ -11,7 +11,8 @@ pub type DssimImage = crate::DssimImage<f32>;
 }
 
 /// Free the context
-#[no_mangle] pub unsafe extern fn dssim_free(d: *mut Dssim) {
+#[no_mangle]
+pub unsafe extern "C" fn dssim_free(d: *mut Dssim) {
     if d.is_null() {
         return;
     }
@@ -49,7 +50,8 @@ pub type DssimImage = crate::DssimImage<f32>;
 }
 
 /// Free image data
-#[no_mangle] pub unsafe extern fn dssim_free_image(img: *mut DssimImage) {
+#[no_mangle]
+pub unsafe extern "C" fn dssim_free_image(img: *mut DssimImage) {
     if img.is_null() {
         return;
     }
