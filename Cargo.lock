@@ -21,9 +21,9 @@ dependencies = [
 
 [[package]]
 name = "aom-decode"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1adbf5e66bba769d936f6006611803b46e2bfed4da89279b2cfea3cdf9532df"
+checksum = "f9dc16c84c3c946412a813b77c39e920e75aed10f9ca652a32dd59ca300e6adb"
 dependencies = [
  "avif-parse",
  "imgref",
@@ -62,9 +62,9 @@ dependencies = [
 
 [[package]]
 name = "bytemuck"
-version = "1.12.3"
+version = "1.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aaa3a8d9a1ca92e282c96a32d6511b695d7d994d1d102ba85d279f9b2756947f"
+checksum = "17febce684fd15d89027105661fec94afb475cb995fbc59d2865198446ba2eea"
 
 [[package]]
 name = "byteorder"
@@ -262,9 +262,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.1.19"
+version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "62b467343b94ba476dcb2500d242dadbb39557df889310ac77c5d99100aaac33"
+checksum = "ee512640fe35acbfb4bb779db6f0d80704c2cacfa2e39b601ef3e3f47d1ae4c7"
 dependencies = [
  "libc",
 ]
@@ -326,9 +326,9 @@ dependencies = [
 
 [[package]]
 name = "libaom-sys"
-version = "0.12.1"
+version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc817c7fad55e49c6cb3dcb1344ca012d9239c128ee3d723ffaf5d03e7115b0c"
+checksum = "1849531b9a2ea1c6bbfbb9ee7819619a905f9171ad8750e1ef80449cc4ae8e0b"
 dependencies = [
  "cmake",
 ]
@@ -363,9 +363,9 @@ dependencies = [
 
 [[package]]
 name = "load_image"
-version = "3.0.1"
+version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5b996997afc21a44026a156baf28aa1223b2b5459b33e9a50b0363aa876b9655"
+checksum = "5f87f0f354b901237de8e6d4c0f050a3aa85b83a458fea9796f993a08a67c3cc"
 dependencies = [
  "aom-decode",
  "bytemuck",
@@ -498,9 +498,9 @@ dependencies = [
 
 [[package]]
 name = "num_cpus"
-version = "1.14.0"
+version = "1.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6058e64324c71e02bc2b150e4f3bc8286db6c83092132ffa3f6b1eab0f9def5"
+checksum = "0fac9e2da13b5eb447a6ce3d392f23a29d8694bff781bf03a16cd9ac8697593b"
 dependencies = [
  "hermit-abi",
  "libc",
