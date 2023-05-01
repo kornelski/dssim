@@ -66,6 +66,7 @@ impl ToLABBitmap for ImgVec<RGBLU> {
 }
 
 impl ToLABBitmap for GBitmap {
+    #[inline(never)]
     fn to_lab(&self) -> Vec<GBitmap> {
         let width = self.width();
         assert!(width > 0);
@@ -91,6 +92,7 @@ impl ToLABBitmap for GBitmap {
     }
 }
 
+#[inline(never)]
 fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> Vec<GBitmap>
     where F: Fn(T, usize) -> (f32, f32, f32) + Sync + Send + 'static
 {

@@ -244,6 +244,7 @@ impl Dssim {
         Some(DssimImage { scale })
     }
 
+    #[inline(never)]
     fn make_scales_recursive<InBitmap, OutBitmap>(scales_left: usize, image: MaybeArc<InBitmap>, scales: &mut Vec<DssimChanScale<f32>>)
     where
         InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
@@ -288,6 +289,7 @@ impl Dssim {
     /// The `SsimMap`s are returned only if you've enabled them first.
     ///
     /// `Val` is a fancy wrapper for `f64`
+    #[inline(never)]
     pub fn compare<M: Borrow<DssimImage<f32>>>(&self, original_image: &DssimImage<f32>, modified_image: M) -> (Val, Vec<SsimMap>) {
         let modified_image = modified_image.borrow();
         let res: Vec<_> = self.scale_weights.as_slice().par_iter().with_min_len(1).cloned().zip(
@@ -370,6 +372,7 @@ impl Dssim {
         }
     }
 
+    #[inline(never)]
     fn compare_scale<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
     where
         L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
