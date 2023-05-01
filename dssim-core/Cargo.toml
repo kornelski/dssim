@@ -10,7 +10,7 @@ license = "AGPL-3.0"
 name = "dssim-core"
 readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
-version = "3.2.5"
+version = "3.2.6"
 edition = "2021"
 
 [lib]
@@ -29,6 +29,25 @@ lodepng = "3.7.0"
 default = ["threads"]
 threads = ["dep:rayon"]
 no-macos-vimage = []
+# internal for cargo-c only
+capi = []
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+
+# for use with https://lib.rs/cargo-c
+[package.metadata.capi.library]
+name = "dssim"
+version = "3.0.0"
+
+[package.metadata.capi.pkg_config]
+name = "dssim"
+filename = "dssim"
+
+[package.metadata.capi.header]
+name = "dssim"
+subdirectory = ""
+generation = false
+
+[package.metadata.capi.install.include]
+asset = [{from = "dssim.h"}]

@@ -31,7 +31,7 @@ crossbeam-channel = "0.5.6"
 
 [features]
 default = ["threads", "dssim-core/default", "no-macos-vimage"]
-threads = ["rayon", "dssim-core/threads"]
+threads = ["dep:rayon", "dssim-core/threads"]
 avif = ["load_image/avif"]
 webp = ["load_image/webp"]
 webp-static = ["load_image/webp-static"]

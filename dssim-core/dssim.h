@@ -1,5 +1,12 @@
 /**
  * Use cargo build --release to create target/release/libdssim_core.a
+ *
+ * or
+ *
+ * rustup update
+ * cargo install cargo-c
+ * cargo cbuild --release # makes target/<platform>/release/libdssim.{a,so,pc}
+ * cargo cinstall --release --verbose # installs libdssim.so globally
  */
 
 #include <stdarg.h>

@@ -77,6 +77,27 @@ Full     |  -0.8711 | -0.6984
 [1]: http://www.ponomarenko.info/tid2013.htm
 [2]: https://lib.rs/crates/tid2013stats
 
+## Usage from C
+
+Make sure to build `dssim-core` library project, not the parent `dssim` binary project.
+
+```bash
+cd dssim-core
+rustup update
+cargo build --release
+```
+
+This will build `target/release/libdssim_core.a` that you can link with your project. Use `dssim.h` included in the dssim repo. It's up to you where you put these files.
+
+Alternatively, on Linux there is a more involved but slightly more proper method:
+
+```bash
+cargo install cargo-c
+cargo cinstall --release --destdir=/ --prefix=/usr/lib
+```
+
+This will install `libdssim.so` in `/usr/lib` and make `dssim` available to `pkg-config`. See `target/<platform>/release` for all the files built this way.
+
 ## License
 
 DSSIM is dual-licensed under [AGPL](LICENSE) or [commercial](https://supso.org/projects/dssim) license.
