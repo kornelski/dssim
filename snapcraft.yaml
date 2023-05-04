@@ -1,19 +1,18 @@
 name: dssim
-version: 2.9.7
-summary: Check for (dis)similarity between two or more PNG images.
+version: 3.2.4
+summary: Check for (dis)similarity between two or more images.
 description: |
       This tool computes (dis)similarity between two or more PNG images using an algorithm approximating human vision.
       Comparison is done using the SSIM algorithm at multiple weighed resolutions.
       The value returned is 1/SSIM-1, where 0 means identical image, and >0 (unbounded) is amount of difference.
       Values are not directly comparable with other tools.
 
-grade: stable
-base: core18
+base: core20
 confinement: strict
 
 apps:
   dssim:
-    command: dssim
+    command: bin/dssim
     plugs:
       - home
 
@@ -21,5 +20,4 @@ parts:
   dssim:
     source-type: git
     source: https://github.com/kornelski/dssim.git
-    source-tag: 2.9.7
     plugin: rust
