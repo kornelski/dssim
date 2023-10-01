@@ -290,9 +290,9 @@ dependencies = [
 
 [[package]]
 name = "lcms2"
-version = "6.0.0-alpha.2"
+version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "425571d037b1230c46c8cc09167bd1fc69dd646b7015e2e386441e3173a996e1"
+checksum = "897a7716b253bb5c58ac17a1a74ddda694f57fcf1c8a65799087783592c71092"
 dependencies = [
  "bytemuck",
  "foreign-types",
@@ -301,9 +301,9 @@ dependencies = [
 
 [[package]]
 name = "lcms2-sys"
-version = "4.0.2"
+version = "4.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81057b902a5fa40801856b7b4a40e0ffcca42ee20666519bf4eebba49aff22a3"
+checksum = "137dae56197ab9e66729ff73e2942e26f16f9ddcd14a53295c35f53dcd067b58"
 dependencies = [
  "cc",
  "dunce",
@@ -350,9 +350,9 @@ dependencies = [
 
 [[package]]
 name = "load_image"
-version = "3.1.1"
+version = "3.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee14680fac299054170f6cc2299efbe032318404d8498e727f7b0bb9e940e480"
+checksum = "4ce4ddf55fffd47e0764d74a58d0e80c32d93bfb149b0c707532e92c4f97d9d7"
 dependencies = [
  "aom-decode",
  "bytemuck",
