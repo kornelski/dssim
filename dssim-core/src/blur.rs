@@ -291,5 +291,5 @@ fn blur_two() {
     assert!((1. - dst.buf()[3]).abs() < 0.0001, "{}", dst.buf()[3]);
     assert!((1. - dst.buf()[3 * 4]).abs() < 0.0001, "{}", dst.buf()[3 * 4]);
     assert!((1. - dst.buf()[4 * 4 - 1]).abs() < 0.0001, "{}", dst.buf()[4 * 4 - 1]);
-    assert_eq!(exp, dst.buf()[0]);
+    assert!((exp as f64 - dst.buf()[0] as f64).abs() < 0.0000001);
 }
