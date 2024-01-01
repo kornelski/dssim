@@ -27,7 +27,7 @@ rayon = { version = "1.8.0", optional = true }
 rgb = "0.8.37"
 lodepng = "3.8.1"
 load_image = { version = "3.0.3", features = ["lcms2-static"] }
-crossbeam-channel = "0.5.8"
+crossbeam-channel = "0.5.10"
 
 [features]
 default = ["threads", "dssim-core/default", "no-macos-vimage"]
