@@ -22,8 +22,7 @@ use getopts::Options;
 use rayon::prelude::*;
 use std::env;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicBool;
-use std::sync::atomic::Ordering::SeqCst;
+use std::process::ExitCode;
 
 mod ordqueue;
 
@@ -44,13 +43,15 @@ fn to_byte(i: f32) -> u8 {
     else {(i * 256.0) as u8}
 }
 
-fn main() {
+fn main() -> ExitCode {
     if let Err(e) = run() {
         eprintln!("error: {e}");
         if let Some(s) = e.source() {
             eprintln!("  {s}");
         }
-        std::process::exit(1);
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
     }
 }
 
@@ -85,71 +86,73 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         attr.set_save_ssim_maps(8);
     }
 
-    let decode_more = AtomicBool::new(true);
     std::thread::scope(|scope| {
+        let decode_thread = || {
+            let images_send = images_send; // ensure it's moved, and attr isn't
+            filenames_recv.into_iter().try_for_each(|(i, file): (usize, PathBuf)| {
+                dssim::load_image(&attr, &file)
+                    .map_err(|e| format!("Can't load {}, because: {e}", file.display()))
+                    .and_then(|image| images_send.push(i, (file, image)).map_err(|_| "Aborted".into()))
+            })
+        };
 
-    let decode_thread = || {
-        let images_send = images_send; // ensure it's moved, and attr isn't
-        filenames_recv.into_iter().take_while(|_| decode_more.load(SeqCst))
-        .try_for_each(|(i, file): (usize, PathBuf)| {
-            dssim::load_image(&attr, &file)
-                .map_err(|e| format!("Can't load {}, because: {e}", file.display()))
-                .and_then(|image| images_send.push(i, (file, image)).map_err(|_| "Aborted".into()))
-        })
-        .map_err(|e| { decode_more.store(false, SeqCst); e})
-    };
+        let threads = [
+            scope.spawn(decode_thread.clone()),
+            scope.spawn(decode_thread),
+        ];
 
-    let threads = [
-        scope.spawn(decode_thread.clone()),
-        scope.spawn(decode_thread),
-    ];
+        let result = (|| {
+            files.into_iter().map(PathBuf::from).enumerate()
+                .try_for_each(move |f| filenames_send.send(f))?;
 
-    files.into_iter().map(PathBuf::from).enumerate()
-        .try_for_each(move |f| filenames_send.send(f))?;
+            let (file1, original) = images_recv.next().ok_or("Can't load any images")?;
 
-    let (file1, original) = images_recv.next().unwrap();
+            for (file2, modified) in images_recv {
+                if original.width() != modified.width() || original.height() != modified.height() {
+                    return Err(format!("Image {} has a different size ({}x{}) than {} ({}x{})\n",
+                        file2.display(), modified.width(), modified.height(),
+                        file1.display(), original.width(), original.height()).into());
+                }
 
-    for (file2, modified) in images_recv {
-        if original.width() != modified.width() || original.height() != modified.height() {
-            eprintln!("Image {} has a different size ({}x{}) than {} ({}x{})\n",
-                file2.display(), modified.width(), modified.height(),
-                file1.display(), original.width(), original.height());
-            std::process::exit(1);
-        }
+                let (dssim, ssim_maps) = attr.compare(&original, modified);
 
-        let (dssim, ssim_maps) = attr.compare(&original, modified);
+                println!("{dssim:.8}\t{}", file2.display());
 
-        println!("{dssim:.8}\t{}", file2.display());
+                if let Some(map_output_file) = map_output_file {
+                    write_ssim_maps(ssim_maps, map_output_file)?;
+                }
+            }
+            Ok(())
+        })();
 
-        if let Some(map_output_file) = map_output_file {
-            #[cfg(feature = "threads")]
-            let ssim_maps_iter = ssim_maps.par_iter();
-            #[cfg(not(feature = "threads"))]
-            let ssim_maps_iter = ssim_maps.iter();
-
-            ssim_maps_iter.enumerate().try_for_each(|(n, map_meta)| {
-                let avgssim = map_meta.ssim as f32;
-                let out: Vec<_> = map_meta.map.pixels().map(|ssim|{
-                    let max = 1_f32 - ssim;
-                    let maxsq = max * max;
-                    rgb::RGBA8 {
-                        r: to_byte(maxsq * 16.0),
-                        g: to_byte(max * 3.0),
-                        b: to_byte(max / ((1_f32 - avgssim) * 4_f32)),
-                        a: 255,
-                    }
-                }).collect();
-                lodepng::encode32_file(format!("{map_output_file}-{n}.png"), &out, map_meta.map.width(), map_meta.map.height())
-                    .map_err(|e| {
-                        format!("Can't write {map_output_file}: {e}")
-                    })
-            })?;
-        }
-    }
-
-    decode_more.store(false, SeqCst);
-    Ok(threads.into_iter().try_for_each(|t| t.join().unwrap())?)
+        threads.into_iter().try_for_each(|t| t.join().map_err(|_| "thread panicked; this is a bug")?)?;
+        result
     })
+}
+
+fn write_ssim_maps(ssim_maps: Vec<dssim_core::SsimMap>, map_output_file: &str) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "threads")]
+    let ssim_maps_iter = ssim_maps.par_iter();
+    #[cfg(not(feature = "threads"))]
+    let ssim_maps_iter = ssim_maps.iter();
+    ssim_maps_iter.enumerate().try_for_each(|(n, map_meta)| {
+        let avgssim = map_meta.ssim as f32;
+        let out: Vec<_> = map_meta.map.pixels().map(|ssim|{
+            let max = 1_f32 - ssim;
+            let maxsq = max * max;
+            rgb::RGBA8 {
+                r: to_byte(maxsq * 16.0),
+                g: to_byte(max * 3.0),
+                b: to_byte(max / ((1_f32 - avgssim) * 4_f32)),
+                a: 255,
+            }
+        }).collect();
+        lodepng::encode32_file(format!("{map_output_file}-{n}.png"), &out, map_meta.map.width(), map_meta.map.height())
+            .map_err(|e| {
+                format!("Can't write {map_output_file}: {e}")
+            })
+    })?;
+    Ok(())
 }
 
 #[test]
