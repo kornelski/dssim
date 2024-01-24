@@ -24,8 +24,6 @@ use std::env;
 use std::path::PathBuf;
 use std::process::ExitCode;
 
-mod ordqueue;
-
 fn usage(argv0: &str) {
     eprintln!("\
        Usage: {argv0} original.png modified.png [modified.png...]\
@@ -79,7 +77,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Err("You must specify at least 2 files to compare".into());
     }
 
-    let (images_send, mut images_recv) = ordqueue::new(2);
+    let (images_send, mut images_recv) = ordered_channel::bounded(2);
     let (filenames_send, filenames_recv) = crossbeam_channel::unbounded();
     let mut attr = dssim::Dssim::new();
     if map_output_file.is_some() {
@@ -92,7 +90,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             filenames_recv.into_iter().try_for_each(|(i, file): (usize, PathBuf)| {
                 dssim::load_image(&attr, &file)
                     .map_err(|e| format!("Can't load {}, because: {e}", file.display()))
-                    .and_then(|image| images_send.push(i, (file, image)).map_err(|_| "Aborted".into()))
+                    .and_then(|image| images_send.send(i, (file, image)).map_err(|_| "Aborted".into()))
             })
         };
 
