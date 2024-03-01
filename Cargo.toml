@@ -27,7 +27,7 @@ rayon = { version = "1.8.1", optional = true }
 rgb = "0.8.37"
 lodepng = "3.10.0"
 load_image = { version = "3.1.4", features = ["lcms2-static"] }
-crossbeam-channel = "0.5.11"
+crossbeam-channel = "0.5.12"
 ordered-channel = { version = "1.0.0" }
 
 [features]
