@@ -1,5 +1,9 @@
 //! Shim for single-threaded rayon replacement
 
+// Unlike other code in this project, this file is licensed
+// under both CC0 and AGPL-3.0, whichever you prefer.
+// <https://creativecommons.org/public-domain/cc0/>
+
 pub mod prelude {
     pub use super::*;
     pub use itertools::Itertools;
