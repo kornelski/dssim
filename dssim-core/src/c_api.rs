@@ -5,7 +5,8 @@ use rgb::RGBA8;
 pub type DssimImage = crate::DssimImage<f32>;
 
 /// Create new context for comparisons
-#[no_mangle] pub extern fn dssim_new() -> *mut Dssim {
+#[no_mangle]
+pub extern "C" fn dssim_new() -> *mut Dssim {
     let d = Box::new(crate::new());
     Box::into_raw(d)
 }
@@ -27,7 +28,7 @@ pub unsafe extern "C" fn dssim_free(d: *mut Dssim) {
 #[no_mangle] pub unsafe extern fn dssim_create_image_rgba(dssim: &mut Dssim, pixels: *const u8, width: u32, height: u32) -> *mut DssimImage {
     let width = width as usize;
     let height = height as usize;
-    let pixels = std::slice::from_raw_parts(pixels as *const RGBA8, width * height);
+    let pixels = std::slice::from_raw_parts(pixels.cast::<RGBA8>(), width * height);
     match dssim.create_image_rgba(pixels, width, height) {
         Some(img) => Box::into_raw(Box::new(img)),
         None => std::ptr::null_mut(),
@@ -42,7 +43,7 @@ pub unsafe extern "C" fn dssim_free(d: *mut Dssim) {
 #[no_mangle] pub unsafe extern fn dssim_create_image_rgb(dssim: &mut Dssim, pixels: *const u8, width: u32, height: u32) -> *mut DssimImage {
     let width = width as usize;
     let height = height as usize;
-    let pixels = std::slice::from_raw_parts(pixels as *const RGB8, width * height);
+    let pixels = std::slice::from_raw_parts(pixels.cast::<RGB8>(), width * height);
     match dssim.create_image_rgb(pixels, width, height) {
         Some(img) => Box::into_raw(Box::new(img)),
         None => std::ptr::null_mut(),

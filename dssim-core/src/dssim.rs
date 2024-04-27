@@ -245,7 +245,7 @@ impl Dssim {
     }
 
     #[inline(never)]
-    fn make_scales_recursive<InBitmap, OutBitmap>(scales_left: usize, image: MaybeArc<InBitmap>, scales: &mut Vec<DssimChanScale<f32>>)
+    fn make_scales_recursive<InBitmap, OutBitmap>(scales_left: usize, image: MaybeArc<'_, InBitmap>, scales: &mut Vec<DssimChanScale<f32>>)
     where
         InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
         OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
@@ -376,7 +376,7 @@ impl Dssim {
     fn compare_scale<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
     where
         L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
-        f32: std::convert::From<L>,
+        f32: From<L>,
     {
         assert_eq!(original.width, modified.width);
         assert_eq!(original.height, modified.height);
@@ -406,7 +406,7 @@ impl Dssim {
             let sigma2_sq: f32 = (img2_sq_blur - mu2mu2).into();
             let sigma12: f32 = (img1_img2_blur - mu1mu2).into();
 
-            (2. * mu1_mu2 + c1) * (2. * sigma12 + c2) /
+            2.0f32.mul_add(mu1_mu2, c1) * 2.0f32.mul_add(sigma12, c2) /
                        ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
         }).collect();
 

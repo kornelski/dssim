@@ -260,7 +260,7 @@ pub(crate) fn avgworst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
         let bot = &bot[0..half_width * 2];
 
         return top.chunks_exact(2).zip(bot.chunks_exact(2)).map(|(a,b)| {
-            (a[0].min(a[1]).min(b[0].min(b[1])) + ((a[0] + a[1] + b[0] + b[1]) * 0.25))*0.5
+            (a[0] + a[1] + b[0] + b[1]).mul_add(0.25, a[0].min(a[1]).min(b[0].min(b[1])))*0.5
         });
     }));
 

@@ -163,13 +163,13 @@ fn image_gray() {
     let g4 = dssim::load_image(&attr, "tests/gray1.jpg").unwrap();
 
     let (diff, _) = attr.compare(&g1, g2);
-    assert!(diff < 0.00001);
+    assert!(diff < 0.00001, "{diff}");
 
     let (diff, _) = attr.compare(&g1, g3);
-    assert!(diff < 0.00001);
+    assert!(diff < 0.00001, "{diff}");
 
     let (diff, _) = attr.compare(&g1, g4);
-    assert!(diff < 0.00006);
+    assert!(diff < 0.00006, "{diff}");
 }
 
 #[test]

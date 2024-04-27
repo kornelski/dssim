@@ -97,9 +97,9 @@ mod portable {
         let c1 = i;
         let c2 = i + 1;
 
-        prev.get_unchecked(c0)*KERNEL[0] + prev.get_unchecked(c1)*KERNEL[1] + prev.get_unchecked(c2)*KERNEL[2] +
-        curr.get_unchecked(c0)*KERNEL[3] + curr.get_unchecked(c1)*KERNEL[4] + curr.get_unchecked(c2)*KERNEL[5] +
-        next.get_unchecked(c0)*KERNEL[6] + next.get_unchecked(c1)*KERNEL[7] + next.get_unchecked(c2)*KERNEL[8]
+        (prev.get_unchecked(c0)*KERNEL[0] + prev.get_unchecked(c1)*KERNEL[1] + prev.get_unchecked(c2)*KERNEL[2]) +
+        (curr.get_unchecked(c0)*KERNEL[3] + curr.get_unchecked(c1)*KERNEL[4] + curr.get_unchecked(c2)*KERNEL[5]) +
+        (next.get_unchecked(c0)*KERNEL[6] + next.get_unchecked(c1)*KERNEL[7] + next.get_unchecked(c2)*KERNEL[8])
     }
 
     fn do3(prev: &[f32], curr: &[f32], next: &[f32], i: usize, width: usize) -> f32 {
@@ -107,12 +107,12 @@ mod portable {
         let c1 = i;
         let c2 = min(i + 1, width - 1);
 
-        prev[c0]*KERNEL[0] + prev[c1]*KERNEL[1] + prev[c2]*KERNEL[2] +
-        curr[c0]*KERNEL[3] + curr[c1]*KERNEL[4] + curr[c2]*KERNEL[5] +
-        next[c0]*KERNEL[6] + next[c1]*KERNEL[7] + next[c2]*KERNEL[8]
+        prev[c2].mul_add(KERNEL[2], prev[c0].mul_add(KERNEL[0], prev[c1] * KERNEL[1])) +
+        curr[c2].mul_add(KERNEL[5], curr[c0].mul_add(KERNEL[3], curr[c1] * KERNEL[4])) +
+        next[c2].mul_add(KERNEL[8], next[c0].mul_add(KERNEL[6], next[c1] * KERNEL[7]))
     }
 
-    pub fn blur(src: ImgRef<f32>, tmp: &mut [MaybeUninit<f32>]) -> ImgVec<f32> {
+    pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [MaybeUninit<f32>]) -> ImgVec<f32> {
         let width = src.width();
         let height = src.height();
         let tmp_dst = ImgRefMut::new(tmp, width, height);
@@ -125,7 +125,7 @@ mod portable {
         ImgVec::new(dst_vec, width, height)
     }
 
-    fn do_blur<'d>(src: ImgRef<f32>, mut dst: ImgRefMut<'d, MaybeUninit<f32>>) -> ImgRefMut<'d, f32> {
+    fn do_blur<'d>(src: ImgRef<'_, f32>, mut dst: ImgRefMut<'d, MaybeUninit<f32>>) -> ImgRefMut<'d, f32> {
         assert_eq!(src.width(), dst.width());
         assert_eq!(src.height(), dst.height());
         assert!(src.width() > 0);
@@ -169,13 +169,13 @@ mod portable {
         }
     }
 
-    pub fn blur_in_place(srcdst: ImgRefMut<f32>, tmp: &mut [MaybeUninit<f32>]) {
+    pub fn blur_in_place(srcdst: ImgRefMut<'_, f32>, tmp: &mut [MaybeUninit<f32>]) {
         let tmp_dst = ImgRefMut::new(tmp, srcdst.width(), srcdst.height());
         let tmp_src = do_blur(srcdst.as_ref(), tmp_dst);
         do_blur(tmp_src.as_ref(), as_maybe_uninit(srcdst));
     }
 
-    fn as_maybe_uninit(img: ImgRefMut<f32>) -> ImgRefMut<MaybeUninit<f32>> {
+    fn as_maybe_uninit(img: ImgRefMut<'_, f32>) -> ImgRefMut<'_, MaybeUninit<f32>> {
         img.map_buf(|dst| unsafe {
             std::slice::from_raw_parts_mut(dst.as_mut_ptr().cast::<MaybeUninit<f32>>(), dst.len())
         })
@@ -237,8 +237,8 @@ fn blur_one_compare(src: ImgVec<f32>) {
 
     assert_eq!(&src2.pixels().collect::<Vec<_>>(), dst.buf());
 
-    assert!((1./110. - dst.buf()[0]).abs() < 0.0001, "{:?}", dst);
-    assert!((1./110. - dst.buf()[5*5-1]).abs() < 0.0001, "{:?}", dst);
+    assert!((1./110. - dst.buf()[0]).abs() < 0.0001, "{dst:?}");
+    assert!((1./110. - dst.buf()[5*5-1]).abs() < 0.0001, "{dst:?}");
     assert!((0.11354011 - dst.buf()[2*5+2]).abs() < 0.0001);
 }
 
@@ -291,5 +291,5 @@ fn blur_two() {
     assert!((1. - dst.buf()[3]).abs() < 0.0001, "{}", dst.buf()[3]);
     assert!((1. - dst.buf()[3 * 4]).abs() < 0.0001, "{}", dst.buf()[3 * 4]);
     assert!((1. - dst.buf()[4 * 4 - 1]).abs() < 0.0001, "{}", dst.buf()[4 * 4 - 1]);
-    assert!((exp as f64 - dst.buf()[0] as f64).abs() < 0.0000001);
+    assert!((f64::from(exp) - f64::from(dst.buf()[0])).abs() < 0.0000001);
 }
