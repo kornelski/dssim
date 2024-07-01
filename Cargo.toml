@@ -24,7 +24,7 @@ dssim-core = { path = "./dssim-core", version = "3.2.5", default-features = fals
 imgref = "1.10.0"
 getopts = "0.2.21"
 rayon = { version = "1.8.1", optional = true }
-rgb = "0.8.37"
+rgb = "0.8.40"
 lodepng = { version = "3.10.0", default-features = false, features = ["rust_backend"] }
 load_image = { version = "3.1.4", features = ["lcms2-static"] }
 crossbeam-channel = "0.5.11"
