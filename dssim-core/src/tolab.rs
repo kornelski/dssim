@@ -135,7 +135,7 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
     ]
 }
 
-impl<'a> ToLABBitmap for ImgRef<'a, RGBAPLU> {
+impl ToLABBitmap for ImgRef<'_, RGBAPLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
         rgb_to_lab(*self, |px, n|{
@@ -144,7 +144,7 @@ impl<'a> ToLABBitmap for ImgRef<'a, RGBAPLU> {
     }
 }
 
-impl<'a> ToLABBitmap for ImgRef<'a, RGBLU> {
+impl ToLABBitmap for ImgRef<'_, RGBLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
         rgb_to_lab(*self, |px, _n|{

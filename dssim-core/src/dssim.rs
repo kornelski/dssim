@@ -104,7 +104,7 @@ impl DssimChan<f32> {
     pub fn new(bitmap: ImgVec<f32>, is_chroma: bool) -> Self {
         debug_assert!(bitmap.pixels().all(|i| i.is_finite() && i >= 0.0 && i <= 1.0));
 
-        DssimChan {
+        Self {
             width: bitmap.width(),
             height: bitmap.height(),
             mu: Vec::new(),
@@ -124,7 +124,7 @@ impl DssimChan<f32> {
 
         let img = self.img.as_mut().unwrap();
         debug_assert_eq!(width * height, img.pixels().count());
-        debug_assert!(img.pixels().all(|i| i.is_finite()));
+        debug_assert!(img.pixels().all(f32::is_finite));
 
         if self.is_chroma {
             blur::blur_in_place(img.as_mut(), tmp);
@@ -147,9 +147,9 @@ impl Channable<LAB, f32> for [DssimChan<f32>] {
             o.img1_img2_blur(m, tmp32)
         }).collect();
 
-        return multizip((blurred[0].iter().copied(), blurred[1].iter().copied(), blurred[2].iter().copied())).map(|(l,a,b)| {
+        multizip((blurred[0].iter().copied(), blurred[1].iter().copied(), blurred[2].iter().copied())).map(|(l,a,b)| {
             LAB {l,a,b}
-        }).collect();
+        }).collect()
     }
 }
 
@@ -182,8 +182,8 @@ impl Channable<f32, f32> for DssimChan<f32> {
 impl Dssim {
     /// Create new context for comparisons
     #[must_use]
-    pub fn new() -> Dssim {
-        Dssim {
+    pub fn new() -> Self {
+        Self {
             scale_weights: DEFAULT_WEIGHTS[..].to_owned(),
             save_maps_scales: 0,
         }
@@ -202,7 +202,8 @@ impl Dssim {
     /// Create image from an array of RGBA pixels (sRGB, non-premultiplied, alpha last).
     ///
     /// If you have a slice of `u8`, then see `rgb` crate's `as_rgba()`.
-    #[must_use] pub fn create_image_rgba(&self, bitmap: &[RGBA<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+    #[must_use]
+    pub fn create_image_rgba(&self, bitmap: &[RGBA<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
         if width * height < bitmap.len() {
             return None;
         }
@@ -213,7 +214,8 @@ impl Dssim {
     /// Create image from an array of packed RGB pixels (sRGB).
     ///
     /// If you have a slice of `u8`, then see `rgb` crate's `as_rgb()`.
-    #[must_use] pub fn create_image_rgb(&self, bitmap: &[RGB<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+    #[must_use]
+    pub fn create_image_rgb(&self, bitmap: &[RGB<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
         if width * height < bitmap.len() {
             return None;
         }
@@ -460,7 +462,7 @@ enum MaybeArc<'a, T> {
     Borrowed(&'a T),
 }
 
-impl<'a, T> Clone for MaybeArc<'a, T> {
+impl<T> Clone for MaybeArc<'_, T> {
     fn clone(&self) -> Self {
         match self {
             Self::Owned(t) => Self::Owned(t.clone()),
@@ -469,7 +471,7 @@ impl<'a, T> Clone for MaybeArc<'a, T> {
     }
 }
 
-impl<'a, T> Deref for MaybeArc<'a, T> {
+impl<T> Deref for MaybeArc<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -479,8 +481,6 @@ impl<'a, T> Deref for MaybeArc<'a, T> {
         }
     }
 }
-
-
 
 #[test]
 fn poison() {

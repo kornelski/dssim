@@ -81,6 +81,7 @@ impl<'a, T> ParIterMutLie<'a, T> for &'a mut [T] {
 
 impl<T> ParIntoIterLie<T> for Vec<T> {
     type IntoIter = std::vec::IntoIter<T>;
+
     fn into_par_iter(self) -> Self::IntoIter {
         self.into_iter()
     }

@@ -210,7 +210,7 @@ fn rgblu_input() {
     use imgref::{Img, ImgRef, ImgVec};
 
     let ctx = Dssim::new();
-    let im: ImgVec<RGBLU> = Img::new(vec![rgb::RGB::new(0.,0.,0.)], 1, 1);
+    let im: ImgVec<RGBLU> = Img::new(vec![rgb::RGB::new(0., 0., 0.)], 1, 1);
     let imr: ImgRef<'_, RGBLU> = im.as_ref();
     ctx.create_image(&imr);
 }

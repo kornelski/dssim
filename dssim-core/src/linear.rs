@@ -1,5 +1,4 @@
-use crate::image::RGBAPLU;
-use crate::image::RGBLU;
+use crate::image::{RGBAPLU, RGBLU};
 use rgb::alt::*;
 use rgb::*;
 
@@ -105,6 +104,7 @@ impl<M> GammaPixel for RGBA<M> where M: Clone + Into<f32> + GammaComponent {
 impl<M> GammaPixel for BGRA<M> where M: Clone + Into<f32> + GammaComponent {
     type Component = M;
     type Output = RGBAPLU;
+
     #[inline]
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
         let a_unit = self.a.clone().into() / M::max_value() as f32;
@@ -134,6 +134,7 @@ impl<M> GammaPixel for RGB<M> where M: GammaComponent {
 impl<M> GammaPixel for BGR<M> where M: GammaComponent {
     type Component = M;
     type Output = RGBAPLU;
+
     #[inline]
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
         RGBAPLU {
@@ -148,6 +149,7 @@ impl<M> GammaPixel for BGR<M> where M: GammaComponent {
 impl<M> GammaPixel for GrayAlpha<M> where M: Copy + Clone + Into<f32> + GammaComponent {
     type Component = M;
     type Output = RGBAPLU;
+
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
         let a_unit = self.1.into() / M::max_value() as f32;
         let g = self.0.to_linear(gamma_lut);
@@ -163,6 +165,7 @@ impl<M> GammaPixel for GrayAlpha<M> where M: Copy + Clone + Into<f32> + GammaCom
 impl<M> GammaPixel for M where M: GammaComponent {
     type Component = M;
     type Output = f32;
+
     #[inline(always)]
     fn to_linear(&self, gamma_lut: &M::Lut) -> f32 {
         self.to_linear(gamma_lut)
@@ -172,15 +175,11 @@ impl<M> GammaPixel for M where M: GammaComponent {
 impl<M> GammaPixel for Gray<M> where M: Copy + GammaComponent {
     type Component = M;
     type Output = RGBAPLU;
+
     #[inline(always)]
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
         let g = self.0.to_linear(gamma_lut);
-        RGBAPLU {
-            r: g,
-            g: g,
-            b: g,
-            a: 1.0,
-        }
+        RGBAPLU { r: g, g, b: g, a: 1.0 }
     }
 }
 

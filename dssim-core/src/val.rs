@@ -2,10 +2,7 @@
 
 use std::cmp::Ordering;
 use std::fmt;
-use std::ops::Add;
-use std::ops::Div;
-use std::ops::Mul;
-use std::ops::Sub;
+use std::ops::{Add, Div, Mul, Sub};
 
 /// Result of comparison as `f64`
 #[derive(Debug, Copy, Clone, PartialEq, PartialOrd)]
@@ -13,9 +10,9 @@ pub struct Dssim(f64);
 
 impl Dssim {
     #[must_use]
-    pub fn new(v: f64) -> Dssim {
+    pub fn new(v: f64) -> Self {
         debug_assert!(v.is_finite());
-        Dssim(v)
+        Self(v)
     }
 }
 
@@ -48,13 +45,14 @@ impl From<Dssim> for f64 {
 }
 
 impl From<f64> for Dssim {
-    fn from(s: f64) -> Dssim {
-        Dssim(s)
+    fn from(s: f64) -> Self {
+        Self(s)
     }
 }
 
 impl<RHS: Into<f64>> Sub<RHS> for Dssim {
     type Output = f64;
+
     fn sub(self, r: RHS) -> Self::Output {
         let rval = r.into();
         debug_assert!(rval.is_finite());
@@ -64,6 +62,7 @@ impl<RHS: Into<f64>> Sub<RHS> for Dssim {
 
 impl Sub<Dssim> for f64 {
     type Output = f64;
+
     fn sub(self, r: Dssim) -> Self::Output {
         self.sub(r.0)
     }
@@ -71,6 +70,7 @@ impl Sub<Dssim> for f64 {
 
 impl<RHS: Into<f64>> Add<RHS> for Dssim {
     type Output = f64;
+
     fn add(self, r: RHS) -> Self::Output {
         let rval = r.into();
         debug_assert!(rval.is_finite());
@@ -80,6 +80,7 @@ impl<RHS: Into<f64>> Add<RHS> for Dssim {
 
 impl Add<Dssim> for f64 {
     type Output = f64;
+
     fn add(self, r: Dssim) -> Self::Output {
         self.add(r.0)
     }
@@ -87,6 +88,7 @@ impl Add<Dssim> for f64 {
 
 impl<RHS: Into<f64>> Mul<RHS> for Dssim {
     type Output = Dssim;
+
     fn mul(self, r: RHS) -> Self::Output {
         let rval = r.into();
         debug_assert!(rval.is_finite());
@@ -96,6 +98,7 @@ impl<RHS: Into<f64>> Mul<RHS> for Dssim {
 
 impl Mul<Dssim> for f64 {
     type Output = Dssim;
+
     fn mul(self, r: Dssim) -> Self::Output {
         self.mul(r.0).into()
     }
@@ -103,6 +106,7 @@ impl Mul<Dssim> for f64 {
 
 impl<RHS: Into<f64>> Div<RHS> for Dssim {
     type Output = f64;
+
     fn div(self, r: RHS) -> Self::Output {
         let rval = r.into();
         debug_assert!(rval.is_finite() && rval != 0.);
@@ -112,6 +116,7 @@ impl<RHS: Into<f64>> Div<RHS> for Dssim {
 
 impl Div<Dssim> for f64 {
     type Output = f64;
+
     fn div(self, r: Dssim) -> Self::Output {
         debug_assert!(r.0 != 0.);
         self.div(r.0)
