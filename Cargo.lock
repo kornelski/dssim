@@ -141,7 +141,7 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "dssim"
-version = "3.3.3"
+version = "3.3.4"
 dependencies = [
  "crossbeam-channel",
  "dssim-core",
@@ -156,7 +156,7 @@ dependencies = [
 
 [[package]]
 name = "dssim-core"
-version = "3.2.10"
+version = "3.2.11"
 dependencies = [
  "imgref",
  "itertools",
