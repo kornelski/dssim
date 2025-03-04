@@ -10,6 +10,7 @@ use crate::lieon as rayon;
 use rayon::prelude::*;
 
 const D65x: f32 = 0.9505;
+const D65y: f32 = 1.0;
 const D65z: f32 = 1.089;
 
 pub type GBitmap = ImgVec<f32>;
@@ -24,9 +25,9 @@ fn fma_matrix(r: f32, rx: f32, g: f32, gx: f32, b: f32, bx: f32) -> f32 {
 
 impl ToLAB for RGBLU {
     fn to_lab(&self) -> (f32, f32, f32) {
-        let fx = fma_matrix(self.r, 0.4124, self.g, 0.3576, self.b, 0.1805) / D65x;
-        let fy = fma_matrix(self.r, 0.2126, self.g, 0.7152, self.b, 0.0722); // D65y is 1.0
-        let fz = fma_matrix(self.r, 0.0193, self.g, 0.1192, self.b, 0.9505) / D65z;
+        let fx = fma_matrix(self.r, 0.4124 / D65x, self.g, 0.3576 / D65x, self.b, 0.1805 / D65x);
+        let fy = fma_matrix(self.r, 0.2126 / D65y, self.g, 0.7152 / D65y, self.b, 0.0722 / D65y);
+        let fz = fma_matrix(self.r, 0.0193 / D65z, self.g, 0.1192 / D65z, self.b, 0.9505 / D65z);
 
         let epsilon: f32 = 216. / 24389.;
         let k = 24389. / (27. * 116.); // http://www.brucelindbloom.com/LContinuity.html
