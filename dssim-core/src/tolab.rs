@@ -31,9 +31,9 @@ impl ToLAB for RGBLU {
 
         let epsilon: f32 = 216. / 24389.;
         let k = 24389. / (27. * 116.); // http://www.brucelindbloom.com/LContinuity.html
-        let X = if fx > epsilon { fx.cbrt() - 16. / 116. } else { k * fx };
-        let Y = if fy > epsilon { fy.cbrt() - 16. / 116. } else { k * fy };
-        let Z = if fz > epsilon { fz.cbrt() - 16. / 116. } else { k * fz };
+        let X = if fx > epsilon { cbrt_poly(fx) - 16. / 116. } else { k * fx };
+        let Y = if fy > epsilon { cbrt_poly(fy) - 16. / 116. } else { k * fy };
+        let Z = if fz > epsilon { cbrt_poly(fz) - 16. / 116. } else { k * fz };
 
         let lab = (
             (Y * 1.05f32), // 1.05 instead of 1.16 to boost color importance without pushing colors outside of 1.0 range
@@ -43,6 +43,21 @@ impl ToLAB for RGBLU {
         debug_assert!(lab.0 <= 1.0 && lab.1 <= 1.0 && lab.2 <= 1.0);
         lab
     }
+}
+
+fn cbrt_poly(x: f32) -> f32 {
+    // Polynomial approximation
+    let poly = [0.2, 1.51, -0.5];
+    let y = (poly[2] * x + poly[1]) * x + poly[0];
+
+    // 2x Halley's Method
+    let y3 = y*y*y;
+    let y = y * (y3 + 2. * x) / (2. * y3 + x);
+    let y3 = y*y*y;
+    let y = y * (y3 + 2. * x) / (2. * y3 + x);
+    debug_assert!(y < 1.001);
+    debug_assert!(x < 216. / 24389. || y >= 16. / 116.);
+    y
 }
 
 /// Convert image to L\*a\*b\* planar
@@ -152,4 +167,42 @@ impl ToLABBitmap for ImgRef<'_, RGBLU> {
             px.to_lab()
         })
     }
+}
+
+#[test]
+fn cbrts1() {
+    let mut totaldiff = 0.;
+    let mut maxdiff: f64 = 0.;
+    for i in (0..=10001).rev() {
+        let x = (i as f64 / 10001.) as f32;
+        let a = cbrt_poly(x);
+        let actual = a * a * a;
+        let expected = x;
+        let absdiff = (expected as f64 - actual as f64).abs();
+        assert!(absdiff < 0.0002, "{expected} - {actual} = {} @ {x}", expected - actual);
+        if i % 400 == 0 {
+            println!("{:+0.3}", (expected - actual)*255.);
+        }
+        totaldiff += absdiff;
+        maxdiff = maxdiff.max(absdiff);
+    }
+    println!("1={totaldiff:0.6}; {maxdiff:0.8}");
+    assert!(totaldiff < 0.0025, "{totaldiff}");
+}
+
+#[test]
+fn cbrts2() {
+    let mut totaldiff = 0.;
+    let mut maxdiff: f64 = 0.;
+    for i in (2000..=10001).rev() {
+        let x = i as f64 / 10001.;
+        let actual = cbrt_poly(x as f32) as f64;
+        let expected = x.cbrt();
+        let absdiff = (expected - actual).abs();
+        totaldiff += absdiff;
+        maxdiff = maxdiff.max(absdiff);
+        assert!(absdiff < 0.0000005, "{expected} - {actual} = {} @ {x}", expected - actual);
+    }
+    println!("2={totaldiff:0.6}; {maxdiff:0.8}");
+    assert!(totaldiff < 0.0025, "{totaldiff}");
 }
