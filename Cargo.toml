@@ -10,7 +10,7 @@ license = "AGPL-3.0"
 name = "dssim"
 readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
-version = "3.3.4"
+version = "3.4.0"
 edition = "2021"
 rust-version = "1.72"
 
@@ -20,13 +20,13 @@ name = "dssim"
 path = "src/main.rs"
 
 [dependencies]
-dssim-core = { path = "./dssim-core", version = "3.2.11", default-features = false }
+dssim-core = { path = "./dssim-core", version = "3.4.0", default-features = false }
 imgref = "1.11.0"
 getopts = "0.2.21"
 rayon = { version = "1.10.0", optional = true }
-rgb = "0.8.44"
-lodepng = { version = "3.10.2", default-features = false, features = ["rust_backend"] }
-load_image = { version = "3.1.4", features = ["lcms2-static"] }
+rgb = "0.8.50"
+lodepng = { version = "3.11", default-features = false, features = ["rust_backend"] }
+load_image = { version = "3.2", features = ["lcms2-static"] }
 crossbeam-channel = "0.5.13"
 ordered-channel = { version = "1.1.0" }
 
