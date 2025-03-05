@@ -25,7 +25,7 @@ pub unsafe extern "C" fn dssim_free(d: *mut Dssim) {
 ///
 /// Call `dssim_free_image` to free memory when the image is no longer needed.
 #[no_mangle]
-pub unsafe extern fn dssim_create_image_rgba(dssim: &mut Dssim, pixels: *const u8, width: u32, height: u32) -> *mut DssimImage {
+pub unsafe extern "C" fn dssim_create_image_rgba(dssim: &mut Dssim, pixels: *const u8, width: u32, height: u32) -> *mut DssimImage {
     let width = width as usize;
     let height = height as usize;
     let pixels = std::slice::from_raw_parts(pixels.cast::<RGBA8>(), width * height);
@@ -41,7 +41,7 @@ pub unsafe extern fn dssim_create_image_rgba(dssim: &mut Dssim, pixels: *const u
 ///
 /// Call `dssim_free_image` to free memory when the image is no longer needed.
 #[no_mangle]
-pub unsafe extern fn dssim_create_image_rgb(dssim: &mut Dssim, pixels: *const u8, width: u32, height: u32) -> *mut DssimImage {
+pub unsafe extern "C" fn dssim_create_image_rgb(dssim: &mut Dssim, pixels: *const u8, width: u32, height: u32) -> *mut DssimImage {
     let width = width as usize;
     let height = height as usize;
     let pixels = std::slice::from_raw_parts(pixels.cast::<RGB8>(), width * height);
@@ -66,7 +66,7 @@ pub unsafe extern "C" fn dssim_free_image(img: *mut DssimImage) {
 ///
 /// Don't forget to free the images and the DSSIM context when done.
 #[no_mangle]
-pub unsafe extern fn dssim_compare(dssim: &mut Dssim, img1: *const DssimImage, img2: *const DssimImage) -> f64 {
+pub unsafe extern "C" fn dssim_compare(dssim: &mut Dssim, img1: *const DssimImage, img2: *const DssimImage) -> f64 {
     let img1 = img1.as_ref().unwrap();
     let img2 = img2.as_ref().unwrap();
     let (val, _) = dssim.compare(img1, img2);
