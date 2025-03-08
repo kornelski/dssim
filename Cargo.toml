@@ -10,7 +10,7 @@ license = "AGPL-3.0"
 name = "dssim"
 readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
-version = "3.4.0"
+version = "3.4.1"
 edition = "2021"
 rust-version = "1.72"
 
@@ -34,8 +34,11 @@ ordered-channel = { version = "1.1.0" }
 default = ["threads", "dssim-core/default", "no-macos-vimage"]
 threads = ["dep:rayon", "dssim-core/threads"]
 avif = ["load_image/avif"]
+# Support comparing WebP files directly
 webp = ["load_image/webp"]
 webp-static = ["load_image/webp-static"]
+# Decode JPEGs using libjpeg-turbo derivative (closer to the reference decoder)
+mozjpeg = ["load_image/mozjpeg"]
 no-macos-vimage = ["dssim-core/no-macos-vimage"]
 
 [package.metadata.release]
