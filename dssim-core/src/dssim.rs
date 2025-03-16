@@ -251,7 +251,7 @@ impl Dssim {
                 let lab = image.to_lab();
                 drop(image); // Free larger RGB image ASAP
                 DssimChanScale {
-                    chan: lab.into_par_iter().enumerate().map(|(n,l)| {
+                    chan: lab.into_par_iter().with_max_len(1).enumerate().map(|(n,l)| {
                         let w = l.width();
                         let h = l.height();
                         let mut ch = DssimChan::new(l, n > 0);
@@ -283,13 +283,16 @@ impl Dssim {
     /// The `SsimMap`s are returned only if you've enabled them first.
     ///
     /// `Val` is a fancy wrapper for `f64`
-    #[inline(never)]
     pub fn compare<M: Borrow<DssimImage<f32>>>(&self, original_image: &DssimImage<f32>, modified_image: M) -> (Val, Vec<SsimMap>) {
-        let modified_image = modified_image.borrow();
-        let res: Vec<_> = self.scale_weights.as_slice().par_iter().with_min_len(1).cloned().zip(
-                        modified_image.scale.as_slice().par_iter().with_min_len(1).zip(
-                        original_image.scale.as_slice().par_iter().with_min_len(1))
-        ).enumerate().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
+        self.compare_inner(original_image, modified_image.borrow())
+    }
+
+    #[inline(never)]
+    fn compare_inner(&self, original_image: &DssimImage<f32>, modified_image: &DssimImage<f32>) -> (Val, Vec<SsimMap>) {
+        let scaled_images_iter = modified_image.scale.iter().zip(original_image.scale.iter());
+        let combined_iter = self.scale_weights.iter().copied().zip(scaled_images_iter).enumerate();
+
+        let res: Vec<_> = combined_iter.par_bridge().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
             let scale_width = original_image_scale.chan[0].width;
             let scale_height = original_image_scale.chan[0].height;
             let mut tmp = Vec::with_capacity(scale_width * scale_height);
@@ -299,10 +302,9 @@ impl Dssim {
                 3 => {
                     let (original_lab, (img1_img2_blur, modified_lab)) = rayon::join(
                     || Self::lab_chan(original_image_scale),
-                    || {
-                        let img1_img2_blur = original_image_scale.chan.img1_img2_blur(&modified_image_scale.chan, tmp);
-                        (img1_img2_blur, Self::lab_chan(modified_image_scale))
-                    });
+                    || rayon::join(
+                        || original_image_scale.chan.img1_img2_blur(&modified_image_scale.chan, tmp),
+                        || Self::lab_chan(modified_image_scale)));
 
                     Self::compare_scale(&original_lab, &modified_lab, &img1_img2_blur)
                 },
