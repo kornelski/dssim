@@ -23,17 +23,18 @@ fn fma_matrix(r: f32, rx: f32, g: f32, gx: f32, b: f32, bx: f32) -> f32 {
     b.mul_add(bx, g.mul_add(gx, r * rx))
 }
 
+const EPSILON: f32 = 216. / 24389.;
+const K: f32 = 24389. / (27. * 116.); // http://www.brucelindbloom.com/LContinuity.html
+
 impl ToLAB for RGBLU {
     fn to_lab(&self) -> (f32, f32, f32) {
         let fx = fma_matrix(self.r, 0.4124 / D65x, self.g, 0.3576 / D65x, self.b, 0.1805 / D65x);
         let fy = fma_matrix(self.r, 0.2126 / D65y, self.g, 0.7152 / D65y, self.b, 0.0722 / D65y);
         let fz = fma_matrix(self.r, 0.0193 / D65z, self.g, 0.1192 / D65z, self.b, 0.9505 / D65z);
 
-        let epsilon: f32 = 216. / 24389.;
-        let k = 24389. / (27. * 116.); // http://www.brucelindbloom.com/LContinuity.html
-        let X = if fx > epsilon { cbrt_poly(fx) - 16. / 116. } else { k * fx };
-        let Y = if fy > epsilon { cbrt_poly(fy) - 16. / 116. } else { k * fy };
-        let Z = if fz > epsilon { cbrt_poly(fz) - 16. / 116. } else { k * fz };
+        let X = if fx > EPSILON { cbrt_poly(fx) - 16. / 116. } else { K * fx };
+        let Y = if fy > EPSILON { cbrt_poly(fy) - 16. / 116. } else { K * fy };
+        let Z = if fz > EPSILON { cbrt_poly(fz) - 16. / 116. } else { K * fz };
 
         let lab = (
             (Y * 1.05f32), // 1.05 instead of 1.16 to boost color importance without pushing colors outside of 1.0 range
@@ -45,6 +46,7 @@ impl ToLAB for RGBLU {
     }
 }
 
+#[inline]
 fn cbrt_poly(x: f32) -> f32 {
     // Polynomial approximation
     let poly = [0.2, 1.51, -0.5];
@@ -80,31 +82,16 @@ impl ToLABBitmap for ImgVec<RGBLU> {
         self.as_ref().to_lab()
     }
 }
-
 impl ToLABBitmap for GBitmap {
-    #[inline(never)]
     fn to_lab(&self) -> Vec<GBitmap> {
-        let width = self.width();
-        assert!(width > 0);
-        let height = self.height();
-        let area = width * height;
-        let mut out = Vec::with_capacity(area);
+        debug_assert!(self.width() > 0);
+        let out = (0..self.height()).into_par_iter().flat_map_iter(|y| {
+            self[y].iter().map(|&fy| {
+                if fy > EPSILON { (cbrt_poly(fy) - 16. / 116.) * 1.16 } else { (K * 1.16) * fy }
+            })
+        }).collect();
 
-        // For output width == stride
-        out.spare_capacity_mut().par_chunks_exact_mut(width).take(height).enumerate().for_each(|(y, out_row)| {
-            let in_row = &self.rows().nth(y).unwrap()[0..width];
-            let out_row = &mut out_row[0..width];
-            let epsilon: f32 = 216. / 24389.;
-            for x in 0..width {
-                let fy = in_row[x];
-                // http://www.brucelindbloom.com/LContinuity.html
-                let Y = if fy > epsilon { fy.cbrt() - 16. / 116. } else { ((24389. / 27.) / 116.) * fy };
-                out_row[x].write(Y * 1.16);
-            }
-        });
-
-        unsafe { out.set_len(area) };
-        vec![Img::new(out, width, height)]
+        vec![Img::new(out, self.width(), self.height())]
     }
 }
 
