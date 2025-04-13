@@ -1,5 +1,5 @@
 name: dssim
-version: 3.2.4
+version: git
 summary: Check for (dis)similarity between two or more images.
 description: |
       This tool computes (dis)similarity between two or more PNG images using an algorithm approximating human vision.
