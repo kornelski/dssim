@@ -22,7 +22,7 @@ path = "src/main.rs"
 [dependencies]
 dssim-core = { path = "./dssim-core", version = "3.4.0", default-features = false }
 imgref = "1.11.0"
-getopts = "0.2.21"
+getopts = "0.2.23"
 rayon = { version = "1.10.0", optional = true }
 rgb = "0.8.50"
 lodepng = { version = "3.11", default-features = false, features = ["rust_backend"] }
