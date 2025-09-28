@@ -11,6 +11,8 @@ pub mod prelude {
 
 pub trait ParIterator: Sized {
     fn with_min_len(self, _one: usize) -> Self { self }
+    fn with_max_len(self, _one: usize) -> Self { self }
+    fn par_bridge(self) -> Self { self }
 }
 
 impl<T: Iterator> ParIterator for T {

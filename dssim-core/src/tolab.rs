@@ -85,11 +85,17 @@ impl ToLABBitmap for ImgVec<RGBLU> {
 impl ToLABBitmap for GBitmap {
     fn to_lab(&self) -> Vec<GBitmap> {
         debug_assert!(self.width() > 0);
+        let f = |fy| {
+            if fy > EPSILON { (cbrt_poly(fy) - 16. / 116.) * 1.16 } else { (K * 1.16) * fy }
+        };
+
+        #[cfg(feature = "threads")]
         let out = (0..self.height()).into_par_iter().flat_map_iter(|y| {
-            self[y].iter().map(|&fy| {
-                if fy > EPSILON { (cbrt_poly(fy) - 16. / 116.) * 1.16 } else { (K * 1.16) * fy }
-            })
+            self[y].iter().map(|&fy| f(fy))
         }).collect();
+
+        #[cfg(not(feature = "threads"))]
+        let out = self.pixels().map(f).collect();
 
         vec![Img::new(out, self.width(), self.height())]
     }
