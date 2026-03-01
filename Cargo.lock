@@ -360,9 +360,9 @@ dependencies = [
 
 [[package]]
 name = "load_image"
-version = "3.3.1"
+version = "3.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13af80aa49d27d6334430fcc8aa55c01acdf23209da94f670e217650320644c0"
+checksum = "bb2ce0544aaf135df416d3a96276250a546f1e54512bbc68bb5e2f1493197a99"
 dependencies = [
  "aom-decode",
  "bytemuck",
