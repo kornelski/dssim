@@ -9,7 +9,7 @@ pub type dssim_px_t = f32;
 
 #[link(name = "Accelerate", kind = "framework")]
 #[cfg(target_os = "macos")]
-extern "C" {
+unsafe extern "C" {
     pub fn vImageConvolve_PlanarF(
         src: *const vImage_Buffer<*const f32>,
         dest: *mut vImage_Buffer<*mut f32>,

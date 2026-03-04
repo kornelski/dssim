@@ -3,21 +3,9 @@ const KERNEL: [f32; 9] = [
     0.095332, 0.118095, 0.095332, 0.118095, 0.146293, 0.118095, 0.095332, 0.118095, 0.095332,
 ];
 
-/// Allocate an f32 buffer without zeroing memory.
-///
-/// All blur functions fully write every element of their `tmp` and `dst` buffers
-/// before reading, so uninitialized contents are never observed.
 #[inline]
-#[allow(clippy::uninit_vec)]
-pub(crate) fn uninit_f32_vec(len: usize) -> Vec<f32> {
-    let mut v = Vec::with_capacity(len);
-    // SAFETY: all blur functions (blur_h*, blur_v*) write every element of
-    // their output buffer before any element is read. The caller must uphold
-    // this contract.
-    unsafe {
-        v.set_len(len);
-    }
-    v
+pub(crate) fn zeroed_f32_vec(len: usize) -> Vec<f32> {
+    vec![0.0f32; len]
 }
 
 #[cfg(all(target_os = "macos", not(feature = "no-macos-vimage")))]
@@ -137,7 +125,7 @@ mod mac {
 
 #[cfg(not(all(target_os = "macos", not(feature = "no-macos-vimage"))))]
 mod portable {
-    use super::uninit_f32_vec;
+    use super::zeroed_f32_vec;
     use imgref::*;
 
     // 1D kernel from separable decomposition of the 3×3 kernel.
@@ -504,7 +492,7 @@ mod portable {
         let pixels = width * height;
         assert!(tmp.len() >= pixels);
         let tmp = &mut tmp[..pixels];
-        let mut dst = uninit_f32_vec(pixels);
+        let mut dst = zeroed_f32_vec(pixels);
 
         #[cfg(all(feature = "fma", target_arch = "x86_64"))]
         {
@@ -557,7 +545,7 @@ mod portable {
         let pixels = width * height;
         assert!(tmp.len() >= pixels);
         let tmp = &mut tmp[..pixels];
-        let mut dst = uninit_f32_vec(pixels);
+        let mut dst = zeroed_f32_vec(pixels);
 
         #[cfg(all(feature = "fma", target_arch = "x86_64"))]
         {

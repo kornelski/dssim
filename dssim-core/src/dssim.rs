@@ -250,7 +250,7 @@ impl Dssim {
                                 let mut ch = DssimChan::new(l, n > 0);
 
                                 let pixels = w * h;
-                                let mut tmp = blur::uninit_f32_vec(pixels);
+                                let mut tmp = blur::zeroed_f32_vec(pixels);
                                 ch.preprocess(&mut tmp);
                                 ch
                             })
@@ -317,7 +317,7 @@ impl Dssim {
                             let img1_img2_blur: Vec<Vec<f32>> = (0..3usize)
                                 .into_par_iter()
                                 .map(|c| {
-                                    let mut tmp = blur::uninit_f32_vec(pixels);
+                                    let mut tmp = blur::zeroed_f32_vec(pixels);
                                     original_image_scale.chan[c]
                                         .img1_img2_blur(&modified_image_scale.chan[c], &mut tmp)
                                 })
@@ -329,7 +329,7 @@ impl Dssim {
                             )
                         }
                         1 => {
-                            let mut tmp = blur::uninit_f32_vec(scale_width * scale_height);
+                            let mut tmp = blur::zeroed_f32_vec(scale_width * scale_height);
                             let img1_img2_blur = original_image_scale.chan[0]
                                 .img1_img2_blur(&modified_image_scale.chan[0], &mut tmp);
                             Self::compare_scale(
@@ -414,7 +414,7 @@ impl Dssim {
         {
             use archmage::SimdToken as _;
             if let Some(token) = archmage::X64V3Token::summon() {
-                let mut map_out = blur::uninit_f32_vec(pixels);
+                let mut map_out = blur::zeroed_f32_vec(pixels);
                 map_out
                     .par_chunks_mut(1024)
                     .enumerate()
