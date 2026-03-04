@@ -10,13 +10,18 @@ pub mod prelude {
 }
 
 pub trait ParIterator: Sized {
-    fn with_min_len(self, _one: usize) -> Self { self }
-    fn with_max_len(self, _one: usize) -> Self { self }
-    fn par_bridge(self) -> Self { self }
+    fn with_min_len(self, _one: usize) -> Self {
+        self
+    }
+    fn with_max_len(self, _one: usize) -> Self {
+        self
+    }
+    fn par_bridge(self) -> Self {
+        self
+    }
 }
 
-impl<T: Iterator> ParIterator for T {
-}
+impl<T: Iterator> ParIterator for T {}
 
 pub trait ParSliceLie<T> {
     fn par_chunks(&self, n: usize) -> std::slice::Chunks<'_, T>;

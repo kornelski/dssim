@@ -21,13 +21,13 @@
 
 use crate::blur;
 use crate::image::*;
+#[cfg(not(feature = "threads"))]
+use crate::lieon as rayon;
 use crate::linear::ToRGBAPLU;
 pub use crate::tolab::ToLABBitmap;
 pub use crate::val::Dssim as Val;
 use imgref::*;
 use itertools::multizip;
-#[cfg(not(feature = "threads"))]
-use crate::lieon as rayon;
 use rayon::prelude::*;
 use rgb::{RGB, RGBA};
 use std::borrow::Borrow;
@@ -102,7 +102,9 @@ pub fn new() -> Dssim {
 
 impl DssimChan<f32> {
     pub fn new(bitmap: ImgVec<f32>, is_chroma: bool) -> Self {
-        debug_assert!(bitmap.pixels().all(|i| i.is_finite() && i >= 0.0 && i <= 1.0));
+        debug_assert!(bitmap
+            .pixels()
+            .all(|i| i.is_finite() && i >= 0.0 && i <= 1.0));
 
         Self {
             width: bitmap.width(),
@@ -132,24 +134,35 @@ impl DssimChan<f32> {
         let (mu, _, _) = blur::blur(img.as_ref(), tmp).into_contiguous_buf();
         self.mu = mu;
 
-        self.img_sq_blur = img.pixels().map(|i| {
-            debug_assert!(i <= 1.0 && i >= 0.0);
-            i * i
-        }).collect();
-        blur::blur_in_place(ImgRefMut::new(&mut self.img_sq_blur[..], width, height), tmp);
+        self.img_sq_blur = img
+            .pixels()
+            .map(|i| {
+                debug_assert!(i <= 1.0 && i >= 0.0);
+                i * i
+            })
+            .collect();
+        blur::blur_in_place(
+            ImgRefMut::new(&mut self.img_sq_blur[..], width, height),
+            tmp,
+        );
     }
 }
 
 impl Channable<LAB, f32> for [DssimChan<f32>] {
     fn img1_img2_blur(&self, modified: &Self, tmp32: &mut [MaybeUninit<f32>]) -> Vec<LAB> {
+        let blurred: Vec<_> = self
+            .iter()
+            .zip(modified.iter())
+            .map(|(o, m)| o.img1_img2_blur(m, tmp32))
+            .collect();
 
-        let blurred:Vec<_> = self.iter().zip(modified.iter()).map(|(o,m)|{
-            o.img1_img2_blur(m, tmp32)
-        }).collect();
-
-        multizip((blurred[0].iter().copied(), blurred[1].iter().copied(), blurred[2].iter().copied())).map(|(l,a,b)| {
-            LAB {l,a,b}
-        }).collect()
+        multizip((
+            blurred[0].iter().copied(),
+            blurred[1].iter().copied(),
+            blurred[2].iter().copied(),
+        ))
+        .map(|(l, a, b)| LAB { l, a, b })
+        .collect()
     }
 }
 
@@ -157,11 +170,18 @@ impl Channable<f32, f32> for DssimChan<f32> {
     fn img1_img2_blur(&self, modified: &Self, tmp32: &mut [MaybeUninit<f32>]) -> Vec<f32> {
         let modified_img = modified.img.as_ref().unwrap();
 
-        let mut out = self.img.as_ref().unwrap().pixels().zip(modified_img.pixels()).map(|(px1, px2)| {
-            debug_assert!(px1 <= 1.0 && px1 >= 0.0);
-            debug_assert!(px2 <= 1.0 && px2 >= 0.0);
-            px1 * px2
-        }).collect::<Vec<_>>();
+        let mut out = self
+            .img
+            .as_ref()
+            .unwrap()
+            .pixels()
+            .zip(modified_img.pixels())
+            .map(|(px1, px2)| {
+                debug_assert!(px1 <= 1.0 && px1 >= 0.0);
+                debug_assert!(px2 <= 1.0 && px2 >= 0.0);
+                px1 * px2
+            })
+            .collect::<Vec<_>>();
 
         let width = modified_img.width();
         let height = modified_img.height();
@@ -195,7 +215,12 @@ impl Dssim {
     ///
     /// If you have a slice of `u8`, then see `rgb` crate's `as_rgba()`.
     #[must_use]
-    pub fn create_image_rgba(&self, bitmap: &[RGBA<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+    pub fn create_image_rgba(
+        &self,
+        bitmap: &[RGBA<u8>],
+        width: usize,
+        height: usize,
+    ) -> Option<DssimImage<f32>> {
         if width * height < bitmap.len() {
             return None;
         }
@@ -207,7 +232,12 @@ impl Dssim {
     ///
     /// If you have a slice of `u8`, then see `rgb` crate's `as_rgb()`.
     #[must_use]
-    pub fn create_image_rgb(&self, bitmap: &[RGB<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+    pub fn create_image_rgb(
+        &self,
+        bitmap: &[RGB<u8>],
+        width: usize,
+        height: usize,
+    ) -> Option<DssimImage<f32>> {
         if width * height < bitmap.len() {
             return None;
         }
@@ -239,42 +269,57 @@ impl Dssim {
     }
 
     #[inline(never)]
-    fn make_scales_recursive<InBitmap, OutBitmap>(scales_left: usize, image: MaybeArc<'_, InBitmap>, scales: &mut Vec<DssimChanScale<f32>>)
-    where
+    fn make_scales_recursive<InBitmap, OutBitmap>(
+        scales_left: usize,
+        image: MaybeArc<'_, InBitmap>,
+        scales: &mut Vec<DssimChanScale<f32>>,
+    ) where
         InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
         OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
     {
         // Run to_lab and next downsampling in parallel
-        let (chan, _) = rayon::join({
-            let image = image.clone();
-            move || {
-                let lab = image.to_lab();
-                drop(image); // Free larger RGB image ASAP
-                DssimChanScale {
-                    chan: lab.into_par_iter().with_max_len(1).enumerate().map(|(n,l)| {
-                        let w = l.width();
-                        let h = l.height();
-                        let mut ch = DssimChan::new(l, n > 0);
+        let (chan, _) = rayon::join(
+            {
+                let image = image.clone();
+                move || {
+                    let lab = image.to_lab();
+                    drop(image); // Free larger RGB image ASAP
+                    DssimChanScale {
+                        chan: lab
+                            .into_par_iter()
+                            .with_max_len(1)
+                            .enumerate()
+                            .map(|(n, l)| {
+                                let w = l.width();
+                                let h = l.height();
+                                let mut ch = DssimChan::new(l, n > 0);
 
-                        let pixels = w * h;
-                        let mut tmp = Vec::with_capacity(pixels);
-                        ch.preprocess(&mut tmp.spare_capacity_mut()[..pixels]);
-                        ch
-                    }).collect(),
-                }
-            }
-        }, {
-            let scales = &mut *scales;
-            move || {
-                if scales_left > 0 {
-                    let down = image.downsample();
-                    drop(image);
-                    if let Some(downsampled) = down {
-                        Self::make_scales_recursive(scales_left - 1, MaybeArc::Owned(Arc::new(downsampled)), scales);
+                                let pixels = w * h;
+                                let mut tmp = Vec::with_capacity(pixels);
+                                ch.preprocess(&mut tmp.spare_capacity_mut()[..pixels]);
+                                ch
+                            })
+                            .collect(),
                     }
                 }
-            }
-        });
+            },
+            {
+                let scales = &mut *scales;
+                move || {
+                    if scales_left > 0 {
+                        let down = image.downsample();
+                        drop(image);
+                        if let Some(downsampled) = down {
+                            Self::make_scales_recursive(
+                                scales_left - 1,
+                                MaybeArc::Owned(Arc::new(downsampled)),
+                                scales,
+                            );
+                        }
+                    }
+                }
+            },
+        );
         scales.push(chan);
     }
 
@@ -283,53 +328,88 @@ impl Dssim {
     /// The `SsimMap`s are returned only if you've enabled them first.
     ///
     /// `Val` is a fancy wrapper for `f64`
-    pub fn compare<M: Borrow<DssimImage<f32>>>(&self, original_image: &DssimImage<f32>, modified_image: M) -> (Val, Vec<SsimMap>) {
+    pub fn compare<M: Borrow<DssimImage<f32>>>(
+        &self,
+        original_image: &DssimImage<f32>,
+        modified_image: M,
+    ) -> (Val, Vec<SsimMap>) {
         self.compare_inner(original_image, modified_image.borrow())
     }
 
     #[inline(never)]
-    fn compare_inner(&self, original_image: &DssimImage<f32>, modified_image: &DssimImage<f32>) -> (Val, Vec<SsimMap>) {
+    fn compare_inner(
+        &self,
+        original_image: &DssimImage<f32>,
+        modified_image: &DssimImage<f32>,
+    ) -> (Val, Vec<SsimMap>) {
         let scaled_images_iter = modified_image.scale.iter().zip(original_image.scale.iter());
-        let combined_iter = self.scale_weights.iter().copied().zip(scaled_images_iter).enumerate();
+        let combined_iter = self
+            .scale_weights
+            .iter()
+            .copied()
+            .zip(scaled_images_iter)
+            .enumerate();
 
-        let res: Vec<_> = combined_iter.par_bridge().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
-            let scale_width = original_image_scale.chan[0].width;
-            let scale_height = original_image_scale.chan[0].height;
-            let mut tmp = Vec::with_capacity(scale_width * scale_height);
-            let tmp = &mut tmp.spare_capacity_mut()[0 .. scale_width*scale_height];
+        let res: Vec<_> = combined_iter
+            .par_bridge()
+            .map(
+                |(n, (weight, (modified_image_scale, original_image_scale)))| {
+                    let scale_width = original_image_scale.chan[0].width;
+                    let scale_height = original_image_scale.chan[0].height;
+                    let mut tmp = Vec::with_capacity(scale_width * scale_height);
+                    let tmp = &mut tmp.spare_capacity_mut()[0..scale_width * scale_height];
 
-            let ssim_map = match original_image_scale.chan.len() {
-                3 => {
-                    let (original_lab, (img1_img2_blur, modified_lab)) = rayon::join(
-                    || Self::lab_chan(original_image_scale),
-                    || rayon::join(
-                        || original_image_scale.chan.img1_img2_blur(&modified_image_scale.chan, tmp),
-                        || Self::lab_chan(modified_image_scale)));
+                    let ssim_map = match original_image_scale.chan.len() {
+                        3 => {
+                            let (original_lab, (img1_img2_blur, modified_lab)) = rayon::join(
+                                || Self::lab_chan(original_image_scale),
+                                || {
+                                    rayon::join(
+                                        || {
+                                            original_image_scale
+                                                .chan
+                                                .img1_img2_blur(&modified_image_scale.chan, tmp)
+                                        },
+                                        || Self::lab_chan(modified_image_scale),
+                                    )
+                                },
+                            );
 
-                    Self::compare_scale(&original_lab, &modified_lab, &img1_img2_blur)
+                            Self::compare_scale(&original_lab, &modified_lab, &img1_img2_blur)
+                        }
+                        1 => {
+                            let img1_img2_blur = original_image_scale.chan[0]
+                                .img1_img2_blur(&modified_image_scale.chan[0], tmp);
+                            Self::compare_scale(
+                                &original_image_scale.chan[0],
+                                &modified_image_scale.chan[0],
+                                &img1_img2_blur,
+                            )
+                        }
+                        _ => panic!(),
+                    };
+
+                    let sum = ssim_map.pixels().fold(0., |sum, i| sum + f64::from(i));
+                    let len = (ssim_map.width() * ssim_map.height()) as f64;
+                    let avg = (sum / len).max(0.0).powf((0.5_f64).powf(n as f64));
+                    let score = 1.0
+                        - (ssim_map
+                            .pixels()
+                            .fold(0., |sum, i| sum + (avg - f64::from(i)).abs())
+                            / len);
+
+                    let map = if self.save_maps_scales as usize > n {
+                        Some(SsimMap {
+                            map: ssim_map,
+                            ssim: score,
+                        })
+                    } else {
+                        None
+                    };
+                    (score, weight, map)
                 },
-                1 => {
-                    let img1_img2_blur = original_image_scale.chan[0].img1_img2_blur(&modified_image_scale.chan[0], tmp);
-                    Self::compare_scale(&original_image_scale.chan[0], &modified_image_scale.chan[0], &img1_img2_blur)
-                },
-                _ => panic!(),
-            };
-
-            let sum = ssim_map.pixels().fold(0., |sum, i| sum + f64::from(i));
-            let len = (ssim_map.width()*ssim_map.height()) as f64;
-            let avg = (sum / len).max(0.0).powf((0.5_f64).powf(n as f64));
-            let score = 1.0 - (ssim_map.pixels().fold(0., |sum, i| sum + (avg - f64::from(i)).abs()) / len);
-
-            let map = if self.save_maps_scales as usize > n {
-                Some(SsimMap {
-                    map: ssim_map,
-                    ssim: score,
-                })
-            } else {
-                None
-            };
-            (score, weight, map)
-        }).collect();
+            )
+            .collect();
 
         let mut ssim_sum = 0.0;
         let mut weight_sum = 0.0;
@@ -352,16 +432,31 @@ impl Dssim {
         assert_eq!(l.width, a.width);
         assert_eq!(b.width, a.width);
         DssimChan {
-            img_sq_blur: multizip((l.img_sq_blur.iter().copied(), a.img_sq_blur.iter().copied(), b.img_sq_blur.iter().copied()))
-                .map(|(l,a,b)|LAB {l,a,b}).collect(),
-            img: if let (Some(l),Some(a),Some(b)) = (&l.img, &a.img, &b.img) {
-                let buf = multizip((l.pixels(), a.pixels(), b.pixels())).map(|(l,a,b)|{
-                    debug_assert!(l.is_finite() && a.is_finite() && b.is_finite());
-                    LAB {l,a,b}
-                }).collect();
+            img_sq_blur: multizip((
+                l.img_sq_blur.iter().copied(),
+                a.img_sq_blur.iter().copied(),
+                b.img_sq_blur.iter().copied(),
+            ))
+            .map(|(l, a, b)| LAB { l, a, b })
+            .collect(),
+            img: if let (Some(l), Some(a), Some(b)) = (&l.img, &a.img, &b.img) {
+                let buf = multizip((l.pixels(), a.pixels(), b.pixels()))
+                    .map(|(l, a, b)| {
+                        debug_assert!(l.is_finite() && a.is_finite() && b.is_finite());
+                        LAB { l, a, b }
+                    })
+                    .collect();
                 Some(ImgVec::new(buf, l.width(), l.height()))
-            } else {None},
-            mu: multizip((l.mu.iter().copied(), a.mu.iter().copied(), b.mu.iter().copied())).map(|(l,a,b)|LAB {l,a,b}).collect(),
+            } else {
+                None
+            },
+            mu: multizip((
+                l.mu.iter().copied(),
+                a.mu.iter().copied(),
+                b.mu.iter().copied(),
+            ))
+            .map(|(l, a, b)| LAB { l, a, b })
+            .collect(),
             is_chroma: false,
             width: l.width,
             height: l.height,
@@ -369,7 +464,11 @@ impl Dssim {
     }
 
     #[inline(never)]
-    fn compare_scale<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
+    fn compare_scale<L>(
+        original: &DssimChan<L>,
+        modified: &DssimChan<L>,
+        img1_img2_blur: &[L],
+    ) -> ImgVec<f32>
     where
         L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
         f32: From<L>,
@@ -388,30 +487,64 @@ impl Dssim {
         debug_assert_eq!(img1_img2_blur.len(), original.mu.len());
         debug_assert_eq!(img1_img2_blur.len(), original.img_sq_blur.len());
 
-        let mu_iter = original.mu.as_slice().par_iter().with_min_len(1<<10).cloned().zip_eq(modified.mu.as_slice().par_iter().with_min_len(1<<10).cloned());
-        let sq_iter = original.img_sq_blur.as_slice().par_iter().with_min_len(1<<10).cloned().zip_eq(modified.img_sq_blur.as_slice().par_iter().with_min_len(1<<10).cloned());
-        let map_out = img1_img2_blur.par_iter().with_min_len(1<<10).cloned().zip_eq(mu_iter).zip_eq(sq_iter)
-        .map(|((img1_img2_blur, (mu1, mu2)), (img1_sq_blur, img2_sq_blur))| {
-            let mu1mu1 = mu1 * mu1;
-            let mu1mu2 = mu1 * mu2;
-            let mu2mu2 = mu2 * mu2;
-            let mu1_sq: f32 = mu1mu1.into();
-            let mu2_sq: f32 = mu2mu2.into();
-            let mu1_mu2: f32 = mu1mu2.into();
-            let sigma1_sq: f32 = (img1_sq_blur - mu1mu1).into();
-            let sigma2_sq: f32 = (img2_sq_blur - mu2mu2).into();
-            let sigma12: f32 = (img1_img2_blur - mu1mu2).into();
+        let mu_iter = original
+            .mu
+            .as_slice()
+            .par_iter()
+            .with_min_len(1 << 10)
+            .cloned()
+            .zip_eq(
+                modified
+                    .mu
+                    .as_slice()
+                    .par_iter()
+                    .with_min_len(1 << 10)
+                    .cloned(),
+            );
+        let sq_iter = original
+            .img_sq_blur
+            .as_slice()
+            .par_iter()
+            .with_min_len(1 << 10)
+            .cloned()
+            .zip_eq(
+                modified
+                    .img_sq_blur
+                    .as_slice()
+                    .par_iter()
+                    .with_min_len(1 << 10)
+                    .cloned(),
+            );
+        let map_out = img1_img2_blur
+            .par_iter()
+            .with_min_len(1 << 10)
+            .cloned()
+            .zip_eq(mu_iter)
+            .zip_eq(sq_iter)
+            .map(
+                |((img1_img2_blur, (mu1, mu2)), (img1_sq_blur, img2_sq_blur))| {
+                    let mu1mu1 = mu1 * mu1;
+                    let mu1mu2 = mu1 * mu2;
+                    let mu2mu2 = mu2 * mu2;
+                    let mu1_sq: f32 = mu1mu1.into();
+                    let mu2_sq: f32 = mu2mu2.into();
+                    let mu1_mu2: f32 = mu1mu2.into();
+                    let sigma1_sq: f32 = (img1_sq_blur - mu1mu1).into();
+                    let sigma2_sq: f32 = (img2_sq_blur - mu2mu2).into();
+                    let sigma12: f32 = (img1_img2_blur - mu1mu2).into();
 
-            2.0f32.mul_add(mu1_mu2, c1) * 2.0f32.mul_add(sigma12, c2) /
-                       ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
-        }).collect();
+                    2.0f32.mul_add(mu1_mu2, c1) * 2.0f32.mul_add(sigma12, c2)
+                        / ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
+                },
+            )
+            .collect();
 
         ImgVec::new(map_out, width, height)
     }
 }
 
 fn to_dssim(ssim: f64) -> f64 {
-    1.0 / ssim.max(std::f64::EPSILON) - 1.0
+    1.0 / ssim.max(f64::EPSILON) - 1.0
 }
 
 #[test]
@@ -425,27 +558,41 @@ fn png_compare() {
 
     let buf1 = &file1.buffer.to_rgbaplu()[..];
     let buf2 = &file2.buffer.to_rgbaplu()[..];
-    let img1 = d.create_image(&Img::new(buf1, file1.width, file1.height)).unwrap();
-    let img2 = d.create_image(&Img::new(buf2, file2.width, file2.height)).unwrap();
+    let img1 = d
+        .create_image(&Img::new(buf1, file1.width, file1.height))
+        .unwrap();
+    let img2 = d
+        .create_image(&Img::new(buf2, file2.width, file2.height))
+        .unwrap();
 
     let (res, _) = d.compare(&img1, img2);
     assert!((0.001 - res).abs() < 0.0005, "res is {res}");
 
-    let img1b = d.create_image(&Img::new(buf1, file1.width, file1.height)).unwrap();
+    let img1b = d
+        .create_image(&Img::new(buf1, file1.width, file1.height))
+        .unwrap();
     let (res, _) = d.compare(&img1, img1b);
 
     assert!(0.000000000000001 > res);
     assert!(res < 0.000000000000001);
     assert_eq!(res, res);
 
-    let sub_img1 = d.create_image(&Img::new(buf1, file1.width, file1.height).sub_image(2,3,44,33)).unwrap();
-    let sub_img2 = d.create_image(&Img::new(buf2, file2.width, file2.height).sub_image(17,9,44,33)).unwrap();
+    let sub_img1 = d
+        .create_image(&Img::new(buf1, file1.width, file1.height).sub_image(2, 3, 44, 33))
+        .unwrap();
+    let sub_img2 = d
+        .create_image(&Img::new(buf2, file2.width, file2.height).sub_image(17, 9, 44, 33))
+        .unwrap();
     // Test passing second image directly
     let (res, _) = d.compare(&sub_img1, sub_img2);
     assert!(res > 0.1);
 
-    let sub_img1 = d.create_image(&Img::new(buf1, file1.width, file1.height).sub_image(22,8,61,40)).unwrap();
-    let sub_img2 = d.create_image(&Img::new(buf2, file2.width, file2.height).sub_image(22,8,61,40)).unwrap();
+    let sub_img1 = d
+        .create_image(&Img::new(buf1, file1.width, file1.height).sub_image(22, 8, 61, 40))
+        .unwrap();
+    let sub_img2 = d
+        .create_image(&Img::new(buf2, file2.width, file2.height).sub_image(22, 8, 61, 40))
+        .unwrap();
     // Test passing second image as reference
     let (res, _) = d.compare(&sub_img1, sub_img2);
     assert!(res < 0.01);
@@ -478,18 +625,17 @@ impl<T> Deref for MaybeArc<'_, T> {
 
 #[test]
 fn poison() {
-    let a = RGBAPLU::new(1.,1.,1.,1.);
-    let b = RGBAPLU::new(0.,0.,0.,0.);
-    let n = 1./0.;
-    let n = RGBAPLU::new(n,n,n,n);
-    let buf = vec![
-      b,a,a,b,n,n,
-      a,b,b,a,n,n,
-      b,a,a,b,n,
-    ];
+    let a = RGBAPLU::new(1., 1., 1., 1.);
+    let b = RGBAPLU::new(0., 0., 0., 0.);
+    let n = 1. / 0.;
+    let n = RGBAPLU::new(n, n, n, n);
+    let buf = vec![b, a, a, b, n, n, a, b, b, a, n, n, b, a, a, b, n];
     let img = ImgVec::new_stride(buf, 4, 3, 6);
     assert!(img.pixels().all(|p| p.r.is_finite() && p.a.is_finite()));
-    assert!(img.as_ref().pixels().all(|p| p.g.is_finite() && p.b.is_finite()));
+    assert!(img
+        .as_ref()
+        .pixels()
+        .all(|p| p.g.is_finite() && p.b.is_finite()));
 
     let d = new();
     let sub_img1 = d.create_image(&img.as_ref()).unwrap();

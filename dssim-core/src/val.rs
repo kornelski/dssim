@@ -128,10 +128,18 @@ impl PartialOrd<f64> for Dssim {
         self.0.partial_cmp(other)
     }
 
-    fn lt(&self, other: &f64) -> bool { self.0.lt(other) }
-    fn le(&self, other: &f64) -> bool { self.0.le(other) }
-    fn gt(&self, other: &f64) -> bool { self.0.gt(other) }
-    fn ge(&self, other: &f64) -> bool { self.0.ge(other) }
+    fn lt(&self, other: &f64) -> bool {
+        self.0.lt(other)
+    }
+    fn le(&self, other: &f64) -> bool {
+        self.0.le(other)
+    }
+    fn gt(&self, other: &f64) -> bool {
+        self.0.gt(other)
+    }
+    fn ge(&self, other: &f64) -> bool {
+        self.0.ge(other)
+    }
 }
 
 impl PartialOrd<Dssim> for f64 {
@@ -139,8 +147,16 @@ impl PartialOrd<Dssim> for f64 {
         self.partial_cmp(&other.0)
     }
 
-    fn lt(&self, other: &Dssim) -> bool { self.lt(&other.0) }
-    fn le(&self, other: &Dssim) -> bool { self.le(&other.0) }
-    fn gt(&self, other: &Dssim) -> bool { self.gt(&other.0) }
-    fn ge(&self, other: &Dssim) -> bool { self.ge(&other.0) }
+    fn lt(&self, other: &Dssim) -> bool {
+        self.lt(&other.0)
+    }
+    fn le(&self, other: &Dssim) -> bool {
+        self.le(&other.0)
+    }
+    fn gt(&self, other: &Dssim) -> bool {
+        self.gt(&other.0)
+    }
+    fn ge(&self, other: &Dssim) -> bool {
+        self.ge(&other.0)
+    }
 }

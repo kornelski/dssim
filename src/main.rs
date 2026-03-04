@@ -25,20 +25,27 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 fn usage(argv0: &str) {
-    eprintln!("\
+    eprintln!(
+        "\
        Usage: {argv0} original.png modified.png [modified.png...]\
      \n   or: {argv0} -o difference.png original.png modified.png\n\n\
        Compares first image against subsequent images, and outputs\n\
        1/SSIM-1 difference for each of them in order (0 = identical).\n\n\
        Images must have identical size, but may have different gamma & depth.\n\
-       \nVersion {} https://kornel.ski/dssim\n", env!("CARGO_PKG_VERSION"));
+       \nVersion {} https://kornel.ski/dssim\n",
+        env!("CARGO_PKG_VERSION")
+    );
 }
 
 #[inline(always)]
 fn to_byte(i: f32) -> u8 {
-    if i <= 0.0 {0}
-    else if i >= 255.0/256.0 {255}
-    else {(i * 256.0) as u8}
+    if i <= 0.0 {
+        0
+    } else if i >= 255.0 / 256.0 {
+        255
+    } else {
+        (i * 256.0) as u8
+    }
 }
 
 fn main() -> ExitCode {
@@ -87,11 +94,17 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     std::thread::scope(|scope| {
         let decode_thread = || {
             let images_send = images_send; // ensure it's moved, and attr isn't
-            filenames_recv.into_iter().try_for_each(|(i, file): (usize, PathBuf)| {
-                dssim::load_image(&attr, &file)
-                    .map_err(|e| format!("Can't load {}, because: {e}", file.display()))
-                    .and_then(|image| images_send.send(i, (file, image)).map_err(|_| "Aborted".into()))
-            })
+            filenames_recv
+                .into_iter()
+                .try_for_each(|(i, file): (usize, PathBuf)| {
+                    dssim::load_image(&attr, &file)
+                        .map_err(|e| format!("Can't load {}, because: {e}", file.display()))
+                        .and_then(|image| {
+                            images_send
+                                .send(i, (file, image))
+                                .map_err(|_| "Aborted".into())
+                        })
+                })
         };
 
         let threads = [
@@ -100,16 +113,26 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         ];
 
         let result = (|| {
-            files.into_iter().map(PathBuf::from).enumerate()
+            files
+                .into_iter()
+                .map(PathBuf::from)
+                .enumerate()
                 .try_for_each(move |f| filenames_send.send(f))?;
 
             let (file1, original) = images_recv.next().ok_or("Can't load any images")?;
 
             for (file2, modified) in images_recv {
                 if original.width() != modified.width() || original.height() != modified.height() {
-                    return Err(format!("Image {} has a different size ({}x{}) than {} ({}x{})\n",
-                        file2.display(), modified.width(), modified.height(),
-                        file1.display(), original.width(), original.height()).into());
+                    return Err(format!(
+                        "Image {} has a different size ({}x{}) than {} ({}x{})\n",
+                        file2.display(),
+                        modified.width(),
+                        modified.height(),
+                        file1.display(),
+                        original.width(),
+                        original.height()
+                    )
+                    .into());
                 }
 
                 let (dssim, ssim_maps) = attr.compare(&original, modified);
@@ -123,32 +146,44 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         })();
 
-        threads.into_iter().try_for_each(|t| t.join().map_err(|_| "thread panicked; this is a bug")?)?;
+        threads
+            .into_iter()
+            .try_for_each(|t| t.join().map_err(|_| "thread panicked; this is a bug")?)?;
         result
     })
 }
 
-fn write_ssim_maps(ssim_maps: Vec<dssim_core::SsimMap>, map_output_file: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn write_ssim_maps(
+    ssim_maps: Vec<dssim_core::SsimMap>,
+    map_output_file: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "threads")]
     let ssim_maps_iter = ssim_maps.par_iter();
     #[cfg(not(feature = "threads"))]
     let ssim_maps_iter = ssim_maps.iter();
     ssim_maps_iter.enumerate().try_for_each(|(n, map_meta)| {
         let avgssim = map_meta.ssim as f32;
-        let out: Vec<_> = map_meta.map.pixels().map(|ssim|{
-            let max = 1_f32 - ssim;
-            let maxsq = max * max;
-            rgb::RGBA8 {
-                r: to_byte(maxsq * 16.0),
-                g: to_byte(max * 3.0),
-                b: to_byte(max / ((1_f32 - avgssim) * 4_f32)),
-                a: 255,
-            }
-        }).collect();
-        lodepng::encode32_file(format!("{map_output_file}-{n}.png"), &out, map_meta.map.width(), map_meta.map.height())
-            .map_err(|e| {
-                format!("Can't write {map_output_file}: {e}")
+        let out: Vec<_> = map_meta
+            .map
+            .pixels()
+            .map(|ssim| {
+                let max = 1_f32 - ssim;
+                let maxsq = max * max;
+                rgb::RGBA8 {
+                    r: to_byte(maxsq * 16.0),
+                    g: to_byte(max * 3.0),
+                    b: to_byte(max / ((1_f32 - avgssim) * 4_f32)),
+                    a: 255,
+                }
             })
+            .collect();
+        lodepng::encode32_file(
+            format!("{map_output_file}-{n}.png"),
+            &out,
+            map_meta.map.width(),
+            map_meta.map.height(),
+        )
+        .map_err(|e| format!("Can't write {map_output_file}: {e}"))
     })?;
     Ok(())
 }

@@ -190,7 +190,10 @@ pub trait Downsample {
     fn downsample(&self) -> Option<Self::Output>;
 }
 
-impl<T> Downsample for ImgVec<T> where T: Average4 + Copy + Sync + Send {
+impl<T> Downsample for ImgVec<T>
+where
+    T: Average4 + Copy + Sync + Send,
+{
     type Output = ImgVec<T>;
 
     fn downsample(&self) -> Option<Self::Output> {
@@ -198,7 +201,10 @@ impl<T> Downsample for ImgVec<T> where T: Average4 + Copy + Sync + Send {
     }
 }
 
-impl<T> Downsample for ImgRef<'_, T> where T: Average4 + Copy + Sync + Send {
+impl<T> Downsample for ImgRef<'_, T>
+where
+    T: Average4 + Copy + Sync + Send,
+{
     type Output = ImgVec<T>;
 
     fn downsample(&self) -> Option<Self::Output> {
@@ -214,13 +220,20 @@ impl<T> Downsample for ImgRef<'_, T> where T: Average4 + Copy + Sync + Send {
         let half_width = width / 2;
 
         let mut scaled = Vec::with_capacity(half_width * half_height);
-        scaled.extend(self.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
-            let (top, bot) = pair.split_at(stride);
-            let top = &top[0..half_width * 2];
-            let bot = &bot[0..half_width * 2];
+        scaled.extend(
+            self.buf()
+                .chunks(stride * 2)
+                .take(half_height)
+                .flat_map(|pair| {
+                    let (top, bot) = pair.split_at(stride);
+                    let top = &top[0..half_width * 2];
+                    let bot = &bot[0..half_width * 2];
 
-            top.chunks_exact(2).zip(bot.chunks_exact(2)).map(|(a, b)| Average4::average4(a[0], a[1], b[0], b[1]))
-        }));
+                    top.chunks_exact(2)
+                        .zip(bot.chunks_exact(2))
+                        .map(|(a, b)| Average4::average4(a[0], a[1], b[0], b[1]))
+                }),
+        );
 
         assert_eq!(half_width * half_height, scaled.len());
         Some(Img::new(scaled, half_width, half_height))
@@ -238,15 +251,21 @@ pub(crate) fn worst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
-    scaled.extend(input.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
-        let (top, bot) = pair.split_at(stride);
-        let top = &top[0..half_width * 2];
-        let bot = &bot[0..half_width * 2];
+    scaled.extend(
+        input
+            .buf()
+            .chunks(stride * 2)
+            .take(half_height)
+            .flat_map(|pair| {
+                let (top, bot) = pair.split_at(stride);
+                let top = &top[0..half_width * 2];
+                let bot = &bot[0..half_width * 2];
 
-        top.chunks_exact(2).zip(bot.chunks_exact(2)).map(|(a,b)| {
-            a[0].min(a[1]).min(b[0].min(b[1]))
-        })
-    }));
+                top.chunks_exact(2)
+                    .zip(bot.chunks_exact(2))
+                    .map(|(a, b)| a[0].min(a[1]).min(b[0].min(b[1])))
+            }),
+    );
 
     assert_eq!(half_width * half_height, scaled.len());
     Img::new(scaled, half_width, half_height)
@@ -263,15 +282,22 @@ pub(crate) fn avgworst(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
-    scaled.extend(input.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
-        let (top, bot) = pair.split_at(stride);
-        let top = &top[0..half_width * 2];
-        let bot = &bot[0..half_width * 2];
+    scaled.extend(
+        input
+            .buf()
+            .chunks(stride * 2)
+            .take(half_height)
+            .flat_map(|pair| {
+                let (top, bot) = pair.split_at(stride);
+                let top = &top[0..half_width * 2];
+                let bot = &bot[0..half_width * 2];
 
-        top.chunks_exact(2).zip(bot.chunks_exact(2)).map(|(a,b)| {
-            (a[0] + a[1] + b[0] + b[1]).mul_add(0.25, a[0].min(a[1]).min(b[0].min(b[1])))*0.5
-        })
-    }));
+                top.chunks_exact(2).zip(bot.chunks_exact(2)).map(|(a, b)| {
+                    (a[0] + a[1] + b[0] + b[1]).mul_add(0.25, a[0].min(a[1]).min(b[0].min(b[1])))
+                        * 0.5
+                })
+            }),
+    );
 
     assert_eq!(half_width * half_height, scaled.len());
     Img::new(scaled, half_width, half_height)
@@ -288,15 +314,21 @@ pub(crate) fn avg(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     }
 
     let mut scaled = Vec::with_capacity(half_width * half_height);
-    scaled.extend(input.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
-        let (top, bot) = pair.split_at(stride);
-        let top = &top[0..half_width * 2];
-        let bot = &bot[0..half_width * 2];
+    scaled.extend(
+        input
+            .buf()
+            .chunks(stride * 2)
+            .take(half_height)
+            .flat_map(|pair| {
+                let (top, bot) = pair.split_at(stride);
+                let top = &top[0..half_width * 2];
+                let bot = &bot[0..half_width * 2];
 
-        top.chunks_exact(2).zip(bot.chunks_exact(2)).map(|(a,b)| {
-            (a[0] + a[1] + b[0] + b[1]) * 0.25
-        })
-    }));
+                top.chunks_exact(2)
+                    .zip(bot.chunks_exact(2))
+                    .map(|(a, b)| (a[0] + a[1] + b[0] + b[1]) * 0.25)
+            }),
+    );
 
     assert_eq!(half_width * half_height, scaled.len());
     Img::new(scaled, half_width, half_height)
