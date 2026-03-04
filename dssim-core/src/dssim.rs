@@ -408,6 +408,51 @@ impl Dssim {
         let i12_1 = &img1_img2_blur[1][..pixels];
         let i12_2 = &img1_img2_blur[2][..pixels];
 
+        #[cfg(all(feature = "fma", target_arch = "x86_64"))]
+        {
+            use archmage::SimdToken as _;
+            if let Some(token) = archmage::X64V3Token::summon() {
+                let mut map_out = blur::uninit_f32_vec(pixels);
+                map_out
+                    .par_chunks_mut(1024)
+                    .enumerate()
+                    .for_each(|(ci, chunk)| {
+                        let off = ci * 1024;
+                        let len = chunk.len();
+                        crate::ssim_simd::compare_3ch_avx2(
+                            token,
+                            [
+                                &o0_mu[off..off + len],
+                                &o1_mu[off..off + len],
+                                &o2_mu[off..off + len],
+                            ],
+                            [
+                                &m0_mu[off..off + len],
+                                &m1_mu[off..off + len],
+                                &m2_mu[off..off + len],
+                            ],
+                            [
+                                &o0_sq[off..off + len],
+                                &o1_sq[off..off + len],
+                                &o2_sq[off..off + len],
+                            ],
+                            [
+                                &m0_sq[off..off + len],
+                                &m1_sq[off..off + len],
+                                &m2_sq[off..off + len],
+                            ],
+                            [
+                                &i12_0[off..off + len],
+                                &i12_1[off..off + len],
+                                &i12_2[off..off + len],
+                            ],
+                            chunk,
+                        );
+                    });
+                return ImgVec::new(map_out, width, height);
+            }
+        }
+
         let c1: f32 = 0.01 * 0.01;
         let c2: f32 = 0.03 * 0.03;
         let inv3: f32 = 1.0 / 3.0;

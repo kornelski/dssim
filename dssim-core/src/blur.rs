@@ -263,6 +263,237 @@ mod portable {
         }
     }
 
+    // ── AVX2+FMA SIMD path ──────────────────────────────────────────────
+    #[cfg(all(feature = "fma", target_arch = "x86_64"))]
+    mod simd {
+        use super::{K5_INNER, K5_MID, K5_OUTER};
+        use archmage::prelude::*;
+        use magetypes::simd::f32x8;
+
+        #[arcane]
+        pub fn blur_avx2(
+            t: X64V3Token,
+            buf: &[f32],
+            tmp: &mut [f32],
+            dst: &mut [f32],
+            w: usize,
+            h: usize,
+            stride: usize,
+        ) {
+            blur_h5_simd(t, buf, tmp, w, h, stride);
+            blur_v5_simd(t, tmp, dst, w, h, w);
+        }
+
+        #[arcane]
+        pub fn blur_in_place_avx2(
+            t: X64V3Token,
+            buf: &mut [f32],
+            tmp: &mut [f32],
+            w: usize,
+            h: usize,
+            stride: usize,
+        ) {
+            blur_h5_simd(t, buf, tmp, w, h, stride);
+            blur_v5_simd(t, tmp, buf, w, h, stride);
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        #[arcane]
+        pub fn blur_mul_avx2(
+            t: X64V3Token,
+            src1: &[f32],
+            src2: &[f32],
+            tmp: &mut [f32],
+            dst: &mut [f32],
+            w: usize,
+            h: usize,
+            stride1: usize,
+            stride2: usize,
+        ) {
+            blur_h5_mul_simd(t, src1, src2, tmp, w, h, stride1, stride2);
+            blur_v5_simd(t, tmp, dst, w, h, w);
+        }
+
+        #[rite]
+        fn blur_h5_simd(
+            t: X64V3Token,
+            src: &[f32],
+            dst: &mut [f32],
+            width: usize,
+            height: usize,
+            src_stride: usize,
+        ) {
+            let vk_outer = f32x8::splat(t, K5_OUTER);
+            let vk_inner = f32x8::splat(t, K5_INNER);
+            let vk_mid = f32x8::splat(t, K5_MID);
+            let last = width - 1;
+
+            for y in 0..height {
+                let row = &src[y * src_stride..][..width];
+                let out = &mut dst[y * width..][..width];
+
+                // Left edge: scalar (2 pixels)
+                for i in 0..2.min(width) {
+                    let ii = i as isize;
+                    let get = |j: isize| row[j.max(0).min(last as isize) as usize];
+                    out[i] = (get(ii - 2) + get(ii + 2)) * K5_OUTER
+                        + (get(ii - 1) + get(ii + 1)) * K5_INNER
+                        + row[i] * K5_MID;
+                }
+
+                // SIMD loop: needs row[i-2..i+10] valid
+                let mut i = 2;
+                while i + 10 <= width {
+                    let far_left = f32x8::load(t, (&row[i - 2..i + 6]).try_into().unwrap());
+                    let left = f32x8::load(t, (&row[i - 1..i + 7]).try_into().unwrap());
+                    let center = f32x8::load(t, (&row[i..i + 8]).try_into().unwrap());
+                    let right = f32x8::load(t, (&row[i + 1..i + 9]).try_into().unwrap());
+                    let far_right = f32x8::load(t, (&row[i + 2..i + 10]).try_into().unwrap());
+                    let outer_sum = far_left + far_right;
+                    let inner_sum = left + right;
+                    let result =
+                        outer_sum.mul_add(vk_outer, inner_sum.mul_add(vk_inner, center * vk_mid));
+                    result.store((&mut out[i..i + 8]).try_into().unwrap());
+                    i += 8;
+                }
+
+                // Scalar tail + right edges
+                while i < width {
+                    let ii = i as isize;
+                    let get = |j: isize| row[j.max(0).min(last as isize) as usize];
+                    out[i] = (get(ii - 2) + get(ii + 2)) * K5_OUTER
+                        + (get(ii - 1) + get(ii + 1)) * K5_INNER
+                        + row[i] * K5_MID;
+                    i += 1;
+                }
+            }
+        }
+
+        #[rite]
+        fn blur_v5_simd(
+            t: X64V3Token,
+            src: &[f32],
+            dst: &mut [f32],
+            width: usize,
+            height: usize,
+            dst_stride: usize,
+        ) {
+            let vk_outer = f32x8::splat(t, K5_OUTER);
+            let vk_inner = f32x8::splat(t, K5_INNER);
+            let vk_mid = f32x8::splat(t, K5_MID);
+            let last_y = height - 1;
+
+            for y in 0..height {
+                let ym2 = y.saturating_sub(2);
+                let ym1 = y.saturating_sub(1);
+                let yp1 = (y + 1).min(last_y);
+                let yp2 = (y + 2).min(last_y);
+
+                let rm2 = &src[ym2 * width..][..width];
+                let rm1 = &src[ym1 * width..][..width];
+                let rc = &src[y * width..][..width];
+                let rp1 = &src[yp1 * width..][..width];
+                let rp2 = &src[yp2 * width..][..width];
+
+                let out = &mut dst[y * dst_stride..][..width];
+
+                let mut x = 0;
+                while x + 8 <= width {
+                    let vm2 = f32x8::load(t, (&rm2[x..x + 8]).try_into().unwrap());
+                    let vm1 = f32x8::load(t, (&rm1[x..x + 8]).try_into().unwrap());
+                    let vc = f32x8::load(t, (&rc[x..x + 8]).try_into().unwrap());
+                    let vp1 = f32x8::load(t, (&rp1[x..x + 8]).try_into().unwrap());
+                    let vp2 = f32x8::load(t, (&rp2[x..x + 8]).try_into().unwrap());
+                    let outer = vm2 + vp2;
+                    let inner = vm1 + vp1;
+                    let result = outer.mul_add(vk_outer, inner.mul_add(vk_inner, vc * vk_mid));
+                    result.store((&mut out[x..x + 8]).try_into().unwrap());
+                    x += 8;
+                }
+
+                // Scalar tail
+                while x < width {
+                    out[x] = (rm2[x] + rp2[x]) * K5_OUTER
+                        + (rm1[x] + rp1[x]) * K5_INNER
+                        + rc[x] * K5_MID;
+                    x += 1;
+                }
+            }
+        }
+
+        #[allow(clippy::too_many_arguments)]
+        #[rite]
+        fn blur_h5_mul_simd(
+            t: X64V3Token,
+            src1: &[f32],
+            src2: &[f32],
+            dst: &mut [f32],
+            width: usize,
+            height: usize,
+            stride1: usize,
+            stride2: usize,
+        ) {
+            let vk_outer = f32x8::splat(t, K5_OUTER);
+            let vk_inner = f32x8::splat(t, K5_INNER);
+            let vk_mid = f32x8::splat(t, K5_MID);
+            let last = width - 1;
+
+            for y in 0..height {
+                let r1 = &src1[y * stride1..][..width];
+                let r2 = &src2[y * stride2..][..width];
+                let out = &mut dst[y * width..][..width];
+
+                // Left edge: scalar (2 pixels)
+                for i in 0..2.min(width) {
+                    let ii = i as isize;
+                    let cl = |j: isize| j.max(0).min(last as isize) as usize;
+                    let p = |j: isize| r1[cl(j)] * r2[cl(j)];
+                    out[i] = (p(ii - 2) + p(ii + 2)) * K5_OUTER
+                        + (p(ii - 1) + p(ii + 1)) * K5_INNER
+                        + (r1[i] * r2[i]) * K5_MID;
+                }
+
+                // SIMD loop: needs [i-2..i+10] valid from both sources
+                let mut i = 2;
+                while i + 10 <= width {
+                    let l1m2 = f32x8::load(t, (&r1[i - 2..i + 6]).try_into().unwrap());
+                    let l2m2 = f32x8::load(t, (&r2[i - 2..i + 6]).try_into().unwrap());
+                    let l1m1 = f32x8::load(t, (&r1[i - 1..i + 7]).try_into().unwrap());
+                    let l2m1 = f32x8::load(t, (&r2[i - 1..i + 7]).try_into().unwrap());
+                    let l1c = f32x8::load(t, (&r1[i..i + 8]).try_into().unwrap());
+                    let l2c = f32x8::load(t, (&r2[i..i + 8]).try_into().unwrap());
+                    let l1p1 = f32x8::load(t, (&r1[i + 1..i + 9]).try_into().unwrap());
+                    let l2p1 = f32x8::load(t, (&r2[i + 1..i + 9]).try_into().unwrap());
+                    let l1p2 = f32x8::load(t, (&r1[i + 2..i + 10]).try_into().unwrap());
+                    let l2p2 = f32x8::load(t, (&r2[i + 2..i + 10]).try_into().unwrap());
+
+                    let p_m2 = l1m2 * l2m2;
+                    let p_m1 = l1m1 * l2m1;
+                    let p_c = l1c * l2c;
+                    let p_p1 = l1p1 * l2p1;
+                    let p_p2 = l1p2 * l2p2;
+
+                    let outer = p_m2 + p_p2;
+                    let inner = p_m1 + p_p1;
+                    let result = outer.mul_add(vk_outer, inner.mul_add(vk_inner, p_c * vk_mid));
+                    result.store((&mut out[i..i + 8]).try_into().unwrap());
+                    i += 8;
+                }
+
+                // Scalar tail + right edges
+                while i < width {
+                    let ii = i as isize;
+                    let cl = |j: isize| j.max(0).min(last as isize) as usize;
+                    let p = |j: isize| r1[cl(j)] * r2[cl(j)];
+                    out[i] = (p(ii - 2) + p(ii + 2)) * K5_OUTER
+                        + (p(ii - 1) + p(ii + 1)) * K5_INNER
+                        + (r1[i] * r2[i]) * K5_MID;
+                    i += 1;
+                }
+            }
+        }
+    }
+
     pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [f32]) -> ImgVec<f32> {
         let width = src.width();
         let height = src.height();
@@ -274,6 +505,15 @@ mod portable {
         assert!(tmp.len() >= pixels);
         let tmp = &mut tmp[..pixels];
         let mut dst = uninit_f32_vec(pixels);
+
+        #[cfg(all(feature = "fma", target_arch = "x86_64"))]
+        {
+            use archmage::SimdToken as _;
+            if let Some(token) = archmage::X64V3Token::summon() {
+                simd::blur_avx2(token, src.buf(), tmp, &mut dst, width, height, src.stride());
+                return ImgVec::new(dst, width, height);
+            }
+        }
 
         blur_h5(src.buf(), tmp, width, height, src.stride());
         blur_v5(tmp, &mut dst, width, height, width);
@@ -290,6 +530,15 @@ mod portable {
         assert!(tmp.len() >= pixels);
         let tmp = &mut tmp[..pixels];
         let buf = srcdst.buf_mut();
+
+        #[cfg(all(feature = "fma", target_arch = "x86_64"))]
+        {
+            use archmage::SimdToken as _;
+            if let Some(token) = archmage::X64V3Token::summon() {
+                simd::blur_in_place_avx2(token, buf, tmp, width, height, stride);
+                return;
+            }
+        }
 
         blur_h5(buf, tmp, width, height, stride);
         blur_v5(tmp, buf, width, height, stride);
@@ -309,6 +558,25 @@ mod portable {
         assert!(tmp.len() >= pixels);
         let tmp = &mut tmp[..pixels];
         let mut dst = uninit_f32_vec(pixels);
+
+        #[cfg(all(feature = "fma", target_arch = "x86_64"))]
+        {
+            use archmage::SimdToken as _;
+            if let Some(token) = archmage::X64V3Token::summon() {
+                simd::blur_mul_avx2(
+                    token,
+                    src1.buf(),
+                    src2.buf(),
+                    tmp,
+                    &mut dst,
+                    width,
+                    height,
+                    src1.stride(),
+                    src2.stride(),
+                );
+                return dst;
+            }
+        }
 
         blur_h5_mul(
             src1.buf(),

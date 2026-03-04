@@ -14,6 +14,7 @@ mod image;
 #[cfg(not(feature = "threads"))]
 mod lieon;
 mod linear;
+mod ssim_simd;
 mod tolab;
 mod val;
 

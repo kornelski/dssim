@@ -19,6 +19,8 @@ crate-type = ["lib", "staticlib"]
 [dependencies]
 imgref = "1.11.0"
 itertools = "0.14"
+archmage = { version = "0.8.6", optional = true }
+magetypes = { version = "0.8.6", optional = true }
 rayon = { version = "1.11.0", optional = true }
 rgb = "0.8.52"
 
@@ -28,6 +30,7 @@ lodepng = "3.12.1"
 [features]
 default = ["threads"]
 threads = ["dep:rayon"]
+fma = ["dep:archmage", "dep:magetypes"]
 no-macos-vimage = []
 # internal for cargo-c only
 capi = []
