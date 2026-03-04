@@ -25,20 +25,17 @@ imgref = "1.11.0"
 getopts = "0.2.24"
 rayon = { version = "1.10.0", optional = true }
 rgb = "0.8.52"
-lodepng = { version = "3.12", default-features = false, features = ["rust_backend"] }
-load_image = { version = "3.3", features = ["lcms2-static"] }
+png = "0.18"
+zune-jpeg = "0.5"
+moxcms = "0.8"
 crossbeam-channel = "0.5.15"
 ordered-channel = { version = "1.2.0" }
+zenbitmaps = { path = "../zenbitmaps", features = ["rgb"] } # TODO: publish or use git dep before merge
 
 [features]
-default = ["threads", "dssim-core/default", "no-macos-vimage"]
+default = ["threads", "dssim-core/default", "no-macos-vimage", "fma"]
 threads = ["dep:rayon", "dssim-core/threads"]
-avif = ["load_image/avif"]
-# Support comparing WebP files directly
-webp = ["load_image/webp"]
-webp-static = ["load_image/webp-static"]
-# Decode JPEGs using libjpeg-turbo derivative (closer to the reference decoder)
-mozjpeg = ["load_image/mozjpeg"]
+fma = ["dssim-core/fma"]
 no-macos-vimage = ["dssim-core/no-macos-vimage"]
 
 [package.metadata.release]

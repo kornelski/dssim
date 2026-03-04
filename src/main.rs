@@ -27,8 +27,8 @@ use std::process::ExitCode;
 fn usage(argv0: &str) {
     eprintln!(
         "\
-       Usage: {argv0} original.png modified.png [modified.png...]\
-     \n   or: {argv0} -o difference.png original.png modified.png\n\n\
+       Usage: {argv0} original modified [modified...]\
+     \n   or: {argv0} -o difference.png original modified\n\n\
        Compares first image against subsequent images, and outputs\n\
        1/SSIM-1 difference for each of them in order (0 = identical).\n\n\
        Images must have identical size, but may have different gamma & depth.\n\
@@ -177,14 +177,32 @@ fn write_ssim_maps(
                 }
             })
             .collect();
-        lodepng::encode32_file(
-            format!("{map_output_file}-{n}.png"),
+        write_png_rgba(
+            &format!("{map_output_file}-{n}.png"),
             &out,
             map_meta.map.width(),
             map_meta.map.height(),
         )
         .map_err(|e| format!("Can't write {map_output_file}: {e}"))
     })?;
+    Ok(())
+}
+
+fn write_png_rgba(
+    path: &str,
+    data: &[rgb::RGBA8],
+    width: usize,
+    height: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use rgb::ComponentBytes;
+
+    let file = std::io::BufWriter::new(std::fs::File::create(path)?);
+    let mut encoder = png::Encoder::new(file, width as u32, height as u32);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header()?;
+    writer.write_image_data(data.as_bytes())?;
+    writer.finish()?;
     Ok(())
 }
 

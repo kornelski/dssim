@@ -4,36 +4,23 @@
 
 pub use dssim_core::*;
 use imgref::Img;
-use load_image::ImageData;
 use std::path::Path;
 
-fn load(attr: &Dssim, path: &Path) -> Result<DssimImage<f32>, load_image::Error> {
-    let img = load_image::load_path(path)?;
-    Ok(match img.bitmap {
-        ImageData::RGB8(ref bitmap) => {
-            attr.create_image(&Img::new(bitmap.to_rgblu(), img.width, img.height))
-        }
-        ImageData::RGB16(ref bitmap) => {
-            attr.create_image(&Img::new(bitmap.to_rgblu(), img.width, img.height))
-        }
-        ImageData::RGBA8(ref bitmap) => {
-            attr.create_image(&Img::new(bitmap.to_rgbaplu(), img.width, img.height))
-        }
-        ImageData::RGBA16(ref bitmap) => {
-            attr.create_image(&Img::new(bitmap.to_rgbaplu(), img.width, img.height))
-        }
-        ImageData::GRAY8(ref bitmap) => {
-            attr.create_image(&Img::new(bitmap.to_rgblu(), img.width, img.height))
-        }
-        ImageData::GRAY16(ref bitmap) => {
-            attr.create_image(&Img::new(bitmap.to_rgblu(), img.width, img.height))
-        }
-        ImageData::GRAYA8(ref bitmap) => {
-            attr.create_image(&Img::new(bitmap.to_rgbaplu(), img.width, img.height))
-        }
-        ImageData::GRAYA16(ref bitmap) => {
-            attr.create_image(&Img::new(bitmap.to_rgbaplu(), img.width, img.height))
-        }
+pub mod load;
+
+use load::PixelData;
+
+fn load_impl(attr: &Dssim, path: &Path) -> Result<DssimImage<f32>, load::LoadError> {
+    let (width, height, pixels) = load::load_path(path)?;
+    Ok(match pixels {
+        PixelData::Rgb8(ref bm) => attr.create_image(&Img::new(bm.to_rgblu(), width, height)),
+        PixelData::Rgb16(ref bm) => attr.create_image(&Img::new(bm.to_rgblu(), width, height)),
+        PixelData::Rgba8(ref bm) => attr.create_image(&Img::new(bm.to_rgbaplu(), width, height)),
+        PixelData::Rgba16(ref bm) => attr.create_image(&Img::new(bm.to_rgbaplu(), width, height)),
+        PixelData::Gray8(ref bm) => attr.create_image(&Img::new(bm.to_rgblu(), width, height)),
+        PixelData::Gray16(ref bm) => attr.create_image(&Img::new(bm.to_rgblu(), width, height)),
+        PixelData::GrayA8(ref bm) => attr.create_image(&Img::new(bm.to_rgbaplu(), width, height)),
+        PixelData::GrayA16(ref bm) => attr.create_image(&Img::new(bm.to_rgbaplu(), width, height)),
     }
     .expect("infallible"))
 }
@@ -43,6 +30,6 @@ fn load(attr: &Dssim, path: &Path) -> Result<DssimImage<f32>, load_image::Error>
 pub fn load_image(
     attr: &Dssim,
     path: impl AsRef<Path>,
-) -> Result<DssimImage<f32>, load_image::Error> {
-    load(attr, path.as_ref())
+) -> Result<DssimImage<f32>, load::LoadError> {
+    load_impl(attr, path.as_ref())
 }
