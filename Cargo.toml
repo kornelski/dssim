@@ -30,7 +30,7 @@ zune-jpeg = "0.5"
 moxcms = "0.8"
 crossbeam-channel = "0.5.15"
 ordered-channel = { version = "1.2.0" }
-zenbitmaps = { path = "../zenbitmaps", features = ["rgb"] } # TODO: publish or use git dep before merge
+zenbitmaps = { git = "https://github.com/imazen/zenbitmaps.git", rev = "818992c", features = ["rgb"] }
 
 [features]
 default = ["threads", "dssim-core/default", "no-macos-vimage", "fma"]
