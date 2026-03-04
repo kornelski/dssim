@@ -23,10 +23,10 @@ pub(crate) fn uninit_f32_vec(len: usize) -> Vec<f32> {
 #[cfg(all(target_os = "macos", not(feature = "no-macos-vimage")))]
 mod mac {
     use super::KERNEL;
-    use crate::ffi::vImageConvolve_PlanarF;
-    use crate::ffi::vImagePixelCount;
     use crate::ffi::vImage_Buffer;
     use crate::ffi::vImage_Flags::kvImageEdgeExtend;
+    use crate::ffi::vImageConvolve_PlanarF;
+    use crate::ffi::vImagePixelCount;
     use imgref::*;
 
     pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [f32]) -> ImgVec<f32> {

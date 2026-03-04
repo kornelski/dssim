@@ -1,9 +1,9 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use crate::image::ToRGB;
 use crate::image::RGBAPLU;
 use crate::image::RGBLU;
+use crate::image::ToRGB;
 #[cfg(not(feature = "threads"))]
 use crate::lieon as rayon;
 use imgref::*;
@@ -98,7 +98,7 @@ fn cbrt_poly(x: f32) -> f32 {
 // ── AVX2+FMA SIMD path ──────────────────────────────────────────────
 #[cfg(all(feature = "fma", target_arch = "x86_64"))]
 mod simd {
-    use super::{cbrt_poly, GBitmap, ToLAB, EPSILON, K, RGBLU};
+    use super::{EPSILON, GBitmap, K, RGBLU, ToLAB, cbrt_poly};
     #[cfg(not(feature = "threads"))]
     use crate::lieon::prelude::*;
     use archmage::prelude::*;

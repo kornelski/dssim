@@ -100,9 +100,11 @@ pub fn new() -> Dssim {
 
 impl DssimChan<f32> {
     pub fn new(bitmap: ImgVec<f32>, is_chroma: bool) -> Self {
-        debug_assert!(bitmap
-            .pixels()
-            .all(|i| i.is_finite() && i >= 0.0 && i <= 1.0));
+        debug_assert!(
+            bitmap
+                .pixels()
+                .all(|i| i.is_finite() && i >= 0.0 && i <= 1.0)
+        );
 
         Self {
             width: bitmap.width(),
@@ -670,10 +672,11 @@ fn poison() {
     let buf = vec![b, a, a, b, n, n, a, b, b, a, n, n, b, a, a, b, n];
     let img = ImgVec::new_stride(buf, 4, 3, 6);
     assert!(img.pixels().all(|p| p.r.is_finite() && p.a.is_finite()));
-    assert!(img
-        .as_ref()
-        .pixels()
-        .all(|p| p.g.is_finite() && p.b.is_finite()));
+    assert!(
+        img.as_ref()
+            .pixels()
+            .all(|p| p.g.is_finite() && p.b.is_finite())
+    );
 
     let d = new();
     let sub_img1 = d.create_image(&img.as_ref()).unwrap();
