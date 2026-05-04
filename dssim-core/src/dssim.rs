@@ -129,7 +129,7 @@ impl DssimChan<f32> {
         if self.is_chroma {
             blur::blur_in_place(img.as_mut(), tmp);
         }
-        let (mu, _, _) = blur::blur(img.as_ref(), tmp).into_contiguous_buf();
+        let (mu, ..) = blur::blur(img.as_ref(), tmp).into_contiguous_buf();
         self.mu = mu;
 
         self.img_sq_blur = img.pixels().map(|i| {

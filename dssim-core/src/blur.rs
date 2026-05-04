@@ -71,19 +71,19 @@ mod portable {
         for y in 0..height {
             prev = curr;
             curr = next;
-            let next_start = (y+1)*src_stride;
-            next = if y+1 < height {&src[next_start..next_start+width]} else {curr};
+            let next_start = (y + 1) * src_stride;
+            next = if y + 1 < height { &src[next_start..next_start + width] } else { curr };
 
-            let dstrow = &mut dst[y*dst_stride..y*dst_stride+width];
+            let dstrow = &mut dst[y * dst_stride..y * dst_stride + width];
 
             dstrow[0].write(do3(prev, curr, next, 0, width));
-            for i in 1..width-1 {
+            for i in 1..width - 1 {
                 unsafe {
                     dstrow[i].write(do3f(prev, curr, next, i));
                 }
             }
             if width > 1 {
-                dstrow[width-1].write(do3(prev, curr, next, width-1, width));
+                dstrow[width - 1].write(do3(prev, curr, next, width - 1, width));
             }
         }
 
@@ -151,15 +151,16 @@ fn blur_one_stride() {
 fn blur_one_compare(src: ImgVec<f32>) {
     let mut src2 = src.clone();
 
-    let mut tmp = vec![-55.; 5*5]; tmp.clear();
+    let mut tmp = vec![-55.; 5 * 5];
+    tmp.clear();
     let dst = blur(src.as_ref(), tmp.spare_capacity_mut());
     blur_in_place(src2.as_mut(), tmp.spare_capacity_mut());
 
     assert_eq!(&src2.pixels().collect::<Vec<_>>(), dst.buf());
 
-    assert!((1./110. - dst.buf()[0]).abs() < 0.0001, "{dst:?}");
-    assert!((1./110. - dst.buf()[5*5-1]).abs() < 0.0001, "{dst:?}");
-    assert!((0.11354011 - dst.buf()[2*5+2]).abs() < 0.0001);
+    assert!((1. / 110. - dst.buf()[0]).abs() < 0.0001, "{dst:?}");
+    assert!((1. / 110. - dst.buf()[5 * 5 - 1]).abs() < 0.0001, "{dst:?}");
+    assert!((0.11354011 - dst.buf()[2 * 5 + 2]).abs() < 0.0001);
 }
 
 #[test]
@@ -167,9 +168,10 @@ fn blur_1x1() {
     let src = vec![1.];
     let mut src2 = src.clone();
 
-    let mut tmp = vec![-999.; 1]; tmp.clear();
-    let dst = blur(ImgRef::new(&src[..], 1,1), tmp.spare_capacity_mut());
-    blur_in_place(ImgRefMut::new(&mut src2[..], 1,1), tmp.spare_capacity_mut());
+    let mut tmp = vec![-999.; 1];
+    tmp.clear();
+    let dst = blur(ImgRef::new(&src[..], 1, 1), tmp.spare_capacity_mut());
+    blur_in_place(ImgRefMut::new(&mut src2[..], 1, 1), tmp.spare_capacity_mut());
 
     assert!((dst.buf()[0] - 1.).abs() < 0.00001);
     assert!((src2[0] - 1.).abs() < 0.00001);

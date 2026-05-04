@@ -53,9 +53,9 @@ fn cbrt_poly(x: f32) -> f32 {
     let y = poly[2].mul_add(x, poly[1]).mul_add(x, poly[0]);
 
     // 2x Halley's Method
-    let y3 = y*y*y;
+    let y3 = y * y * y;
     let y = y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x);
-    let y3 = y*y*y;
+    let y3 = y * y * y;
     let y = y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x);
     debug_assert!(y < 1.001);
     debug_assert!(x < 216. / 24389. || y >= 16. / 116.);
@@ -174,7 +174,7 @@ fn cbrts1() {
         let absdiff = (f64::from(expected) - f64::from(actual)).abs();
         assert!(absdiff < 0.0002, "{expected} - {actual} = {} @ {x}", expected - actual);
         if i % 400 == 0 {
-            println!("{:+0.3}", (expected - actual)*255.);
+            println!("{:+0.3}", (expected - actual) * 255.);
         }
         totaldiff += absdiff;
         maxdiff = maxdiff.max(absdiff);

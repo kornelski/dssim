@@ -1,7 +1,7 @@
 #![feature(test)]
 
 extern crate test;
-use dssim::{ToRGBAPLU, RGBAPLU};
+use dssim::{RGBAPLU, ToRGBAPLU};
 use imgref::{Img, ImgVec};
 use test::Bencher;
 

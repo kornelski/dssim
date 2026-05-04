@@ -1,6 +1,6 @@
-use std::ptr;
 use crate::Dssim;
 use rgb::{RGB8, RGBA8};
+use std::ptr;
 
 pub type DssimImage = crate::DssimImage<f32>;
 
@@ -17,7 +17,7 @@ pub unsafe extern "C" fn dssim_free(d: *mut Dssim) {
     if d.is_null() {
         return;
     }
-    let _ =  unsafe { Box::from_raw(d) };
+    let _ = unsafe { Box::from_raw(d) };
 }
 
 /// Take sRGB RGBA pixels (non-premultiplied, alpha last) and preprocess them into image format that can be compared.
@@ -32,7 +32,7 @@ pub unsafe extern "C" fn dssim_create_image_rgba(dssim: &mut Dssim, pixels: *con
     }
     let width = width as usize;
     let height = height as usize;
-    let pixels =  unsafe { std::slice::from_raw_parts(pixels.cast::<RGBA8>(), width * height) };
+    let pixels = unsafe { std::slice::from_raw_parts(pixels.cast::<RGBA8>(), width * height) };
     match dssim.create_image_rgba(pixels, width, height) {
         Some(img) => Box::into_raw(Box::new(img)),
         None => ptr::null_mut(),
@@ -51,7 +51,7 @@ pub unsafe extern "C" fn dssim_create_image_rgb(dssim: &mut Dssim, pixels: *cons
     }
     let width = width as usize;
     let height = height as usize;
-    let pixels =  unsafe { std::slice::from_raw_parts(pixels.cast::<RGB8>(), width * height) };
+    let pixels = unsafe { std::slice::from_raw_parts(pixels.cast::<RGB8>(), width * height) };
     match dssim.create_image_rgb(pixels, width, height) {
         Some(img) => Box::into_raw(Box::new(img)),
         None => ptr::null_mut(),
@@ -64,7 +64,7 @@ pub unsafe extern "C" fn dssim_free_image(img: *mut DssimImage) {
     if img.is_null() {
         return;
     }
-    let _ =  unsafe { Box::from_raw(img) };
+    let _ = unsafe { Box::from_raw(img) };
 }
 
 /// Compare these two images.
