@@ -117,7 +117,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{dssim:.8}\t{}", file2.display());
 
                 if let Some(map_output_file) = map_output_file {
-                    write_ssim_maps(ssim_maps, map_output_file)?;
+                    write_ssim_maps(&ssim_maps, map_output_file)?;
                 }
             }
             Ok(())
@@ -128,7 +128,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     })
 }
 
-fn write_ssim_maps(ssim_maps: Vec<dssim_core::SsimMap>, map_output_file: &str) -> Result<(), Box<dyn std::error::Error>> {
+fn write_ssim_maps(ssim_maps: &[dssim_core::SsimMap], map_output_file: &str) -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "threads")]
     let ssim_maps_iter = ssim_maps.par_iter();
     #[cfg(not(feature = "threads"))]

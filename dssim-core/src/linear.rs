@@ -58,11 +58,11 @@ impl GammaComponent for u8 {
         lut[*self as usize]
     }
 
-    #[inline]
+    #[inline(always)]
     fn make_lut() -> Self::Lut {
         let mut out = [0.; 256];
         for (i, o) in out.iter_mut().enumerate() {
-            *o = to_linear(i as f32 / f32::from(Self::max_value()));
+            *o = to_linear(i as f32 / f32::from(Self::MAX));
         }
         out
     }
@@ -70,17 +70,19 @@ impl GammaComponent for u8 {
 
 impl GammaComponent for u16 {
     type Lut = [f32; 65536];
+
     fn max_value() -> usize { 65535 }
+
     #[inline(always)]
     fn to_linear(&self, lut: &Self::Lut) -> f32 {
         lut[*self as usize]
     }
 
-    #[inline]
+    #[inline(always)]
     fn make_lut() -> Self::Lut {
         let mut out = [0.; 65536];
         for (i, o) in out.iter_mut().enumerate() {
-            *o = to_linear(i as f32 / f32::from(Self::max_value()));
+            *o = to_linear(i as f32 / f32::from(Self::MAX));
         }
         out
     }

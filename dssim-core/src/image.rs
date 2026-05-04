@@ -89,28 +89,28 @@ impl std::ops::Sub<Self> for LAB {
 }
 
 impl LAB {
-    pub(crate) fn avg(&self) -> f32 {
+    pub(crate) fn avg(self) -> f32 {
         (self.l + self.a + self.b) * (1. / 3.)
     }
 }
 
 impl From<LAB> for f64 {
-    fn from(other: LAB) -> f64 {
-        (f64::from(other.l) + f64::from(other.a) + f64::from(other.b)) * (1. / 3.)
+    fn from(other: LAB) -> Self {
+        (Self::from(other.l) + Self::from(other.a) + Self::from(other.b)) * (1. / 3.)
     }
 }
 
 impl From<LAB> for f32 {
-    fn from(other: LAB) -> f32 {
+    fn from(other: LAB) -> Self {
         other.avg()
     }
 }
 
-impl std::ops::Div<LAB> for LAB {
-    type Output = LAB;
+impl std::ops::Div<Self> for LAB {
+    type Output = Self;
 
     fn div(self, other: Self::Output) -> Self::Output {
-        LAB {
+        Self {
             l: self.l / other.l,
             a: self.a / other.a,
             b: self.b / other.b,
@@ -191,7 +191,7 @@ pub trait Downsample {
 }
 
 impl<T> Downsample for ImgVec<T> where T: Average4 + Copy + Sync + Send {
-    type Output = ImgVec<T>;
+    type Output = Self;
 
     fn downsample(&self) -> Option<Self::Output> {
         self.as_ref().downsample()

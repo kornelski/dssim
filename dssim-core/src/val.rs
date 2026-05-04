@@ -39,7 +39,7 @@ impl PartialEq<f64> for Dssim {
 }
 
 impl From<Dssim> for f64 {
-    fn from(s: Dssim) -> f64 {
+    fn from(s: Dssim) -> Self {
         s.0
     }
 }
@@ -61,7 +61,7 @@ impl<RHS: Into<f64>> Sub<RHS> for Dssim {
 }
 
 impl Sub<Dssim> for f64 {
-    type Output = f64;
+    type Output = Self;
 
     fn sub(self, r: Dssim) -> Self::Output {
         self.sub(r.0)
@@ -79,7 +79,7 @@ impl<RHS: Into<f64>> Add<RHS> for Dssim {
 }
 
 impl Add<Dssim> for f64 {
-    type Output = f64;
+    type Output = Self;
 
     fn add(self, r: Dssim) -> Self::Output {
         self.add(r.0)
@@ -87,7 +87,7 @@ impl Add<Dssim> for f64 {
 }
 
 impl<RHS: Into<f64>> Mul<RHS> for Dssim {
-    type Output = Dssim;
+    type Output = Self;
 
     fn mul(self, r: RHS) -> Self::Output {
         let rval = r.into();
@@ -115,7 +115,7 @@ impl<RHS: Into<f64>> Div<RHS> for Dssim {
 }
 
 impl Div<Dssim> for f64 {
-    type Output = f64;
+    type Output = Self;
 
     fn div(self, r: Dssim) -> Self::Output {
         debug_assert!(r.0 != 0.);

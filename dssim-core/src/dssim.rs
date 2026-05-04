@@ -335,7 +335,7 @@ impl Dssim {
         let mut weight_sum = 0.0;
         let mut ssim_maps = Vec::new();
         for (score, weight, map) in res {
-            ssim_sum += score * weight;
+            ssim_sum = score.mul_add(weight, ssim_sum);
             weight_sum += weight;
             if let Some(m) = map {
                 ssim_maps.push(m);
@@ -411,7 +411,7 @@ impl Dssim {
 }
 
 fn to_dssim(ssim: f64) -> f64 {
-    1.0 / ssim.max(std::f64::EPSILON) - 1.0
+    1.0 / ssim.max(f64::EPSILON) - 1.0
 }
 
 #[test]

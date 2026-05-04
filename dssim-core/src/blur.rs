@@ -97,9 +97,11 @@ mod portable {
         let c1 = i;
         let c2 = i + 1;
 
-        (prev.get_unchecked(c0)*KERNEL[0] + prev.get_unchecked(c1)*KERNEL[1] + prev.get_unchecked(c2)*KERNEL[2]) +
-        (curr.get_unchecked(c0)*KERNEL[3] + curr.get_unchecked(c1)*KERNEL[4] + curr.get_unchecked(c2)*KERNEL[5]) +
-        (next.get_unchecked(c0)*KERNEL[6] + next.get_unchecked(c1)*KERNEL[7] + next.get_unchecked(c2)*KERNEL[8])
+        unsafe {
+            (prev.get_unchecked(c0)*KERNEL[0] + prev.get_unchecked(c1)*KERNEL[1] + prev.get_unchecked(c2)*KERNEL[2]) +
+            (curr.get_unchecked(c0)*KERNEL[3] + curr.get_unchecked(c1)*KERNEL[4] + curr.get_unchecked(c2)*KERNEL[5]) +
+            (next.get_unchecked(c0)*KERNEL[6] + next.get_unchecked(c1)*KERNEL[7] + next.get_unchecked(c2)*KERNEL[8])
+        }
     }
 
     fn do3(prev: &[f32], curr: &[f32], next: &[f32], i: usize, width: usize) -> f32 {
@@ -256,6 +258,7 @@ fn blur_1x1() {
 }
 
 #[test]
+#[allow(clippy::suboptimal_flops)]
 fn blur_two() {
     let src = vec![
     0.,1.,1.,1.,
@@ -271,19 +274,19 @@ fn blur_two() {
 
     assert_eq!(&src2, dst.buf());
 
-    let z00 = 0.*KERNEL[0] + 0.*KERNEL[1] + 1.*KERNEL[2] +
-              0.*KERNEL[3] + 0.*KERNEL[4] + 1.*KERNEL[5] +
+    let z00 =                               1.*KERNEL[2] +
+                                            1.*KERNEL[5] +
               1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
-    let z01 =                                   0.*KERNEL[0] + 1.*KERNEL[1] + 1.*KERNEL[2] +
-                                                0.*KERNEL[3] + 1.*KERNEL[4] + 1.*KERNEL[5] +
-                                                1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
+    let z01 =                                              1.*KERNEL[1] + 1.*KERNEL[2] +
+                                                           1.*KERNEL[4] + 1.*KERNEL[5] +
+                                            1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
 
-    let z10 = 0.*KERNEL[0] + 0.*KERNEL[1] + 1.*KERNEL[2] +
+    let z10 =                               1.*KERNEL[2] +
               1.*KERNEL[3] + 1.*KERNEL[4] + 1.*KERNEL[5] +
               1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
-    let z11 =                                   0.*KERNEL[0] + 1.*KERNEL[1] + 1.*KERNEL[2] +
-                                                1.*KERNEL[3] + 1.*KERNEL[4] + 1.*KERNEL[5] +
-                                                1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
+    let z11 =                                              1.*KERNEL[1] + 1.*KERNEL[2] +
+                                            1.*KERNEL[3] + 1.*KERNEL[4] + 1.*KERNEL[5] +
+                                            1.*KERNEL[6] + 1.*KERNEL[7] + 1.*KERNEL[8];
     let exp = z00*KERNEL[0] + z00*KERNEL[1] + z01*KERNEL[2] +
               z00*KERNEL[3] + z00*KERNEL[4] + z01*KERNEL[5] +
               z10*KERNEL[6] + z10*KERNEL[7] + z11*KERNEL[8];

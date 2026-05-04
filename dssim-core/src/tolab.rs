@@ -49,14 +49,14 @@ impl ToLAB for RGBLU {
 #[inline]
 fn cbrt_poly(x: f32) -> f32 {
     // Polynomial approximation
-    let poly = [0.2, 1.51, -0.5];
-    let y = (poly[2] * x + poly[1]) * x + poly[0];
+    let poly = [0.2f32, 1.51, -0.5];
+    let y = poly[2].mul_add(x, poly[1]).mul_add(x, poly[0]);
 
     // 2x Halley's Method
     let y3 = y*y*y;
-    let y = y * (y3 + 2. * x) / (2. * y3 + x);
+    let y = y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x);
     let y3 = y*y*y;
-    let y = y * (y3 + 2. * x) / (2. * y3 + x);
+    let y = y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x);
     debug_assert!(y < 1.001);
     debug_assert!(x < 216. / 24389. || y >= 16. / 116.);
     y
@@ -97,7 +97,7 @@ impl ToLABBitmap for GBitmap {
         #[cfg(not(feature = "threads"))]
         let out = self.pixels().map(f).collect();
 
-        vec![Img::new(out, self.width(), self.height())]
+        vec![Self::new(out, self.width(), self.height())]
     }
 }
 
@@ -167,11 +167,11 @@ fn cbrts1() {
     let mut totaldiff = 0.;
     let mut maxdiff: f64 = 0.;
     for i in (0..=10001).rev() {
-        let x = (i as f64 / 10001.) as f32;
+        let x = (f64::from(i) / 10001.) as f32;
         let a = cbrt_poly(x);
         let actual = a * a * a;
         let expected = x;
-        let absdiff = (expected as f64 - actual as f64).abs();
+        let absdiff = (f64::from(expected) - f64::from(actual)).abs();
         assert!(absdiff < 0.0002, "{expected} - {actual} = {} @ {x}", expected - actual);
         if i % 400 == 0 {
             println!("{:+0.3}", (expected - actual)*255.);
@@ -188,8 +188,8 @@ fn cbrts2() {
     let mut totaldiff = 0.;
     let mut maxdiff: f64 = 0.;
     for i in (2000..=10001).rev() {
-        let x = i as f64 / 10001.;
-        let actual = cbrt_poly(x as f32) as f64;
+        let x = f64::from(i) / 10001.;
+        let actual = f64::from(cbrt_poly(x as f32));
         let expected = x.cbrt();
         let absdiff = (expected - actual).abs();
         totaldiff += absdiff;
