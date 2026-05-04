@@ -132,11 +132,11 @@ impl DssimChan<f32> {
         let (mu, ..) = blur::blur(img.as_ref(), tmp).into_contiguous_buf();
         self.mu = mu;
 
-        self.img_sq_blur = img.pixels().map(|i| {
-            debug_assert!(i <= 1.0 && i >= 0.0);
-            i * i
-        }).collect();
-        blur::blur_in_place(ImgRefMut::new(&mut self.img_sq_blur[..], width, height), tmp);
+        // Fused squared-image blur: blur_mul(img, img) does a single H5*V5 pass
+        // over img*img, avoiding both the materialized i*i vector and the
+        // separate in-place blur over it.
+        self.img_sq_blur = blur::blur_mul(img.as_ref(), img.as_ref(), tmp);
+        debug_assert_eq!(self.img_sq_blur.len(), width * height);
     }
 }
 
@@ -155,19 +155,10 @@ impl Channable<LAB, f32> for [DssimChan<f32>] {
 
 impl Channable<f32, f32> for DssimChan<f32> {
     fn img1_img2_blur(&self, modified: &Self, tmp32: &mut [MaybeUninit<f32>]) -> Vec<f32> {
+        let src = self.img.as_ref().unwrap();
         let modified_img = modified.img.as_ref().unwrap();
-
-        let mut out = self.img.as_ref().unwrap().pixels().zip(modified_img.pixels()).map(|(px1, px2)| {
-            debug_assert!(px1 <= 1.0 && px1 >= 0.0);
-            debug_assert!(px2 <= 1.0 && px2 >= 0.0);
-            px1 * px2
-        }).collect::<Vec<_>>();
-
-        let width = modified_img.width();
-        let height = modified_img.height();
-        debug_assert_eq!(out.len(), width * height);
-        blur::blur_in_place(ImgRefMut::new(&mut out, width, height), tmp32);
-        out
+        // Fused multiply+blur: avoids materializing the product as a Vec.
+        blur::blur_mul(src.as_ref(), modified_img.as_ref(), tmp32)
     }
 }
 
