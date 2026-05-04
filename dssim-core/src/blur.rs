@@ -5,84 +5,6 @@ const KERNEL: [f32; 9] = [
     0.095332, 0.118095, 0.095332,
 ];
 
-#[cfg(all(target_os = "macos", not(feature = "no-macos-vimage")))]
-mod mac {
-    use super::KERNEL;
-    use crate::ffi::vImageConvolve_PlanarF;
-    use crate::ffi::vImagePixelCount;
-    use crate::ffi::vImage_Buffer;
-    use crate::ffi::vImage_Flags::kvImageEdgeExtend;
-    use imgref::*;
-    use std::mem::MaybeUninit;
-
-    pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [MaybeUninit<f32>]) -> ImgVec<f32> {
-        let width = src.width();
-        let height = src.height();
-
-        let srcbuf = vImage_Buffer {
-            width: width as vImagePixelCount,
-            height: height as vImagePixelCount,
-            rowBytes: src.stride() * std::mem::size_of::<f32>(),
-            data: src.buf().as_ptr(),
-        };
-        let mut dst_vec = Vec::with_capacity(width * height);
-        let mut dstbuf = vImage_Buffer {
-            width: width as vImagePixelCount,
-            height: height as vImagePixelCount,
-            rowBytes: width * std::mem::size_of::<f32>(),
-            data: dst_vec.spare_capacity_mut().as_mut_ptr().cast(),
-        };
-
-        do_blur(&srcbuf, tmp, &mut dstbuf, width, height);
-        unsafe {
-            dst_vec.set_len(dst_vec.capacity());
-        }
-        ImgVec::new(dst_vec, width, height)
-    }
-
-    pub fn blur_in_place(mut srcdst: ImgRefMut<'_, f32>, tmp: &mut [MaybeUninit<f32>]) {
-        let srcbuf = vImage_Buffer {
-            width: srcdst.width() as vImagePixelCount,
-            height: srcdst.height() as vImagePixelCount,
-            rowBytes: srcdst.stride() * std::mem::size_of::<f32>(),
-            data: srcdst.buf().as_ptr(),
-        };
-        let mut dstbuf = vImage_Buffer {
-            width: srcdst.width() as vImagePixelCount,
-            height: srcdst.height() as vImagePixelCount,
-            rowBytes: srcdst.stride() * std::mem::size_of::<f32>(),
-            data: srcdst.buf_mut().as_mut_ptr(),
-        };
-
-        do_blur(&srcbuf, tmp, &mut dstbuf, srcdst.width(), srcdst.height());
-    }
-
-    fn do_blur(srcbuf: &vImage_Buffer<*const f32>, tmp: &mut [MaybeUninit<f32>], dstbuf: &mut vImage_Buffer<*mut f32>, width: usize, height: usize) {
-        assert_eq!(tmp.len(), width * height);
-
-        unsafe {
-            let mut tmpwrbuf = vImage_Buffer {
-                width: width as vImagePixelCount,
-                height: height as vImagePixelCount,
-                rowBytes: width * std::mem::size_of::<f32>(),
-                data: tmp.as_mut_ptr().cast::<f32>(),
-            };
-            let res = vImageConvolve_PlanarF(srcbuf, &mut tmpwrbuf, std::ptr::null_mut(), 0, 0, KERNEL.as_ptr(), 3, 3, 0., kvImageEdgeExtend);
-            assert_eq!(0, res);
-
-            let tmprbuf = vImage_Buffer {
-                width: width as vImagePixelCount,
-                height: height as vImagePixelCount,
-                rowBytes: width * std::mem::size_of::<f32>(),
-                data: tmp.as_ptr().cast::<f32>(),
-            };
-            let res = vImageConvolve_PlanarF(&tmprbuf, dstbuf, std::ptr::null_mut(), 0, 0, KERNEL.as_ptr(), 3, 3, 0., kvImageEdgeExtend);
-            assert_eq!(0, res);
-        }
-    }
-}
-
-#[cfg(not(all(target_os = "macos", not(feature = "no-macos-vimage"))))]
 mod portable {
     use super::KERNEL;
     use imgref::*;
@@ -184,10 +106,6 @@ mod portable {
     }
 }
 
-#[cfg(all(target_os = "macos", not(feature = "no-macos-vimage")))]
-pub use self::mac::*;
-
-#[cfg(not(all(target_os = "macos", not(feature = "no-macos-vimage"))))]
 pub use self::portable::*;
 
 #[cfg(test)]

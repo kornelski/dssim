@@ -28,6 +28,7 @@ lodepng = "3.12.2"
 [features]
 default = ["threads"]
 threads = ["dep:rayon"]
+# obsolete
 no-macos-vimage = []
 # internal for cargo-c only
 capi = []

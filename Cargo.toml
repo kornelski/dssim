@@ -31,7 +31,7 @@ crossbeam-channel = "0.5.15"
 ordered-channel = { version = "1.2.0" }
 
 [features]
-default = ["threads", "dssim-core/default", "no-macos-vimage"]
+default = ["threads", "dssim-core/default"]
 threads = ["dep:rayon", "dssim-core/threads"]
 avif = ["load_image/avif"]
 # Support comparing WebP files directly
@@ -39,7 +39,8 @@ webp = ["load_image/webp"]
 webp-static = ["load_image/webp-static"]
 # Decode JPEGs using libjpeg-turbo derivative (closer to the reference decoder)
 mozjpeg = ["load_image/mozjpeg"]
-no-macos-vimage = ["dssim-core/no-macos-vimage"]
+# obsolete
+no-macos-vimage = []
 
 [package.metadata.release]
 consolidate-commits = true

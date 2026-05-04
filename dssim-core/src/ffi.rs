@@ -6,21 +6,6 @@ use std::os::raw::c_ulong;
 
 pub type dssim_px_t = f32;
 
-#[link(name = "Accelerate", kind = "framework")]
-#[cfg(target_os = "macos")]
-unsafe extern "C" {
-    pub fn vImageConvolve_PlanarF(src: *const vImage_Buffer<*const f32>,
-                                  dest: *mut vImage_Buffer<*mut f32>,
-                                  tempBuffer: *mut f32,
-                                  srcOffsetToROI_X: vImagePixelCount,
-                                  srcOffsetToROI_Y: vImagePixelCount,
-                                  kernel: *const f32,
-                                  kernel_height: u32,
-                                  kernel_width: u32,
-                                  backgroundColor: Pixel_F,
-                                  flags: vImage_Flags) -> vImage_Error;
-}
-
 pub type vImagePixelCount = c_ulong;
 pub type vImage_Error = isize;
 pub type Pixel_F = f32;
