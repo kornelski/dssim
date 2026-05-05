@@ -477,6 +477,78 @@ fn png_compare() {
     assert!(res < 0.01);
 }
 
+/// Locked-value regression tests for the bundled `test1-sm.png` /
+/// `test2-sm.png` fixture pair. Each scenario asserts the DSSIM value
+/// produced at this branch's HEAD within `5×10⁻⁶` absolute tolerance.
+///
+/// The new fused 5-tap blur (with H1·H1-derived edge weights) is
+/// bit-equivalent to the upstream double-3×3 form modulo FP reordering,
+/// so the locked values match upstream `kornelski/dssim:main` to within
+/// ~10⁻⁷ on every scenario. The 5×10⁻⁶ bound covers:
+///   - upstream-vs-this-branch FP reordering drift (≤ 1.5×10⁻⁷),
+///   - SIMD-path drift from PR2's `tolab` SIMD layer (≤ 5.6×10⁻⁷),
+///   - SIMD ↔ scalar fallback divergence in PR2 (≤ 5.6×10⁻⁷),
+/// with ≈10× margin. A real correctness bug — matrix typo, dropped scale
+/// weight, sigma sign-flip, edge-handling regression — moves SSIM by
+/// ≥10⁻³, so this bound catches everything that matters while admitting
+/// only legitimate last-bit FP reordering. Also 2× tighter than the
+/// existing `image_gray` test's 1×10⁻⁵.
+///
+/// Identity (image vs itself) is locked to exactly zero — mathematical fact,
+/// not numerical.
+#[test]
+fn ssim_locked_values() {
+    use crate::linear::*;
+    use imgref::*;
+
+    /// 5×10⁻⁶ absolute tolerance. See module-level comment for derivation.
+    const ABS_TOL: f64 = 5e-6;
+
+    fn approx_eq(name: &str, got: f64, expected: f64) {
+        let diff = (got - expected).abs();
+        assert!(
+            diff <= ABS_TOL,
+            "{name}: got {got}, expected {expected} (abs diff={diff:.3e}, allowed={ABS_TOL:.0e})",
+        );
+    }
+
+    let d = new();
+    let file1 = lodepng::decode32_file("../tests/test1-sm.png").unwrap();
+    let file2 = lodepng::decode32_file("../tests/test2-sm.png").unwrap();
+    let buf1 = &file1.buffer.to_rgbaplu()[..];
+    let buf2 = &file2.buffer.to_rgbaplu()[..];
+    let img1 = || Img::new(buf1, file1.width, file1.height);
+    let img2 = || Img::new(buf2, file2.width, file2.height);
+
+    // 1. Full-image test1 vs test2 — headline DSSIM for this fixture pair.
+    //    Upstream produces 0.0009482581 for the same input; this branch's
+    //    1.34×10⁻⁷ drift is FMA / 3-channel-combine reordering only.
+    let a = d.create_image(&img1()).unwrap();
+    let b = d.create_image(&img2()).unwrap();
+    let (got, _) = d.compare(&a, b);
+    approx_eq("full test1 vs test2", f64::from(got), 0.0009483923725199794);
+
+    // 2. Identity: image vs itself must be exactly zero. Mathematical fact —
+    //    any drift here means a real bug, not numerical noise.
+    let a2 = d.create_image(&img1()).unwrap();
+    let b2 = d.create_image(&img1()).unwrap();
+    let (got, _) = d.compare(&a2, b2);
+    assert_eq!(f64::from(got), 0.0, "identity must be exactly 0, got {got}");
+
+    // 3. Sub-image regions of differing offsets — exercises the strided path
+    //    (sub_image returns a non-tightly-packed view).
+    let s1 = d.create_image(&img1().sub_image(2, 3, 44, 33)).unwrap();
+    let s2 = d.create_image(&img2().sub_image(17, 9, 44, 33)).unwrap();
+    let (got, _) = d.compare(&s1, s2);
+    approx_eq("sub [2,3,44x33] vs [17,9,44x33]", f64::from(got), 0.10810340934514495);
+
+    // 4. Sub-image regions with same offset — typical aligned-crop case.
+    let s1 = d.create_image(&img1().sub_image(22, 8, 61, 40)).unwrap();
+    let s2 = d.create_image(&img2().sub_image(22, 8, 61, 40)).unwrap();
+    let (got, _) = d.compare(&s1, s2);
+    approx_eq("sub [22,8,61x40] aligned", f64::from(got), 0.001675780079775091);
+}
+
 enum MaybeArc<'a, T> {
     Owned(Arc<T>),
     Borrowed(&'a T),
