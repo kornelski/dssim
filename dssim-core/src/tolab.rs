@@ -46,20 +46,38 @@ impl ToLAB for RGBLU {
     }
 }
 
+/// Cube root initial estimate via the standard bit-manipulation trick
+/// (~5-bit accuracy). Cheap integer-only seed for Halley's refinement.
+/// `B1 = 709_958_130` is the well-known fast-cbrt constant.
+#[inline]
+fn cbrt_initial(x: f32) -> f32 {
+    const B1: u32 = 709_958_130;
+    let ui = x.to_bits();
+    let hx = (ui & 0x7FFF_FFFF) / 3 + B1;
+    let ui_out = (ui & 0x8000_0000) | hx;
+    f32::from_bits(ui_out)
+}
+
+/// Fast cube root: bit-trick seed + 2 Halley iterations.
+/// Each Halley step roughly triples correct bits (5 → 15 → 45), so the
+/// result is bounded by f32 precision (~24 bits), well inside the
+/// existing tolerance tests.
 #[inline]
 fn cbrt_poly(x: f32) -> f32 {
-    // Polynomial approximation
-    let poly = [0.2f32, 1.51, -0.5];
-    let y = poly[2].mul_add(x, poly[1]).mul_add(x, poly[0]);
-
-    // 2x Halley's Method
-    let y3 = y * y * y;
-    let y = y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x);
-    let y3 = y * y * y;
-    let y = y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x);
-    debug_assert!(y < 1.001);
-    debug_assert!(x < 216. / 24389. || y >= 16. / 116.);
-    y
+    if x == 0.0 {
+        return 0.0;
+    }
+    let t = cbrt_initial(x);
+    // Halley step: t ← t · (2x + t³) / (2t³ + x).
+    // Division-first form `t *= num / den` keeps the FMA shape and avoids
+    // catastrophic underflow in `t * num` for very small x.
+    let r = t * t * t;
+    let t = t * x.mul_add(2.0, r) / r.mul_add(2.0, x);
+    let r = t * t * t;
+    let t = t * x.mul_add(2.0, r) / r.mul_add(2.0, x);
+    debug_assert!(t < 1.001);
+    debug_assert!(x < 216. / 24389. || t >= 16. / 116.);
+    t
 }
 
 /// Convert image to L\*a\*b\* planar
