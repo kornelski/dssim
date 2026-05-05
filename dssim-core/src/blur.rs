@@ -487,3 +487,9 @@ fn blur_two() {
     );
 }
 
+// Equivalence test against the upstream double-3×3 blur lives in a separate
+// file to keep this module focused on the algorithm. See
+// `blur/equiv_tests.rs` for the legacy reference impl and per-pixel parity
+// sweep.
+#[cfg(test)]
+mod equiv_tests;
