@@ -165,20 +165,33 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
 impl ToLABBitmap for ImgRef<'_, RGBAPLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self, |px, n|{
-            px.to_rgb(n).to_lab()
-        })
+        #[cfg(target_arch = "x86_64")]
+        if simd_x86::has_avx2_fma() {
+            // SAFETY: capability gate above guarantees AVX2+FMA at runtime.
+            return unsafe { simd_x86::rgbaplu_to_lab(*self) };
+        }
+        rgb_to_lab(*self, |px, n| px.to_rgb(n).to_lab())
     }
 }
 
 impl ToLABBitmap for ImgRef<'_, RGBLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self, |px, _n|{
-            px.to_lab()
-        })
+        #[cfg(target_arch = "x86_64")]
+        if simd_x86::has_avx2_fma() {
+            // SAFETY: capability gate above guarantees AVX2+FMA at runtime.
+            return unsafe { simd_x86::rgblu_to_lab(*self) };
+        }
+        rgb_to_lab(*self, |px, _n| px.to_lab())
     }
 }
+
+// SIMD `tolab` paths live in submodules to keep this file focused on the
+// scalar implementation and dispatch. Each submodule is runtime-dispatched
+// via its own capability-check (`has_avx2_fma()` / `has_neon()`).
+#[cfg(target_arch = "x86_64")]
+mod simd_x86;
+
 
 #[test]
 fn cbrts1() {
