@@ -16,6 +16,15 @@ use std::sync::atomic::{AtomicU8, Ordering};
 static CAP: AtomicU8 = AtomicU8::new(0);
 
 pub(super) fn has_neon() -> bool {
+    // Build-time shortcut: virtually every aarch64 target spec already
+    // enables NEON (it's the AArch64 ABI baseline). When `cfg!` reports
+    // it's on, we skip the atomic load on every dispatch — the function
+    // folds to `true` at compile time. The `is_aarch64_feature_detected!`
+    // path remains for the embedded profiles that ship without NEON
+    // (e.g. `aarch64-unknown-none-softfloat`).
+    if cfg!(target_feature = "neon") {
+        return true;
+    }
     match CAP.load(Ordering::Relaxed) {
         1 => true,
         2 => false,

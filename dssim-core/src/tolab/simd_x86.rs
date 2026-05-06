@@ -16,6 +16,15 @@ use std::sync::atomic::{AtomicU8, Ordering};
 static CAP: AtomicU8 = AtomicU8::new(0);
 
 pub(super) fn has_avx2_fma() -> bool {
+    // Build-time shortcut: when the binary is compiled with
+    // `-C target-feature=+avx2,+fma` (or `-C target-cpu=x86-64-v3`),
+    // these features are statically present on every CPU that can
+    // actually run the binary. The two `cfg!` checks fold to constants,
+    // so this whole function collapses to `true` and the atomic load
+    // on the dispatch path is eliminated.
+    if cfg!(target_feature = "avx2") && cfg!(target_feature = "fma") {
+        return true;
+    }
     match CAP.load(Ordering::Relaxed) {
         1 => true,
         2 => false,
