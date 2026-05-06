@@ -170,6 +170,11 @@ impl ToLABBitmap for ImgRef<'_, RGBAPLU> {
             // SAFETY: capability gate above guarantees AVX2+FMA at runtime.
             return unsafe { simd_x86::rgbaplu_to_lab(*self) };
         }
+        #[cfg(target_arch = "aarch64")]
+        if simd_neon::has_neon() {
+            // SAFETY: capability gate above guarantees NEON at runtime.
+            return unsafe { simd_neon::rgbaplu_to_lab(*self) };
+        }
         rgb_to_lab(*self, |px, n| px.to_rgb(n).to_lab())
     }
 }
@@ -182,6 +187,11 @@ impl ToLABBitmap for ImgRef<'_, RGBLU> {
             // SAFETY: capability gate above guarantees AVX2+FMA at runtime.
             return unsafe { simd_x86::rgblu_to_lab(*self) };
         }
+        #[cfg(target_arch = "aarch64")]
+        if simd_neon::has_neon() {
+            // SAFETY: capability gate above guarantees NEON at runtime.
+            return unsafe { simd_neon::rgblu_to_lab(*self) };
+        }
         rgb_to_lab(*self, |px, _n| px.to_lab())
     }
 }
@@ -192,6 +202,8 @@ impl ToLABBitmap for ImgRef<'_, RGBLU> {
 #[cfg(target_arch = "x86_64")]
 mod simd_x86;
 
+#[cfg(target_arch = "aarch64")]
+mod simd_neon;
 
 #[test]
 fn cbrts1() {
