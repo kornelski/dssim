@@ -27,6 +27,21 @@ pub(super) fn has_avx2_fma() -> bool {
     }
 }
 
+/// Test helper: run `cbrt_x8` on 8 scalar inputs and return 8 scalar outputs.
+/// SAFETY: caller must guarantee AVX2+FMA at runtime.
+#[cfg(test)]
+#[target_feature(enable = "avx2,fma")]
+pub(super) unsafe fn cbrt_x8_test(input: [f32; 8]) -> [f32; 8] {
+    // SAFETY: `input` is a fully-initialized stack array of 8 f32; the load
+    // reads exactly 8 f32 in bounds.
+    let v = unsafe { _mm256_loadu_ps(input.as_ptr()) };
+    let r = cbrt_x8(v);
+    let mut out = [0.0f32; 8];
+    // SAFETY: `out` is a stack array of 8 f32; the store writes exactly 8 in bounds.
+    unsafe { _mm256_storeu_ps(out.as_mut_ptr(), r) };
+    out
+}
+
 /// 8-wide cube root: same polynomial seed + 2 Halley iterations as the
 /// scalar `cbrt_poly`, lifted onto __m256. Result is within 1 ULP of
 /// `f32::cbrt` over [0, 1]. Pure value-compute — every intrinsic here is

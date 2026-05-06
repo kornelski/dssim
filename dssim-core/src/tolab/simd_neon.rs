@@ -27,6 +27,21 @@ pub(super) fn has_neon() -> bool {
     }
 }
 
+/// Test helper: run `cbrt_x4` on 4 scalar inputs and return 4 scalar outputs.
+/// SAFETY: caller must guarantee NEON at runtime.
+#[cfg(test)]
+#[target_feature(enable = "neon")]
+pub(super) unsafe fn cbrt_x4_test(input: [f32; 4]) -> [f32; 4] {
+    // SAFETY: `input` is a fully-initialized stack [f32; 4]; the load reads
+    // exactly 4 in-bounds f32s.
+    let v = unsafe { vld1q_f32(input.as_ptr()) };
+    let r = cbrt_x4(v);
+    let mut out = [0.0f32; 4];
+    // SAFETY: `out` is a stack [f32; 4]; the store writes 4 in-bounds f32s.
+    unsafe { vst1q_f32(out.as_mut_ptr(), r) };
+    out
+}
+
 /// 4-wide cube root. Same polynomial seed + 2 Halley iterations as the
 /// scalar `cbrt_poly`; result within ~1 ULP of `f32::cbrt` on [0, 1].
 /// Note: NEON `vfmaq_f32(a, b, c)` computes `a + b·c` (addend first).
