@@ -132,6 +132,68 @@ fn to_lab_x8(r: __m256, g: __m256, b: __m256) -> (__m256, __m256, __m256) {
     (l, a, b_out)
 }
 
+/// AOS → SOA deinterleave for 8 RGB-f32 pixels (24 floats / 3 ymm vectors).
+///
+/// `RGB<f32>` is `#[repr(C)]` (verified in upstream `rgb-0.8.53/src/formats/rgb.rs`),
+/// so 8 pixels load as three contiguous ymm vectors:
+/// - `v0 = [R0 G0 B0 R1 G1 B1 R2 G2]` (lanes 0..7)
+/// - `v1 = [B2 R3 G3 B3 R4 G4 B4 R5]`
+/// - `v2 = [G5 B5 R6 G6 B6 R7 G7 B7]`
+///
+/// Per channel: three `vpermps` lift the wanted lanes into the matching
+/// output positions, then two `vblendps` merge the three contributions.
+/// LLVM further folds shared `vpermps` work and substitutes the cheaper
+/// `vshufps` / `vpermpd` where possible, ending around 11 ops + 3 loads
+/// per chunk — versus ~45 µops (24 `vmovss` + 21 `vinsertps` + 3
+/// `vinsertf128`) emitted by LLVM's autovectorized scalar staging path.
+/// Microbench (Zen 4, single-thread, min of 30): RGBLU `to_lab` drops from
+/// ~24 cyc/px to ~22 cyc/px at 1024², and 28→27 cyc/px at 2048².
+///
+/// SAFETY: caller must hold an AVX2-feature region (provided by the outer
+/// `#[target_feature(enable = "avx2,fma")]`); `ptr` must be valid for 24
+/// contiguous in-bounds `f32` reads.
+#[inline]
+#[target_feature(enable = "avx2")]
+unsafe fn deinterleave_rgb_f32_x8(ptr: *const f32) -> (__m256, __m256, __m256) {
+    // SAFETY: caller guarantees `ptr` covers 24 contiguous in-bounds f32.
+    let (v0, v1, v2) = unsafe {
+        (
+            _mm256_loadu_ps(ptr),
+            _mm256_loadu_ps(ptr.add(8)),
+            _mm256_loadu_ps(ptr.add(16)),
+        )
+    };
+
+    // R lives at: v0 lanes [0,3,6], v1 lanes [1,4,7], v2 lanes [2,5].
+    let r_v0 = _mm256_permutevar8x32_ps(v0, _mm256_setr_epi32(0, 3, 6, 0, 0, 0, 0, 0));
+    let r_v1 = _mm256_permutevar8x32_ps(v1, _mm256_setr_epi32(0, 0, 0, 1, 4, 7, 0, 0));
+    let r_v2 = _mm256_permutevar8x32_ps(v2, _mm256_setr_epi32(0, 0, 0, 0, 0, 0, 2, 5));
+    // 0b00_111_000 = lanes 3,4,5 from r_v1; rest from r_v0.
+    let r = _mm256_blend_ps::<0b0011_1000>(r_v0, r_v1);
+    // 0b11_000_000 = lanes 6,7 from r_v2; rest stays.
+    let r = _mm256_blend_ps::<0b1100_0000>(r, r_v2);
+
+    // G lives at: v0 lanes [1,4,7], v1 lanes [2,5], v2 lanes [0,3,6].
+    let g_v0 = _mm256_permutevar8x32_ps(v0, _mm256_setr_epi32(1, 4, 7, 0, 0, 0, 0, 0));
+    let g_v1 = _mm256_permutevar8x32_ps(v1, _mm256_setr_epi32(0, 0, 0, 2, 5, 0, 0, 0));
+    let g_v2 = _mm256_permutevar8x32_ps(v2, _mm256_setr_epi32(0, 0, 0, 0, 0, 0, 3, 6));
+    // 0b00_011_000 = lanes 3,4 from g_v1; rest from g_v0.
+    let g = _mm256_blend_ps::<0b0001_1000>(g_v0, g_v1);
+    // 0b11_100_000 = lanes 5,6,7 from g_v2.
+    let g = _mm256_blend_ps::<0b1110_0000>(g, g_v2);
+
+    // B lives at: v0 lanes [2,5], v1 lanes [0,3,6], v2 lanes [1,4,7].
+    let b_v0 = _mm256_permutevar8x32_ps(v0, _mm256_setr_epi32(2, 5, 0, 0, 0, 0, 0, 0));
+    let b_v1 = _mm256_permutevar8x32_ps(v1, _mm256_setr_epi32(0, 0, 0, 3, 6, 0, 0, 0));
+    let b_v2 = _mm256_permutevar8x32_ps(v2, _mm256_setr_epi32(0, 0, 0, 0, 0, 1, 4, 7));
+    // 0b00_011_100 = lanes 2,3,4 from b_v1; rest from b_v0.
+    let b = _mm256_blend_ps::<0b0001_1100>(b_v0, b_v1);
+    // 0b11_100_000 = lanes 5,6,7 from b_v2.
+    let b = _mm256_blend_ps::<0b1110_0000>(b, b_v2);
+
+    (r, g, b)
+}
+
 /// Process one row of RGBLU pixels in 8-pixel chunks; scalar tail.
 /// `l_row`, `a_row`, `b_row` are uninitialized; every cell in `[..width]`
 /// is written before this returns.
@@ -145,27 +207,16 @@ fn rgblu_row(
 ) {
     let chunks = width / 8;
 
-    let mut r_arr = [0.0f32; 8];
-    let mut g_arr = [0.0f32; 8];
-    let mut b_arr = [0.0f32; 8];
-
     for c in 0..chunks {
         let base = c * 8;
-        for i in 0..8 {
-            let p = in_row[base + i];
-            r_arr[i] = p.r;
-            g_arr[i] = p.g;
-            b_arr[i] = p.b;
-        }
-        // SAFETY: each *_arr is a fully-initialized stack [f32; 8]; the
-        // load reads exactly 8 in-bounds f32. The store writes 8 f32 at
-        // `*_row[base..base+8]`, which is in bounds because
-        // `base + 8 ≤ chunks * 8 ≤ width` and each row slice has length
-        // `width` (asserted at the call site in `rgblu_to_lab`).
+        // SAFETY: in_row[base..base+8] is in bounds (base+8 ≤ chunks*8 ≤ width
+        // and in_row.len() ≥ width, asserted at the call site). RGB<f32> is
+        // #[repr(C)] with fields (r, g, b) so 8 RGB pixels = 24 contiguous
+        // f32. Stores write 8 f32 each at *_row[base..base+8], in bounds for
+        // the same reason.
         unsafe {
-            let r = _mm256_loadu_ps(r_arr.as_ptr());
-            let g = _mm256_loadu_ps(g_arr.as_ptr());
-            let b = _mm256_loadu_ps(b_arr.as_ptr());
+            let pixel_ptr = in_row.as_ptr().add(base).cast::<f32>();
+            let (r, g, b) = deinterleave_rgb_f32_x8(pixel_ptr);
             let (l, a, b_out) = to_lab_x8(r, g, b);
             _mm256_storeu_ps(l_row.as_mut_ptr().add(base).cast::<f32>(), l);
             _mm256_storeu_ps(a_row.as_mut_ptr().add(base).cast::<f32>(), a);
@@ -223,6 +274,12 @@ fn rgbaplu_row(
             a_arr[i] = p.a;
         }
         // SAFETY: same in-bounds argument as `rgblu_row`'s loads/stores.
+        // The RGBA hot path keeps the autovectorized scalar staging gather:
+        // a hand-rolled vpermps deinterleave wins on instruction count but
+        // loses on Zen 4 because the final cross-lane permute (needed to
+        // restore [c0..c7] order before the dither lane mask is applied)
+        // is port-5-bound — net ~1 % regression in microbench. The RGBLU
+        // path doesn't share this constraint, so it does use the hand-roll.
         let (r, g, b, a) = unsafe {
             (
                 _mm256_loadu_ps(r_arr.as_ptr()),
