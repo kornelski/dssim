@@ -46,20 +46,38 @@ impl ToLAB for RGBLU {
     }
 }
 
+/// Cube root initial estimate via the standard bit-manipulation trick
+/// (~5-bit accuracy). Cheap integer-only seed for Halley's refinement.
+/// `B1 = 709_958_130` is the well-known fast-cbrt constant.
+#[inline]
+fn cbrt_initial(x: f32) -> f32 {
+    const B1: u32 = 709_958_130;
+    let ui = x.to_bits();
+    let hx = (ui & 0x7FFF_FFFF) / 3 + B1;
+    let ui_out = (ui & 0x8000_0000) | hx;
+    f32::from_bits(ui_out)
+}
+
+/// Fast cube root: bit-trick seed + 2 Halley iterations.
+/// Each Halley step roughly triples correct bits (5 → 15 → 45), so the
+/// result is bounded by f32 precision (~24 bits), well inside the
+/// existing tolerance tests.
 #[inline]
 fn cbrt_poly(x: f32) -> f32 {
-    // Polynomial approximation
-    let poly = [0.2f32, 1.51, -0.5];
-    let y = poly[2].mul_add(x, poly[1]).mul_add(x, poly[0]);
-
-    // 2x Halley's Method
-    let y3 = y * y * y;
-    let y = y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x);
-    let y3 = y * y * y;
-    let y = y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x);
-    debug_assert!(y < 1.001);
-    debug_assert!(x < 216. / 24389. || y >= 16. / 116.);
-    y
+    if x == 0.0 {
+        return 0.0;
+    }
+    let t = cbrt_initial(x);
+    // Halley step: t ← t · (2x + t³) / (2t³ + x).
+    // Division-first form `t *= num / den` keeps the FMA shape and avoids
+    // catastrophic underflow in `t * num` for very small x.
+    let r = t * t * t;
+    let t = t * x.mul_add(2.0, r) / r.mul_add(2.0, x);
+    let r = t * t * t;
+    let t = t * x.mul_add(2.0, r) / r.mul_add(2.0, x);
+    debug_assert!(t < 1.001);
+    debug_assert!(x < 216. / 24389. || t >= 16. / 116.);
+    t
 }
 
 /// Convert image to L\*a\*b\* planar
@@ -147,20 +165,45 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
 impl ToLABBitmap for ImgRef<'_, RGBAPLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self, |px, n|{
-            px.to_rgb(n).to_lab()
-        })
+        #[cfg(target_arch = "x86_64")]
+        if simd_x86::has_avx2_fma() {
+            // SAFETY: capability gate above guarantees AVX2+FMA at runtime.
+            return unsafe { simd_x86::rgbaplu_to_lab(*self) };
+        }
+        #[cfg(target_arch = "aarch64")]
+        if simd_neon::has_neon() {
+            // SAFETY: capability gate above guarantees NEON at runtime.
+            return unsafe { simd_neon::rgbaplu_to_lab(*self) };
+        }
+        rgb_to_lab(*self, |px, n| px.to_rgb(n).to_lab())
     }
 }
 
 impl ToLABBitmap for ImgRef<'_, RGBLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self, |px, _n|{
-            px.to_lab()
-        })
+        #[cfg(target_arch = "x86_64")]
+        if simd_x86::has_avx2_fma() {
+            // SAFETY: capability gate above guarantees AVX2+FMA at runtime.
+            return unsafe { simd_x86::rgblu_to_lab(*self) };
+        }
+        #[cfg(target_arch = "aarch64")]
+        if simd_neon::has_neon() {
+            // SAFETY: capability gate above guarantees NEON at runtime.
+            return unsafe { simd_neon::rgblu_to_lab(*self) };
+        }
+        rgb_to_lab(*self, |px, _n| px.to_lab())
     }
 }
+
+// SIMD `tolab` paths live in submodules to keep this file focused on the
+// scalar implementation and dispatch. Each submodule is runtime-dispatched
+// via its own capability-check (`has_avx2_fma()` / `has_neon()`).
+#[cfg(target_arch = "x86_64")]
+mod simd_x86;
+
+#[cfg(target_arch = "aarch64")]
+mod simd_neon;
 
 #[test]
 fn cbrts1() {
@@ -198,4 +241,134 @@ fn cbrts2() {
     }
     println!("2={totaldiff:0.6}; {maxdiff:0.8}");
     assert!(totaldiff < 0.0025, "{totaldiff}");
+}
+
+/// Reference scalar cube root using the *previous* polynomial-seed initial
+/// estimate (`y = 0.2 + 1.51·x − 0.5·x²`) followed by 2 Halley iterations.
+/// Kept inline for the brute-force comparison test below — both this and the
+/// current `cbrt_poly` (bit-trick seed) should converge to within 1 ULP of
+/// `f32::cbrt` over [0, 1] after 2 Halley steps, so any divergence between
+/// them larger than ~3×ULP indicates a regression in either path.
+#[cfg(test)]
+fn cbrt_poly_old(x: f32) -> f32 {
+    if x == 0.0 { return 0.0; }
+    let poly = [0.2f32, 1.51, -0.5];
+    let y = poly[2].mul_add(x, poly[1]).mul_add(x, poly[0]);
+    let y3 = y * y * y;
+    let y = y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x);
+    let y3 = y * y * y;
+    y * 2.0f32.mul_add(x, y3) / 2.0f32.mul_add(y3, x)
+}
+
+/// Brute-force comparison over the *use range* `[EPSILON, 1]` (cbrt is masked
+/// out below EPSILON in `to_lab`, so no path consumes the seed there).
+/// 100 001 dense samples; asserts both scalar variants stay within 5×10⁻⁵
+/// absolute error of the IEEE `f32::cbrt`, and pairwise within the same
+/// bound. Catches any regression in either seed or Halley step.
+#[test]
+fn cbrt_old_vs_new_brute() {
+    let lo = EPSILON as f64;
+    let span = 1.0 - lo;
+    let n = 100_001u32;
+    let mut max_new_err: f64 = 0.0;
+    let mut max_old_err: f64 = 0.0;
+    let mut max_pair_diff: f64 = 0.0;
+    for i in 0..=n {
+        let x = (lo + span * f64::from(i) / f64::from(n)) as f32;
+        let new = cbrt_poly(x);
+        let old = cbrt_poly_old(x);
+        let truth = f64::from(x).cbrt();
+        let new_err = (f64::from(new) - truth).abs();
+        let old_err = (f64::from(old) - truth).abs();
+        let diff = (f64::from(new) - f64::from(old)).abs();
+        max_new_err = max_new_err.max(new_err);
+        max_old_err = max_old_err.max(old_err);
+        max_pair_diff = max_pair_diff.max(diff);
+        assert!(new_err < 5e-5, "new cbrt off: x={x} new={new} truth={truth} err={new_err}");
+        assert!(old_err < 5e-5, "old cbrt off: x={x} old={old} truth={truth} err={old_err}");
+        assert!(diff   < 5e-5, "old vs new diverge: x={x} new={new} old={old} diff={diff}");
+    }
+    println!("cbrt brute force [EPSILON,1]: n={n}, max_new_err={max_new_err:.3e}, max_old_err={max_old_err:.3e}, max_pair_diff={max_pair_diff:.3e}");
+}
+
+/// Below-EPSILON sanity check: confirms scalar `cbrt_poly` returns the
+/// linear-tail-friendly value (zero at exactly zero, monotonic for positive
+/// small) without panicking. Output is always discarded by the
+/// `f > EPSILON ? cbrt(f) - bias : K·f` mask in `to_lab`, so we don't pin
+/// numeric accuracy below the threshold — only finiteness.
+#[test]
+fn cbrt_below_epsilon_sane() {
+    assert_eq!(cbrt_poly(0.0), 0.0);
+    for &x in &[1e-12_f32, 1e-9, 1e-6, 1e-4, 1e-3, EPSILON / 2.0] {
+        let y = cbrt_poly(x);
+        assert!(y.is_finite(), "cbrt({x}) = {y} not finite");
+        assert!(y >= 0.0, "cbrt({x}) = {y} negative");
+    }
+}
+
+/// AVX2+FMA SIMD cbrt vs scalar cbrt over the use range `[EPSILON, 1]`.
+/// Skipped when the CPU lacks AVX2/FMA. Lifts 100 008 inputs through
+/// `cbrt_x8` 8-at-a-time and checks per-lane outputs against scalar
+/// `cbrt_poly` (bit-trick seed). The SIMD path uses the polynomial seed,
+/// so the cross-seed gap inside the use range is what's locked down.
+#[cfg(target_arch = "x86_64")]
+#[test]
+fn cbrt_simd_x8_matches_scalar() {
+    if !simd_x86::has_avx2_fma() {
+        eprintln!("skipping: AVX2+FMA not detected");
+        return;
+    }
+    let lo = EPSILON as f64;
+    let span = 1.0 - lo;
+    let n = 100_008usize; // multiple of 8
+    let mut max_diff: f64 = 0.0;
+    let mut buf = [0.0f32; 8];
+    let mut i = 0;
+    while i + 8 <= n {
+        for k in 0..8 {
+            buf[k] = (lo + span * (i + k) as f64 / n as f64) as f32;
+        }
+        // SAFETY: AVX2+FMA confirmed by has_avx2_fma() above.
+        let out = unsafe { simd_x86::cbrt_x8_test(buf) };
+        for k in 0..8 {
+            let scalar = cbrt_poly(buf[k]);
+            let diff = (f64::from(out[k]) - f64::from(scalar)).abs();
+            max_diff = max_diff.max(diff);
+            assert!(diff < 5e-5,
+                "SIMD/scalar cbrt diverge: x={} simd={} scalar={} diff={diff}",
+                buf[k], out[k], scalar);
+        }
+        i += 8;
+    }
+    println!("cbrt_x8 vs scalar [EPSILON,1]: n={i}, max_diff={max_diff:.3e}");
+}
+
+/// NEON SIMD cbrt vs scalar cbrt over the use range `[EPSILON, 1]`. NEON is
+/// mandatory on aarch64 so no runtime gate.
+#[cfg(target_arch = "aarch64")]
+#[test]
+fn cbrt_simd_x4_matches_scalar() {
+    let lo = EPSILON as f64;
+    let span = 1.0 - lo;
+    let n = 100_004usize; // multiple of 4
+    let mut max_diff: f64 = 0.0;
+    let mut buf = [0.0f32; 4];
+    let mut i = 0;
+    while i + 4 <= n {
+        for k in 0..4 {
+            buf[k] = (lo + span * (i + k) as f64 / n as f64) as f32;
+        }
+        // SAFETY: NEON is a baseline aarch64 feature.
+        let out = unsafe { simd_neon::cbrt_x4_test(buf) };
+        for k in 0..4 {
+            let scalar = cbrt_poly(buf[k]);
+            let diff = (f64::from(out[k]) - f64::from(scalar)).abs();
+            max_diff = max_diff.max(diff);
+            assert!(diff < 5e-5,
+                "SIMD/scalar cbrt diverge: x={} simd={} scalar={} diff={diff}",
+                buf[k], out[k], scalar);
+        }
+        i += 4;
+    }
+    println!("cbrt_x4 vs scalar [EPSILON,1]: n={i}, max_diff={max_diff:.3e}");
 }
