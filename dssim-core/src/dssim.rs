@@ -269,7 +269,7 @@ impl Dssim {
         let scaled_images_iter = modified_image.scale.iter().zip(original_image.scale.iter());
         let combined_iter = self.scale_weights.iter().copied().zip(scaled_images_iter).enumerate();
 
-        let res: Vec<_> = combined_iter.par_bridge().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
+        let mut res: Vec<_> = combined_iter.par_bridge().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
             let scale_width = original_image_scale.chan[0].width;
             let scale_height = original_image_scale.chan[0].height;
             let pixels = scale_width * scale_height;
@@ -309,13 +309,16 @@ impl Dssim {
             } else {
                 None
             };
-            (score, weight, map)
+            (n, score, weight, map)
         }).collect();
+        // par_bridge collects in arbitrary order; restore scale order so
+        // the weighted accumulation and `ssim_maps` are deterministic.
+        res.sort_unstable_by_key(|&(n, ..)| n);
 
         let mut ssim_sum = 0.0;
         let mut weight_sum = 0.0;
         let mut ssim_maps = Vec::new();
-        for (score, weight, map) in res {
+        for (_, score, weight, map) in res {
             ssim_sum = score.mul_add(weight, ssim_sum);
             weight_sum += weight;
             if let Some(m) = map {
@@ -595,3 +598,38 @@ fn poison() {
     let (res, _) = d.compare(&sub_img1, sub_img2);
     assert!(res < 0.000001);
 }
+
+/// `par_bridge` collects scale results in arbitrary order; `compare_inner`
+/// re-sorts by scale index so both the returned `SsimMap`s (largest scale
+/// first) and the weighted score are deterministic.
+#[test]
+fn ssim_maps_scale_order() {
+    use crate::linear::*;
+    use imgref::*;
+
+    let mut d = new();
+    d.set_save_ssim_maps(5);
+    let file1 = lodepng::decode32_file("../tests/test1-sm.png").unwrap();
+    let file2 = lodepng::decode32_file("../tests/test2-sm.png").unwrap();
+    let buf1 = &file1.buffer.to_rgbaplu()[..];
+    let buf2 = &file2.buffer.to_rgbaplu()[..];
+    let img1 = d.create_image(&Img::new(buf1, file1.width, file1.height)).unwrap();
+    let img2 = d.create_image(&Img::new(buf2, file2.width, file2.height)).unwrap();
+
+    let (score1, maps) = d.compare(&img1, &img2);
+    assert_eq!(maps.len(), 5);
+    // Largest saved map is the full-resolution scale; each successive map
+    // is a strictly smaller scale.
+    assert_eq!((maps[0].map.width(), maps[0].map.height()), (file1.width, file1.height));
+    for w in maps.windows(2) {
+        assert!(
+            w[0].map.buf().len() > w[1].map.buf().len(),
+            "maps not in descending scale order: {}x{} then {}x{}",
+            w[0].map.width(), w[0].map.height(), w[1].map.width(), w[1].map.height(),
+        );
+    }
+    // Same inputs -> identical score bits (deterministic accumulation).
+    let (score2, _) = d.compare(&img1, &img2);
+    assert_eq!(f64::from(score1).to_bits(), f64::from(score2).to_bits());
+}
+
