@@ -91,7 +91,7 @@ impl GammaComponent for u16 {
 impl<M> GammaPixel for RGBA<M> where M: Clone + Into<f32> + GammaComponent {
     type Component = M;
     type Output = RGBAPLU;
-    #[inline]
+    #[inline(always)]
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
         let a_unit = self.a.clone().into() / M::max_value() as f32;
         RGBAPLU {
@@ -107,7 +107,7 @@ impl<M> GammaPixel for BGRA<M> where M: Clone + Into<f32> + GammaComponent {
     type Component = M;
     type Output = RGBAPLU;
 
-    #[inline]
+    #[inline(always)]
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
         let a_unit = self.a.clone().into() / M::max_value() as f32;
         RGBAPLU {
@@ -122,7 +122,7 @@ impl<M> GammaPixel for BGRA<M> where M: Clone + Into<f32> + GammaComponent {
 impl<M> GammaPixel for RGB<M> where M: GammaComponent {
     type Component = M;
     type Output = RGBAPLU;
-    #[inline]
+    #[inline(always)]
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
         RGBAPLU {
             r: self.r.to_linear(gamma_lut),
@@ -137,7 +137,7 @@ impl<M> GammaPixel for BGR<M> where M: GammaComponent {
     type Component = M;
     type Output = RGBAPLU;
 
-    #[inline]
+    #[inline(always)]
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
         RGBAPLU {
             r: self.r.to_linear(gamma_lut),
@@ -152,6 +152,7 @@ impl<M> GammaPixel for GrayAlpha<M> where M: Copy + Clone + Into<f32> + GammaCom
     type Component = M;
     type Output = RGBAPLU;
 
+    #[inline(always)]
     fn to_linear(&self, gamma_lut: &M::Lut) -> RGBAPLU {
         let a_unit = self.value().into() / M::max_value() as f32;
         let g = self.value().to_linear(gamma_lut);

@@ -24,7 +24,6 @@
 
 use crate::blur;
 use crate::image::*;
-use crate::linear::ToRGBAPLU;
 pub use crate::tolab::ToLABBitmap;
 pub use crate::val::Dssim as Val;
 use imgref::*;
@@ -179,7 +178,7 @@ impl Dssim {
         if width * height < bitmap.len() {
             return None;
         }
-        let img = ImgVec::new(bitmap.to_rgbaplu(), width, height);
+        let img = GammaImage(ImgRef::new(bitmap, width, height));
         self.create_image(&img)
     }
 
@@ -191,7 +190,7 @@ impl Dssim {
         if width * height < bitmap.len() {
             return None;
         }
-        let img = ImgVec::new(bitmap.to_rgblu(), width, height);
+        let img = GammaImage(ImgRef::new(bitmap, width, height));
         self.create_image(&img)
     }
 

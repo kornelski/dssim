@@ -5,9 +5,10 @@
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use crate::image::ToRGB;
+use crate::image::{GammaImage, ToRGB};
 use crate::image::RGBAPLU;
 use crate::image::RGBLU;
+use crate::linear::{GammaComponent, GammaPixel};
 use imgref::*;
 #[cfg(not(feature = "threads"))]
 use crate::lieon as rayon;
@@ -149,13 +150,13 @@ fn gray_to_lab_row(src: &[f32], dst: &mut [f32]) {
 /// the tagged function — `#[target_feature]` does not propagate into
 /// rayon worker callbacks.
 #[inline(always)]
-fn rgb_to_lab_row_inline<T>(in_row: &[T], y: usize,
+fn rgb_to_lab_row_inline<T>(in_row: &[T], y: usize, context: &T::Context,
     l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
     where T: Copy + ToRGB
 {
     for x in 0..in_row.len() {
         let n = (x+11) ^ (y+11);
-        let (l,a,b) = in_row[x].to_rgb(n).to_lab();
+        let (l,a,b) = in_row[x].to_rgb(n, context).to_lab();
         l_row[x].write(l);
         a_row[x].write(a);
         b_row[x].write(b);
@@ -163,11 +164,11 @@ fn rgb_to_lab_row_inline<T>(in_row: &[T], y: usize,
 }
 
 #[inline(never)]
-fn rgb_to_lab_row_base<T>(in_row: &[T], y: usize,
+fn rgb_to_lab_row_base<T>(in_row: &[T], y: usize, context: &T::Context,
     l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
     where T: Copy + ToRGB
 {
-    rgb_to_lab_row_inline(in_row, y, l_row, a_row, b_row)
+    rgb_to_lab_row_inline(in_row, y, context, l_row, a_row, b_row)
 }
 
 /// AVX2+FMA clone of `rgb_to_lab_row_base`; same source, vectorized wider.
@@ -175,50 +176,50 @@ fn rgb_to_lab_row_base<T>(in_row: &[T], y: usize,
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2,fma")]
-fn rgb_to_lab_row_avx2<T>(in_row: &[T], y: usize,
+fn rgb_to_lab_row_avx2<T>(in_row: &[T], y: usize, context: &T::Context,
     l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
     where T: Copy + ToRGB
 {
-    rgb_to_lab_row_inline(in_row, y, l_row, a_row, b_row)
+    rgb_to_lab_row_inline(in_row, y, context, l_row, a_row, b_row)
 }
 
 #[cfg(target_arch = "x86_64")]
 #[inline(never)]
 #[target_feature(enable = "avx2,fma,avx512f,avx512bw,avx512dq,avx512vl")]
-fn rgb_to_lab_row_avx512<T>(in_row: &[T], y: usize,
+fn rgb_to_lab_row_avx512<T>(in_row: &[T], y: usize, context: &T::Context,
     l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
     where T: Copy + ToRGB
 {
-    rgb_to_lab_row_inline(in_row, y, l_row, a_row, b_row)
+    rgb_to_lab_row_inline(in_row, y, context, l_row, a_row, b_row)
 }
 
 /// Runtime dispatch: AVX-512, then AVX2/FMA, then baseline.
 /// aarch64 needs no clone — NEON is its baseline and autovectorizes.
 #[inline]
-fn rgb_to_lab_row<T>(in_row: &[T], y: usize,
+fn rgb_to_lab_row<T>(in_row: &[T], y: usize, context: &T::Context,
     l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
     where T: Copy + ToRGB
 {
     #[cfg(target_arch = "x86_64")]
     if crate::caps::has_avx512() {
         // SAFETY: has_avx512() confirmed AVX2/FMA and AVX-512 F/BW/DQ/VL support.
-        unsafe { rgb_to_lab_row_avx512(in_row, y, l_row, a_row, b_row) };
+        unsafe { rgb_to_lab_row_avx512(in_row, y, context, l_row, a_row, b_row) };
         return;
     }
     #[cfg(target_arch = "x86_64")]
     if crate::caps::has_avx2_fma() {
         // SAFETY: has_avx2_fma() confirmed AVX2+FMA support.
-        unsafe { rgb_to_lab_row_avx2(in_row, y, l_row, a_row, b_row) };
+        unsafe { rgb_to_lab_row_avx2(in_row, y, context, l_row, a_row, b_row) };
         return;
     }
-    rgb_to_lab_row_base(in_row, y, l_row, a_row, b_row)
+    rgb_to_lab_row_base(in_row, y, context, l_row, a_row, b_row)
 }
 
 /// Convert each row into three planar outputs.
 /// Rows are farmed to rayon; the per-row pixel loop lives in the
 /// dispatched `rgb_to_lab_row_*` fns so the feature gate applies to the
 /// actual math (a `#[target_feature]` here would only tag the outer fn).
-fn rgb_to_lab<T>(img: ImgRef<'_, T>) -> Vec<GBitmap>
+fn rgb_to_lab<T>(img: ImgRef<'_, T>, context: &T::Context) -> Vec<GBitmap>
     where T: Copy + ToRGB + Sync + Send + 'static
 {
     let width = img.width();
@@ -237,7 +238,7 @@ fn rgb_to_lab<T>(img: ImgRef<'_, T>) -> Vec<GBitmap>
     ).enumerate()
     .for_each(|(y, (l_row, (a_row, b_row)))| {
         let in_row = &img.rows().nth(y).unwrap()[0..width];
-        rgb_to_lab_row(in_row, y,
+        rgb_to_lab_row(in_row, y, context,
             &mut l_row[0..width], &mut a_row[0..width], &mut b_row[0..width]);
     });
 
@@ -256,14 +257,27 @@ fn rgb_to_lab<T>(img: ImgRef<'_, T>) -> Vec<GBitmap>
 impl ToLABBitmap for ImgRef<'_, RGBAPLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self)
+        rgb_to_lab(*self, &())
     }
 }
 
 impl ToLABBitmap for ImgRef<'_, RGBLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self)
+        rgb_to_lab(*self, &())
+    }
+}
+
+/// The private adapter uses the same LUT, alpha and Lab arithmetic as the
+/// materialized path, without its full-resolution linear pixel buffer.
+impl<P> ToLABBitmap for GammaImage<'_, P>
+where
+    P: GammaPixel<Output = RGBAPLU> + Copy + Sync + Send + 'static,
+    <P::Component as GammaComponent>::Lut: Sync,
+{
+    fn to_lab(&self) -> Vec<GBitmap> {
+        let lut = P::make_lut();
+        rgb_to_lab(self.0, &lut)
     }
 }
 
@@ -308,3 +322,7 @@ fn cbrts2() {
 #[cfg(test)]
 #[path = "tolab/dispatch_tests.rs"]
 mod dispatch_tests;
+
+#[cfg(test)]
+#[path = "tolab/fused_tests.rs"]
+mod fused_tests;

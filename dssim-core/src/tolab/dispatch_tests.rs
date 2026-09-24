@@ -2,8 +2,8 @@
 
 use super::*;
 
-fn check_rgb<T: Copy + ToRGB>(src: &[T]) {
-    type Kernel<T> = unsafe fn(&[T], usize, &mut [MaybeUninit<f32>], &mut [MaybeUninit<f32>], &mut [MaybeUninit<f32>]);
+pub(super) fn check_rgb<T: Copy + ToRGB>(src: &[T], context: &T::Context) {
+    type Kernel<T> = unsafe fn(&[T], usize, &<T as ToRGB>::Context, &mut [MaybeUninit<f32>], &mut [MaybeUninit<f32>], &mut [MaybeUninit<f32>]);
     let mut kernels: Vec<Kernel<T>> = vec![rgb_to_lab_row_base::<T>, rgb_to_lab_row::<T>];
     #[cfg(target_arch = "x86_64")]
     {
@@ -12,14 +12,14 @@ fn check_rgb<T: Copy + ToRGB>(src: &[T]) {
     }
     for y in [0, 7, 19] {
         let expected: Vec<_> = src.iter().enumerate().map(|(x, &px)| {
-            let (l, a, b) = px.to_rgb((x+11) ^ (y+11)).to_lab();
+            let (l, a, b) = px.to_rgb((x+11) ^ (y+11), context).to_lab();
             [l.to_bits(), a.to_bits(), b.to_bits()]
         }).collect();
         for kernel in &kernels {
             let mut out: [Vec<_>; 3] = std::array::from_fn(|_| vec![MaybeUninit::new(f32::NAN); src.len()]);
             let [l, a, b] = &mut out;
             // SAFETY: feature clones were included only after their CPU check.
-            unsafe { kernel(src, y, l, a, b) };
+            unsafe { kernel(src, y, context, l, a, b) };
             for (i, expected) in expected.iter().enumerate() {
                 for c in 0..3 {
                     // SAFETY: every slot was initialized even before the kernel.
@@ -38,8 +38,8 @@ fn rgb_rows_are_bit_exact_across_tiers() {
             let a = (i % 7) as f32 / 6.0;
             RGBAPLU::new(p.r * a, p.g * a, p.b * a, a)
         }).collect();
-        check_rgb(&rgb);
-        check_rgb(&rgba);
+        check_rgb(&rgb, &());
+        check_rgb(&rgba, &());
     }
 }
 

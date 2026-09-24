@@ -10,9 +10,9 @@ use std::path::Path;
 fn load(attr: &Dssim, path: &Path) -> Result<DssimImage<f32>, load_image::Error> {
     let img = load_image::load_path(path)?;
     Ok(match img.bitmap {
-        ImageData::RGB8(ref bitmap) => attr.create_image(&Img::new(bitmap.to_rgblu(), img.width, img.height)),
+        ImageData::RGB8(ref bitmap) => attr.create_image_rgb(bitmap, img.width, img.height),
         ImageData::RGB16(ref bitmap) => attr.create_image(&Img::new(bitmap.to_rgblu(), img.width, img.height)),
-        ImageData::RGBA8(ref bitmap) => attr.create_image(&Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
+        ImageData::RGBA8(ref bitmap) => attr.create_image_rgba(bitmap, img.width, img.height),
         ImageData::RGBA16(ref bitmap) => attr.create_image(&Img::new(bitmap.to_rgbaplu(), img.width, img.height)),
         ImageData::GRAY8(ref bitmap) => attr.create_image(&Img::new(bitmap.to_rgblu(), img.width, img.height)),
         ImageData::GRAY16(ref bitmap) => attr.create_image(&Img::new(bitmap.to_rgblu(), img.width, img.height)),
