@@ -1,5 +1,5 @@
-//! Safety: new unsafe calls only enter CPU-feature-checked clones. SSIM
-//! kernels write initialized slices; upstream temporary-buffer handling remains.
+//! Safety: unsafe calls only enter CPU-feature-checked clones. SSIM kernels
+//! write initialized slices; streaming scratch is described in dssim_rows.rs.
 
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
@@ -33,22 +33,14 @@ use rayon::prelude::*;
 use rgb::{RGB, RGBA};
 use std::borrow::Borrow;
 use std::mem::MaybeUninit;
-use std::ops;
 use std::ops::Deref;
 use std::sync::Arc;
-
-trait Channable<T, I> {
-    fn img1_img2_blur(&self, modified: &Self, tmp: &mut [MaybeUninit<I>]) -> Vec<T>;
-}
 
 #[derive(Clone)]
 struct DssimChan<T> {
     pub width: usize,
     pub height: usize,
-    pub img: Option<ImgVec<T>>,
-    pub mu: Vec<T>,
-    pub img_sq_blur: Vec<T>,
-    pub is_chroma: bool,
+    pub img: ImgVec<T>,
 }
 
 /// Configuration for the comparison
@@ -102,51 +94,26 @@ pub fn new() -> Dssim {
 }
 
 impl DssimChan<f32> {
-    pub fn new(bitmap: ImgVec<f32>, is_chroma: bool) -> Self {
-        debug_assert!(bitmap.pixels().all(|i| i.is_finite() && i >= 0.0 && i <= 1.0));
-
-        Self {
-            width: bitmap.width(),
-            height: bitmap.height(),
-            mu: Vec::new(),
-            img: Some(bitmap),
-            img_sq_blur: Vec::new(),
-            is_chroma,
-        }
-    }
-}
-
-impl DssimChan<f32> {
-    fn preprocess(&mut self, tmp: &mut [MaybeUninit<f32>]) {
-        let width = self.width;
-        let height = self.height;
+    /// Stores only the (optionally chroma-pre-blurred) image plane.
+    /// `mu`, `img_sq_blur`, and `img1_img2_blur` are derived at compare
+    /// time: keeping them persistent costs 8 more bytes per pixel per
+    /// channel, which dominates peak RSS for large images.
+    pub fn new(mut bitmap: ImgVec<f32>, is_chroma: bool, tmp: &mut [MaybeUninit<f32>]) -> Self {
+        let width = bitmap.width();
+        let height = bitmap.height();
         assert!(width > 0);
         assert!(height > 0);
+        debug_assert_eq!(width * height, bitmap.pixels().count());
+        debug_assert!(bitmap.pixels().all(|i| i.is_finite() && i >= 0.0 && i <= 1.0));
 
-        let img = self.img.as_mut().unwrap();
-        debug_assert_eq!(width * height, img.pixels().count());
-        debug_assert!(img.pixels().all(f32::is_finite));
-
-        if self.is_chroma {
-            blur::blur_in_place(img.as_mut(), tmp);
+        if is_chroma {
+            blur::blur_in_place(bitmap.as_mut(), tmp);
         }
-        let (mu, ..) = blur::blur(img.as_ref(), tmp).into_contiguous_buf();
-        self.mu = mu;
-
-        // Fused squared-image blur: blur_mul(img, img) does a single H5*V5 pass
-        // over img*img, avoiding both the materialized i*i vector and the
-        // separate in-place blur over it.
-        self.img_sq_blur = blur::blur_mul(img.as_ref(), img.as_ref(), tmp);
-        debug_assert_eq!(self.img_sq_blur.len(), width * height);
-    }
-}
-
-impl Channable<f32, f32> for DssimChan<f32> {
-    fn img1_img2_blur(&self, modified: &Self, tmp32: &mut [MaybeUninit<f32>]) -> Vec<f32> {
-        let src = self.img.as_ref().unwrap();
-        let modified_img = modified.img.as_ref().unwrap();
-        // Fused multiply+blur: avoids materializing the product as a Vec.
-        blur::blur_mul(src.as_ref(), modified_img.as_ref(), tmp32)
+        Self {
+            width,
+            height,
+            img: bitmap,
+        }
     }
 }
 
@@ -233,12 +200,9 @@ impl Dssim {
                     chan: lab.into_par_iter().with_max_len(1).enumerate().map(|(n,l)| {
                         let w = l.width();
                         let h = l.height();
-                        let mut ch = DssimChan::new(l, n > 0);
-
                         let pixels = w * h;
                         let mut tmp = Vec::with_capacity(pixels);
-                        ch.preprocess(&mut tmp.spare_capacity_mut()[..pixels]);
-                        ch
+                        DssimChan::new(l, n > 0, &mut tmp.spare_capacity_mut()[..pixels])
                     }).collect(),
                 }
             }
@@ -272,31 +236,7 @@ impl Dssim {
         let combined_iter = self.scale_weights.iter().copied().zip(scaled_images_iter).enumerate();
 
         let mut res: Vec<_> = combined_iter.par_bridge().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
-            let scale_width = original_image_scale.chan[0].width;
-            let scale_height = original_image_scale.chan[0].height;
-            let pixels = scale_width * scale_height;
-
-            let ssim_map = match original_image_scale.chan.len() {
-                3 => {
-                    // Compute the per-channel cross-blur (img1·img2 then blur) for L, a, b
-                    // in parallel — three independent blurs over disjoint memory.
-                    // Each channel gets its own tmp buffer.
-                    let img1_img2_blur: Vec<Vec<f32>> = (0..3usize).into_par_iter().map(|c| {
-                        let mut tmp_buf: Vec<f32> = Vec::with_capacity(pixels);
-                        let tmp = &mut tmp_buf.spare_capacity_mut()[..pixels];
-                        original_image_scale.chan[c]
-                            .img1_img2_blur(&modified_image_scale.chan[c], tmp)
-                    }).collect();
-                    Self::compare_scale_3ch(original_image_scale, modified_image_scale, &img1_img2_blur)
-                },
-                1 => {
-                    let mut tmp_buf: Vec<f32> = Vec::with_capacity(pixels);
-                    let tmp = &mut tmp_buf.spare_capacity_mut()[..pixels];
-                    let img1_img2_blur = original_image_scale.chan[0].img1_img2_blur(&modified_image_scale.chan[0], tmp);
-                    Self::compare_scale(&original_image_scale.chan[0], &modified_image_scale.chan[0], &img1_img2_blur)
-                },
-                _ => panic!(),
-            };
+            let ssim_map = Self::compare_scale_fused(original_image_scale, modified_image_scale);
 
             let sum = ssim_map.pixels().fold(0., |sum, i| sum + f64::from(i));
             let len = (ssim_map.width()*ssim_map.height()) as f64;
@@ -331,103 +271,8 @@ impl Dssim {
         (to_dssim(ssim_sum / weight_sum).into(), ssim_maps)
     }
 
-    /// 3-channel SSIM combine, scalar but unrolled across L/a/b. Reads the three
-    /// channels directly from the per-channel `mu` and `img_sq_blur` Vecs and the
-    /// three `img1_img2_blur` Vecs computed earlier in parallel — no LAB struct
-    /// interleaving, no zip-iterator overhead, and per-channel slices stay
-    /// cache-friendly. Algebraically identical to `compare_scale::<LAB>`.
-    #[inline(never)]
-    fn compare_scale_3ch(
-        original: &DssimChanScale<f32>,
-        modified: &DssimChanScale<f32>,
-        img1_img2_blur: &[Vec<f32>],
-    ) -> ImgVec<f32> {
-        let width = original.chan[0].width;
-        let height = original.chan[0].height;
-        let pixels = width * height;
 
-        let (o0, o1, o2) = (&original.chan[0], &original.chan[1], &original.chan[2]);
-        let (m0, m1, m2) = (&modified.chan[0], &modified.chan[1], &modified.chan[2]);
-
-        let o0_mu = &o0.mu[..pixels];
-        let o1_mu = &o1.mu[..pixels];
-        let o2_mu = &o2.mu[..pixels];
-        let m0_mu = &m0.mu[..pixels];
-        let m1_mu = &m1.mu[..pixels];
-        let m2_mu = &m2.mu[..pixels];
-        let o0_sq = &o0.img_sq_blur[..pixels];
-        let o1_sq = &o1.img_sq_blur[..pixels];
-        let o2_sq = &o2.img_sq_blur[..pixels];
-        let m0_sq = &m0.img_sq_blur[..pixels];
-        let m1_sq = &m1.img_sq_blur[..pixels];
-        let m2_sq = &m2.img_sq_blur[..pixels];
-        let i12_0 = &img1_img2_blur[0][..pixels];
-        let i12_1 = &img1_img2_blur[1][..pixels];
-        let i12_2 = &img1_img2_blur[2][..pixels];
-
-        let inputs = Ssim3Planes {
-            mu1: [o0_mu, o1_mu, o2_mu],
-            mu2: [m0_mu, m1_mu, m2_mu],
-            sq1: [o0_sq, o1_sq, o2_sq],
-            sq2: [m0_sq, m1_sq, m2_sq],
-            i12: [i12_0, i12_1, i12_2],
-        };
-
-        let mut map_out = vec![0.0; pixels];
-        map_out.as_mut_slice().par_chunks_mut(SSIM3_CHUNK).enumerate().for_each(|(ci, out)| {
-            ssim3_range(&inputs, ci * SSIM3_CHUNK, out);
-        });
-
-        ImgVec::new(map_out, width, height)
-    }
-
-    #[inline(never)]
-    fn compare_scale<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
-    where
-        L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
-        f32: From<L>,
-    {
-        assert_eq!(original.width, modified.width);
-        assert_eq!(original.height, modified.height);
-
-        let width = original.width;
-        let height = original.height;
-
-        let c1 = 0.01 * 0.01;
-        let c2 = 0.03 * 0.03;
-
-        debug_assert_eq!(original.mu.len(), modified.mu.len());
-        debug_assert_eq!(original.img_sq_blur.len(), modified.img_sq_blur.len());
-        debug_assert_eq!(img1_img2_blur.len(), original.mu.len());
-        debug_assert_eq!(img1_img2_blur.len(), original.img_sq_blur.len());
-
-        let mu_iter = original.mu.as_slice().par_iter().with_min_len(1<<10).cloned().zip_eq(modified.mu.as_slice().par_iter().with_min_len(1<<10).cloned());
-        let sq_iter = original.img_sq_blur.as_slice().par_iter().with_min_len(1<<10).cloned().zip_eq(modified.img_sq_blur.as_slice().par_iter().with_min_len(1<<10).cloned());
-        let map_out = img1_img2_blur.par_iter().with_min_len(1<<10).cloned().zip_eq(mu_iter).zip_eq(sq_iter)
-        .map(|((img1_img2_blur, (mu1, mu2)), (img1_sq_blur, img2_sq_blur))| {
-            let mu1mu1 = mu1 * mu1;
-            let mu1mu2 = mu1 * mu2;
-            let mu2mu2 = mu2 * mu2;
-            let mu1_sq: f32 = mu1mu1.into();
-            let mu2_sq: f32 = mu2mu2.into();
-            let mu1_mu2: f32 = mu1mu2.into();
-            let sigma1_sq: f32 = (img1_sq_blur - mu1mu1).into();
-            let sigma2_sq: f32 = (img2_sq_blur - mu2mu2).into();
-            let sigma12: f32 = (img1_img2_blur - mu1mu2).into();
-
-            2.0f32.mul_add(mu1_mu2, c1) * 2.0f32.mul_add(sigma12, c2) /
-                       ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
-        }).collect();
-
-        ImgVec::new(map_out, width, height)
-    }
 }
-
-/// Parallel chunk size for the SSIM map kernels: 4K pixels per rayon task
-/// keeps work-stealing granularity close to the old `with_min_len(1<<10)`
-/// split while giving each kernel call a run long enough to amortize the
-/// capability check.
-const SSIM3_CHUNK: usize = 1 << 12;
 
 /// Flat per-pixel inputs to the 3-channel SSIM map kernel: blurred means,
 /// blurred squared-image means, and cross-blurred products for each of the
@@ -721,3 +566,10 @@ fn ssim_maps_scale_order() {
 #[cfg(test)]
 #[path = "dssim_dispatch_tests.rs"]
 mod dispatch_tests;
+
+#[path = "dssim_rows.rs"]
+mod rows;
+
+#[cfg(test)]
+#[path = "dssim_memory_tests.rs"]
+mod memory_tests;

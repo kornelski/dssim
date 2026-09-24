@@ -10,7 +10,7 @@ fn ssim3_is_bit_exact_across_tiers() {
         if crate::caps::has_avx2_fma() { kernels.push(ssim3_range_avx2); }
         if crate::caps::has_avx512() { kernels.push(ssim3_range_avx512); }
     }
-    for n in [0, 1, 7, 8, 15, 16, 17, SSIM3_CHUNK + 13] {
+    for n in [0, 1, 7, 8, 15, 16, 17, 4096 + 13] {
         let planes: Vec<Vec<f32>> = (0..15).map(|seed| (0..n+3).map(|i| {
             let x = (i as u32).wrapping_mul(2_654_435_761).wrapping_add(seed);
             ((x ^ (x >> 16)) & 0xFFFF) as f32 / 65536.0
