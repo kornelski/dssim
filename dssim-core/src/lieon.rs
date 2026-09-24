@@ -88,3 +88,11 @@ impl<T> ParIntoIterLie<T> for Vec<T> {
         self.into_iter()
     }
 }
+
+impl ParIntoIterLie<usize> for std::ops::Range<usize> {
+    type IntoIter = Self;
+
+    fn into_par_iter(self) -> Self::IntoIter {
+        self
+    }
+}
