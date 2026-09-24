@@ -8,6 +8,7 @@ use imgref::*;
 #[cfg(not(feature = "threads"))]
 use crate::lieon as rayon;
 use rayon::prelude::*;
+use std::mem::MaybeUninit;
 
 const D65x: f32 = 0.9505;
 const D65y: f32 = 1.0;
@@ -101,9 +102,76 @@ impl ToLABBitmap for GBitmap {
     }
 }
 
+/// Per-pixel Lab conversion strategy for `rgb_to_lab`'s row kernels.
+/// `conv` MUST be `#[inline(always)]` in every impl: the row kernels are
+/// `#[target_feature]` clones, and only code inlined into them compiles
+/// with FMA — a non-inlined callee (e.g. a fat closure) silently runs at
+/// baseline features as libm `fmaf` calls.
+trait LabConv<T: Copy>: Sync + Send {
+    fn conv(&self, px: T, n: usize) -> (f32, f32, f32);
+}
+
+/// Per-row body shared by the baseline and AVX2+FMA row writers.
+/// `#[inline(always)]` so the `#[target_feature]` clone re-vectorizes the
+/// same body under its target features. The pixel loop must live inside
+/// the tagged function — `#[target_feature]` does not propagate into
+/// rayon worker callbacks.
+#[inline(always)]
+fn rgb_to_lab_row_inline<T, C>(in_row: &[T], y: usize, conv: &C,
+    l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
+    where T: Copy, C: LabConv<T>
+{
+    for x in 0..in_row.len() {
+        let n = (x+11) ^ (y+11);
+        let (l,a,b) = conv.conv(in_row[x], n);
+        l_row[x].write(l);
+        a_row[x].write(a);
+        b_row[x].write(b);
+    }
+}
+
 #[inline(never)]
-fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> Vec<GBitmap>
-    where F: Fn(T, usize) -> (f32, f32, f32) + Sync + Send + 'static
+fn rgb_to_lab_row_base<T, C>(in_row: &[T], y: usize, conv: &C,
+    l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
+    where T: Copy, C: LabConv<T>
+{
+    rgb_to_lab_row_inline(in_row, y, conv, l_row, a_row, b_row)
+}
+
+/// AVX2+FMA clone of `rgb_to_lab_row_base`; same source, vectorized wider.
+/// SAFETY: call only when `caps::has_avx2_fma()` has confirmed support.
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2,fma")]
+fn rgb_to_lab_row_avx2<T, C>(in_row: &[T], y: usize, conv: &C,
+    l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
+    where T: Copy, C: LabConv<T>
+{
+    rgb_to_lab_row_inline(in_row, y, conv, l_row, a_row, b_row)
+}
+
+/// Runtime dispatch: AVX2+FMA kernel when detected, baseline otherwise.
+/// aarch64 needs no clone — NEON is its baseline and autovectorizes.
+#[inline]
+fn rgb_to_lab_row<T, C>(in_row: &[T], y: usize, conv: &C,
+    l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
+    where T: Copy, C: LabConv<T>
+{
+    #[cfg(target_arch = "x86_64")]
+    if crate::caps::has_avx2_fma() {
+        // SAFETY: has_avx2_fma() confirmed AVX2+FMA support.
+        unsafe { rgb_to_lab_row_avx2(in_row, y, conv, l_row, a_row, b_row) };
+        return;
+    }
+    rgb_to_lab_row_base(in_row, y, conv, l_row, a_row, b_row)
+}
+
+/// Shared row writer: calls `conv` per pixel into three planar outputs.
+/// Rows are farmed to rayon; the per-row pixel loop lives in the
+/// dispatched `rgb_to_lab_row_*` fns so the feature gate applies to the
+/// actual math (a `#[target_feature]` here would only tag the outer fn).
+fn rgb_to_lab<T, C>(img: ImgRef<'_, T>, conv: &C) -> Vec<GBitmap>
+    where T: Copy + Sync + Send + 'static, C: LabConv<T>
 {
     let width = img.width();
     assert!(width > 0);
@@ -121,16 +189,8 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
     ).enumerate()
     .for_each(|(y, (l_row, (a_row, b_row)))| {
         let in_row = &img.rows().nth(y).unwrap()[0..width];
-        let l_row = &mut l_row[0..width];
-        let a_row = &mut a_row[0..width];
-        let b_row = &mut b_row[0..width];
-        for x in 0..width {
-            let n = (x+11) ^ (y+11);
-            let (l,a,b) = cb(in_row[x], n);
-            l_row[x].write(l);
-            a_row[x].write(a);
-            b_row[x].write(b);
-        }
+        rgb_to_lab_row(in_row, y, conv,
+            &mut l_row[0..width], &mut a_row[0..width], &mut b_row[0..width]);
     });
 
     unsafe { out_l.set_len(area) };
@@ -144,21 +204,34 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
     ]
 }
 
+struct RgbapluLab;
+struct RgbluLab;
+
+impl LabConv<RGBAPLU> for RgbapluLab {
+    #[inline(always)]
+    fn conv(&self, px: RGBAPLU, n: usize) -> (f32, f32, f32) {
+        px.to_rgb(n).to_lab()
+    }
+}
+
+impl LabConv<RGBLU> for RgbluLab {
+    #[inline(always)]
+    fn conv(&self, px: RGBLU, _n: usize) -> (f32, f32, f32) {
+        px.to_lab()
+    }
+}
+
 impl ToLABBitmap for ImgRef<'_, RGBAPLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self, |px, n|{
-            px.to_rgb(n).to_lab()
-        })
+        rgb_to_lab(*self, &RgbapluLab)
     }
 }
 
 impl ToLABBitmap for ImgRef<'_, RGBLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self, |px, _n|{
-            px.to_lab()
-        })
+        rgb_to_lab(*self, &RgbluLab)
     }
 }
 

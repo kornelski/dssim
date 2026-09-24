@@ -159,20 +159,22 @@ pub(crate) trait ToRGB {
 
 impl ToRGB for RGBAPLU {
     fn to_rgb(self, n: usize) -> RGBLU {
+        // Bit tests only read bits <32; u32 keeps vectorized compares in
+        // 32-bit lanes instead of usize-wide ones.
+        let n = n as u32;
         let mut r = self.r;
         let mut g = self.g;
         let mut b = self.b;
         let a = self.a;
-        if a < 255.0 {
-            if (n & 16) != 0 {
-                r += 1.0 - a;
-            }
-            if (n & 8) != 0 {
-                g += 1.0 - a; // assumes premultiplied alpha
-            }
-            if (n & 32) != 0 {
-                b += 1.0 - a;
-            }
+        let dither = if a < 255.0 { 1.0 - a } else { 0.0 }; // assumes premultiplied alpha
+        if (n & 16) != 0 {
+            r += dither;
+        }
+        if (n & 8) != 0 {
+            g += dither;
+        }
+        if (n & 32) != 0 {
+            b += dither;
         }
 
         RGBLU { r, g, b }

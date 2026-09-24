@@ -19,6 +19,10 @@ doctest = false
 name = "dssim"
 path = "src/main.rs"
 
+[[bench]]
+name = "compare"
+harness = false
+
 [dependencies]
 dssim-core = { path = "./dssim-core", version = "3.5.1", default-features = false }
 imgref = "1.12.3"

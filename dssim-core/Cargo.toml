@@ -4,7 +4,7 @@ categories = ["multimedia::images"]
 description = "Library that measures structural similarity between images using a multi-scale variant of the SSIM algorithm."
 documentation = "https://docs.rs/dssim-core"
 homepage = "https://kornel.ski/dssim"
-include = ["README.md", "Cargo.toml", "src/*.rs", "LICENSE"]
+include = ["README.md", "Cargo.toml", "src/**/*.rs", "LICENSE"]
 keywords = ["ssim", "image", "comparison", "objective", "metric"]
 license = "AGPL-3.0"
 name = "dssim-core"
@@ -12,6 +12,7 @@ readme = "README.md"
 repository = "https://github.com/kornelski/dssim.git"
 version = "3.5.1"
 edition = "2024"
+rust-version = "1.90"
 
 [lib]
 crate-type = ["lib", "staticlib"]
