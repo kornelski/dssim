@@ -1,13 +1,19 @@
+//! Safety: the feature-gated calls are checked by caps. RGB output retains
+//! upstream spare-capacity writes and set_len after all rows complete.
+//! Grayscale output uses initialized slices; indexing is bounds-checked.
+
 #![allow(non_snake_case)]
 #![allow(non_upper_case_globals)]
 
-use crate::image::ToRGB;
+use crate::image::{GammaImage, ToRGB};
 use crate::image::RGBAPLU;
 use crate::image::RGBLU;
+use crate::linear::{GammaComponent, GammaPixel};
 use imgref::*;
 #[cfg(not(feature = "threads"))]
 use crate::lieon as rayon;
 use rayon::prelude::*;
+use std::mem::MaybeUninit;
 
 const D65x: f32 = 0.9505;
 const D65y: f32 = 1.0;
@@ -27,6 +33,7 @@ const EPSILON: f32 = 216. / 24389.;
 const K: f32 = 24389. / (27. * 116.); // http://www.brucelindbloom.com/LContinuity.html
 
 impl ToLAB for RGBLU {
+    #[inline(always)]
     fn to_lab(&self) -> (f32, f32, f32) {
         let fx = fma_matrix(self.r, 0.4124 / D65x, self.g, 0.3576 / D65x, self.b, 0.1805 / D65x);
         let fy = fma_matrix(self.r, 0.2126 / D65y, self.g, 0.7152 / D65y, self.b, 0.0722 / D65y);
@@ -85,25 +92,135 @@ impl ToLABBitmap for ImgVec<RGBLU> {
 impl ToLABBitmap for GBitmap {
     fn to_lab(&self) -> Vec<GBitmap> {
         debug_assert!(self.width() > 0);
-        let f = |fy| {
-            if fy > EPSILON { (cbrt_poly(fy) - 16. / 116.) * 1.16 } else { (K * 1.16) * fy }
-        };
-
-        #[cfg(feature = "threads")]
-        let out = (0..self.height()).into_par_iter().flat_map_iter(|y| {
-            self[y].iter().map(|&fy| f(fy))
-        }).collect();
-
-        #[cfg(not(feature = "threads"))]
-        let out = self.pixels().map(f).collect();
+        let mut out = vec![0.0; self.width() * self.height()];
+        out.as_mut_slice().par_chunks_exact_mut(self.width()).enumerate().for_each(|(y, row)| {
+            gray_to_lab_row(&self[y], row);
+        });
 
         vec![Self::new(out, self.width(), self.height())]
     }
 }
 
+/// Grayscale rows respect the input stride, including padded ImgVec buffers.
+#[inline(always)]
+fn gray_to_lab_row_inline(src: &[f32], dst: &mut [f32]) {
+    assert_eq!(src.len(), dst.len());
+    for (&fy, out) in src.iter().zip(dst) {
+        *out = if fy > EPSILON { (cbrt_poly(fy) - 16. / 116.) * 1.16 } else { (K * 1.16) * fy };
+    }
+}
+
 #[inline(never)]
-fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> Vec<GBitmap>
-    where F: Fn(T, usize) -> (f32, f32, f32) + Sync + Send + 'static
+fn gray_to_lab_row_base(src: &[f32], dst: &mut [f32]) {
+    gray_to_lab_row_inline(src, dst);
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2,fma")]
+fn gray_to_lab_row_avx2(src: &[f32], dst: &mut [f32]) {
+    gray_to_lab_row_inline(src, dst);
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2,fma,avx512f,avx512bw,avx512dq,avx512vl")]
+fn gray_to_lab_row_avx512(src: &[f32], dst: &mut [f32]) {
+    gray_to_lab_row_inline(src, dst);
+}
+
+#[inline]
+fn gray_to_lab_row(src: &[f32], dst: &mut [f32]) {
+    #[cfg(target_arch = "x86_64")]
+    if crate::caps::has_avx512() {
+        // SAFETY: the gate checks all target features required by this clone.
+        return unsafe { gray_to_lab_row_avx512(src, dst) };
+    }
+    #[cfg(target_arch = "x86_64")]
+    if crate::caps::has_avx2_fma() {
+        // SAFETY: the gate checks all target features required by this clone.
+        return unsafe { gray_to_lab_row_avx2(src, dst) };
+    }
+    gray_to_lab_row_base(src, dst);
+}
+
+/// Per-row body shared by the baseline and feature-enabled row kernels.
+/// `#[inline(always)]` so the `#[target_feature]` clone re-vectorizes the
+/// same body under its target features. The pixel loop must live inside
+/// the tagged function — `#[target_feature]` does not propagate into
+/// rayon worker callbacks.
+#[inline(always)]
+fn rgb_to_lab_row_inline<T>(in_row: &[T], y: usize, context: &T::Context,
+    l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
+    where T: Copy + ToRGB
+{
+    for x in 0..in_row.len() {
+        let n = (x+11) ^ (y+11);
+        let (l,a,b) = in_row[x].to_rgb(n, context).to_lab();
+        l_row[x].write(l);
+        a_row[x].write(a);
+        b_row[x].write(b);
+    }
+}
+
+#[inline(never)]
+fn rgb_to_lab_row_base<T>(in_row: &[T], y: usize, context: &T::Context,
+    l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
+    where T: Copy + ToRGB
+{
+    rgb_to_lab_row_inline(in_row, y, context, l_row, a_row, b_row)
+}
+
+/// AVX2+FMA clone of `rgb_to_lab_row_base`; same source, vectorized wider.
+/// SAFETY: call only when `caps::has_avx2_fma()` has confirmed support.
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2,fma")]
+fn rgb_to_lab_row_avx2<T>(in_row: &[T], y: usize, context: &T::Context,
+    l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
+    where T: Copy + ToRGB
+{
+    rgb_to_lab_row_inline(in_row, y, context, l_row, a_row, b_row)
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2,fma,avx512f,avx512bw,avx512dq,avx512vl")]
+fn rgb_to_lab_row_avx512<T>(in_row: &[T], y: usize, context: &T::Context,
+    l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
+    where T: Copy + ToRGB
+{
+    rgb_to_lab_row_inline(in_row, y, context, l_row, a_row, b_row)
+}
+
+/// Runtime dispatch: AVX-512, then AVX2/FMA, then baseline.
+/// aarch64 needs no clone — NEON is its baseline and autovectorizes.
+#[inline]
+fn rgb_to_lab_row<T>(in_row: &[T], y: usize, context: &T::Context,
+    l_row: &mut [MaybeUninit<f32>], a_row: &mut [MaybeUninit<f32>], b_row: &mut [MaybeUninit<f32>])
+    where T: Copy + ToRGB
+{
+    #[cfg(target_arch = "x86_64")]
+    if crate::caps::has_avx512() {
+        // SAFETY: has_avx512() confirmed AVX2/FMA and AVX-512 F/BW/DQ/VL support.
+        unsafe { rgb_to_lab_row_avx512(in_row, y, context, l_row, a_row, b_row) };
+        return;
+    }
+    #[cfg(target_arch = "x86_64")]
+    if crate::caps::has_avx2_fma() {
+        // SAFETY: has_avx2_fma() confirmed AVX2+FMA support.
+        unsafe { rgb_to_lab_row_avx2(in_row, y, context, l_row, a_row, b_row) };
+        return;
+    }
+    rgb_to_lab_row_base(in_row, y, context, l_row, a_row, b_row)
+}
+
+/// Convert each row into three planar outputs.
+/// Rows are farmed to rayon; the per-row pixel loop lives in the
+/// dispatched `rgb_to_lab_row_*` fns so the feature gate applies to the
+/// actual math (a `#[target_feature]` here would only tag the outer fn).
+fn rgb_to_lab<T>(img: ImgRef<'_, T>, context: &T::Context) -> Vec<GBitmap>
+    where T: Copy + ToRGB + Sync + Send + 'static
 {
     let width = img.width();
     assert!(width > 0);
@@ -121,18 +238,11 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
     ).enumerate()
     .for_each(|(y, (l_row, (a_row, b_row)))| {
         let in_row = &img.rows().nth(y).unwrap()[0..width];
-        let l_row = &mut l_row[0..width];
-        let a_row = &mut a_row[0..width];
-        let b_row = &mut b_row[0..width];
-        for x in 0..width {
-            let n = (x+11) ^ (y+11);
-            let (l,a,b) = cb(in_row[x], n);
-            l_row[x].write(l);
-            a_row[x].write(a);
-            b_row[x].write(b);
-        }
+        rgb_to_lab_row(in_row, y, context,
+            &mut l_row[0..width], &mut a_row[0..width], &mut b_row[0..width]);
     });
 
+    // SAFETY: all rows initialized every output slot; a panic skips publication.
     unsafe { out_l.set_len(area) };
     unsafe { out_a.set_len(area) };
     unsafe { out_b.set_len(area) };
@@ -147,18 +257,27 @@ fn rgb_to_lab<T: Copy + Sync + Send + 'static, F>(img: ImgRef<'_, T>, cb: F) -> 
 impl ToLABBitmap for ImgRef<'_, RGBAPLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self, |px, n|{
-            px.to_rgb(n).to_lab()
-        })
+        rgb_to_lab(*self, &())
     }
 }
 
 impl ToLABBitmap for ImgRef<'_, RGBLU> {
     #[inline]
     fn to_lab(&self) -> Vec<GBitmap> {
-        rgb_to_lab(*self, |px, _n|{
-            px.to_lab()
-        })
+        rgb_to_lab(*self, &())
+    }
+}
+
+/// The private adapter uses the same LUT, alpha and Lab arithmetic as the
+/// materialized path, without its full-resolution linear pixel buffer.
+impl<P> ToLABBitmap for GammaImage<'_, P>
+where
+    P: GammaPixel<Output = RGBAPLU> + Copy + Sync + Send + 'static,
+    <P::Component as GammaComponent>::Lut: Sync,
+{
+    fn to_lab(&self) -> Vec<GBitmap> {
+        let lut = P::make_lut();
+        rgb_to_lab(self.0, &lut)
     }
 }
 
@@ -199,3 +318,11 @@ fn cbrts2() {
     println!("2={totaldiff:0.6}; {maxdiff:0.8}");
     assert!(totaldiff < 0.0025, "{totaldiff}");
 }
+
+#[cfg(test)]
+#[path = "tolab/dispatch_tests.rs"]
+mod dispatch_tests;
+
+#[cfg(test)]
+#[path = "tolab/fused_tests.rs"]
+mod fused_tests;
