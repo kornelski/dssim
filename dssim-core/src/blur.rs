@@ -1,7 +1,7 @@
 //! Safety: new unsafe calls only enter CPU-feature-checked clones. The
 //! existing blur allocation/initialization and edge handling are unchanged.
-//! Full-plane allocation/multiply helpers remain test-only as an independent
-//! oracle for the streaming moments implementation.
+//! Full-plane helpers prepare optional cached moments; streaming comparison
+//! uses initialized row buffers.
 
 // 1D kernel from separable decomposition of the original 3×3 Gaussian
 // (KERNEL = [0.095332, 0.118095, 0.095332, …, 0.146293, …]).
@@ -57,7 +57,6 @@ mod portable {
     /// Interior row pass of `blur_h5_mul`: 5-tap over the element-wise
     /// product of `r1` and `r2` (each ordered [-2, -1, 0, +1, +2]).
     #[inline(always)]
-    #[cfg(test)]
     fn blur5_mul_inner_inline(r1: [&[f32]; 5], r2: [&[f32]; 5], out: &mut [MaybeUninit<f32>]) {
         let [a_m2, a_m1, a_c, a_p1, a_p2] = r1;
         let [b_m2, b_m1, b_c, b_p1, b_p2] = r2;
@@ -79,7 +78,6 @@ mod portable {
 
     #[cfg_attr(target_arch = "x86_64", inline(never))]
     #[cfg_attr(not(target_arch = "x86_64"), inline(always))]
-    #[cfg(test)]
     fn blur5_mul_inner_base(r1: [&[f32]; 5], r2: [&[f32]; 5], out: &mut [MaybeUninit<f32>]) {
         blur5_mul_inner_inline(r1, r2, out);
     }
@@ -105,7 +103,6 @@ mod portable {
     #[cfg(target_arch = "x86_64")]
     #[inline(never)]
     #[target_feature(enable = "avx2,fma")]
-    #[cfg(test)]
     fn blur5_mul_inner_avx2(r1: [&[f32]; 5], r2: [&[f32]; 5], out: &mut [MaybeUninit<f32>]) {
         blur5_mul_inner_inline(r1, r2, out);
     }
@@ -113,7 +110,6 @@ mod portable {
     #[cfg(target_arch = "x86_64")]
     #[inline(never)]
     #[target_feature(enable = "avx2,fma,avx512f,avx512bw,avx512dq,avx512vl")]
-    #[cfg(test)]
     fn blur5_mul_inner_avx512(r1: [&[f32]; 5], r2: [&[f32]; 5], out: &mut [MaybeUninit<f32>]) {
         blur5_mul_inner_inline(r1, r2, out);
     }
@@ -139,7 +135,6 @@ mod portable {
 
     /// Runtime dispatch for the fused multiply row pass.
     #[inline]
-    #[cfg(test)]
     fn blur5_mul_inner(r1: [&[f32]; 5], r2: [&[f32]; 5], out: &mut [MaybeUninit<f32>]) {
         #[cfg(target_arch = "x86_64")]
         if crate::caps::has_avx512() {
@@ -309,7 +304,6 @@ mod portable {
     /// to clamped H1·H1 applied to `src1 * src2`. Same edge-handling structure
     /// as `blur_h5`.
     #[allow(clippy::too_many_arguments)]
-    #[cfg(test)]
     fn blur_h5_mul(
         src1: &[f32],
         src2: &[f32],
@@ -391,7 +385,6 @@ mod portable {
         unsafe { std::slice::from_raw_parts(slice.as_ptr().cast::<f32>(), slice.len()) }
     }
 
-    #[cfg(test)]
     pub fn blur(src: ImgRef<'_, f32>, tmp: &mut [MaybeUninit<f32>]) -> ImgVec<f32> {
         let width = src.width();
         let height = src.height();
@@ -448,7 +441,6 @@ mod portable {
 
     /// Blur the element-wise product of two images: `blur(src1 * src2)`.
     /// Fuses the multiply into the horizontal pass, then does a single vertical pass.
-    #[cfg(test)]
     pub fn blur_mul(src1: ImgRef<'_, f32>, src2: ImgRef<'_, f32>, tmp: &mut [MaybeUninit<f32>]) -> Vec<f32> {
         let width = src1.width();
         let height = src1.height();

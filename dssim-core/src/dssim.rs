@@ -41,6 +41,13 @@ struct DssimChan<T> {
     pub width: usize,
     pub height: usize,
     pub img: ImgVec<T>,
+    moments: Option<CachedMoments<T>>,
+}
+
+#[derive(Clone)]
+struct CachedMoments<T> {
+    mu: Vec<T>,
+    squared: Vec<T>,
 }
 
 /// Configuration for the comparison
@@ -75,6 +82,40 @@ impl<T> DssimImage<T> {
     }
 }
 
+/// Per-image preparation options. By default only image planes are retained.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ImageOptions {
+    cache_moments: bool,
+}
+
+impl ImageOptions {
+    /// Precompute and retain image statistics for repeated comparisons.
+    ///
+    /// Disabled by default. Enabling this approximately triples retained pixel
+    /// storage, but avoids recomputing these statistics during comparisons. Caches
+    /// are built during preparation, reusing its scratch buffers. Cached and
+    /// uncached images can be compared together with identical scores and maps.
+    /// This option affects only the image being constructed.
+    ///
+    /// ```
+    /// use dssim_core::{Dssim, ImageOptions};
+    /// use rgb::RGB;
+    /// let d = Dssim::new();
+    /// let pixels = vec![RGB::new(100, 150, 200); 32 * 32];
+    /// let reference = d.create_image_rgb_with_options(
+    ///     &pixels, 32, 32, ImageOptions::default().cache_for_reuse(true),
+    /// ).unwrap();
+    /// let candidate = d.create_image_rgb(&pixels, 32, 32).unwrap();
+    /// let (score, _) = d.compare(&reference, &candidate);
+    /// assert_eq!(f64::from(score), 0.0);
+    /// ```
+    #[must_use]
+    pub fn cache_for_reuse(mut self, enabled: bool) -> Self {
+        self.cache_moments = enabled;
+        self
+    }
+}
+
 // Weighed scales are inspired by the IW-SSIM, but details of the algorithm and weights are different
 const DEFAULT_WEIGHTS: [f64; 5] = [0.028, 0.197, 0.322, 0.298, 0.155];
 
@@ -94,11 +135,8 @@ pub fn new() -> Dssim {
 }
 
 impl DssimChan<f32> {
-    /// Stores only the (optionally chroma-pre-blurred) image plane.
-    /// `mu`, `img_sq_blur`, and `img1_img2_blur` are derived at compare
-    /// time: keeping them persistent costs 8 more bytes per pixel per
-    /// channel, which dominates peak RSS for large images.
-    pub fn new(mut bitmap: ImgVec<f32>, is_chroma: bool, tmp: &mut [MaybeUninit<f32>]) -> Self {
+    /// Prepare the image plane; retained moments are an explicit per-image opt-in.
+    pub fn new(mut bitmap: ImgVec<f32>, is_chroma: bool, cache_moments: bool, tmp: &mut [MaybeUninit<f32>]) -> Self {
         let width = bitmap.width();
         let height = bitmap.height();
         assert!(width > 0);
@@ -109,11 +147,13 @@ impl DssimChan<f32> {
         if is_chroma {
             blur::blur_in_place(bitmap.as_mut(), tmp);
         }
-        Self {
-            width,
-            height,
-            img: bitmap,
-        }
+        let moments = if cache_moments {
+            Some(CachedMoments {
+                mu: blur::blur(bitmap.as_ref(), tmp).into_contiguous_buf().0,
+                squared: blur::blur_mul(bitmap.as_ref(), bitmap.as_ref(), tmp),
+            })
+        } else { None };
+        Self { width, height, img: bitmap, moments }
     }
 }
 
@@ -137,30 +177,45 @@ impl Dssim {
         self.save_maps_scales = num_scales;
     }
 
-    /// Create image from an array of RGBA pixels (sRGB, non-premultiplied, alpha last).
+    /// Create an uncached image from an array of RGBA pixels (sRGB, non-premultiplied, alpha last).
     ///
     /// If you have a slice of `u8`, then see `rgb` crate's `as_rgba()`.
     #[must_use]
     pub fn create_image_rgba(&self, bitmap: &[RGBA<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+        self.create_image_rgba_with_options(bitmap, width, height, ImageOptions::default())
+    }
+
+    /// Like [`Self::create_image_rgba`], with per-image preparation options.
+    #[must_use]
+    pub fn create_image_rgba_with_options(&self, bitmap: &[RGBA<u8>], width: usize, height: usize, options: ImageOptions) -> Option<DssimImage<f32>> {
         if width * height < bitmap.len() {
             return None;
         }
         let img = GammaImage(ImgRef::new(bitmap, width, height));
-        self.create_image(&img)
+        self.create_image_with_options(&img, options)
     }
 
-    /// Create image from an array of packed RGB pixels (sRGB).
+    /// Create an uncached image from an array of packed RGB pixels (sRGB).
     ///
     /// If you have a slice of `u8`, then see `rgb` crate's `as_rgb()`.
     #[must_use]
     pub fn create_image_rgb(&self, bitmap: &[RGB<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+        self.create_image_rgb_with_options(bitmap, width, height, ImageOptions::default())
+    }
+
+    /// Like [`Self::create_image_rgb`], with per-image preparation options.
+    #[must_use]
+    pub fn create_image_rgb_with_options(&self, bitmap: &[RGB<u8>], width: usize, height: usize, options: ImageOptions) -> Option<DssimImage<f32>> {
         if width * height < bitmap.len() {
             return None;
         }
         let img = GammaImage(ImgRef::new(bitmap, width, height));
-        self.create_image(&img)
+        self.create_image_with_options(&img, options)
     }
 
+    /// Create an uncached image. Use [`Self::create_image_with_options`] to cache
+    /// moments for repeated comparisons.
+    ///
     /// The input image is defined using the `imgref` crate, and the pixel type can be:
     ///
     /// * `ImgVec<RGBAPLU>` — RGBA premultiplied alpha, linear, float scaled to 0..1
@@ -176,16 +231,25 @@ impl Dssim {
         InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
         OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
     {
+        self.create_image_with_options(src_img, ImageOptions::default())
+    }
+
+    /// Like [`Self::create_image`], with per-image preparation options.
+    pub fn create_image_with_options<InBitmap, OutBitmap>(&self, src_img: &InBitmap, options: ImageOptions) -> Option<DssimImage<f32>>
+    where
+        InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
+        OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
+    {
         let num_scales = self.scale_weights.len();
         let mut scale = Vec::with_capacity(num_scales);
-        Self::make_scales_recursive(num_scales, MaybeArc::Borrowed(src_img), &mut scale);
+        Self::make_scales_recursive(num_scales, MaybeArc::Borrowed(src_img), &mut scale, options.cache_moments);
         scale.reverse(); // depth-first made smallest scales first
 
         Some(DssimImage { scale })
     }
 
     #[inline(never)]
-    fn make_scales_recursive<InBitmap, OutBitmap>(scales_left: usize, image: MaybeArc<'_, InBitmap>, scales: &mut Vec<DssimChanScale<f32>>)
+    fn make_scales_recursive<InBitmap, OutBitmap>(scales_left: usize, image: MaybeArc<'_, InBitmap>, scales: &mut Vec<DssimChanScale<f32>>, cache_moments: bool)
     where
         InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
         OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
@@ -202,7 +266,7 @@ impl Dssim {
                         let h = l.height();
                         let pixels = w * h;
                         let mut tmp = Vec::with_capacity(pixels);
-                        DssimChan::new(l, n > 0, &mut tmp.spare_capacity_mut()[..pixels])
+                        DssimChan::new(l, n > 0, cache_moments, &mut tmp.spare_capacity_mut()[..pixels])
                     }).collect(),
                 }
             }
@@ -213,7 +277,7 @@ impl Dssim {
                     let down = image.downsample();
                     drop(image);
                     if let Some(downsampled) = down {
-                        Self::make_scales_recursive(scales_left - 1, MaybeArc::Owned(Arc::new(downsampled)), scales);
+                        Self::make_scales_recursive(scales_left - 1, MaybeArc::Owned(Arc::new(downsampled)), scales, cache_moments);
                     }
                 }
             }
@@ -223,7 +287,13 @@ impl Dssim {
 
     /// Compare original with another image. See `create_image`
     ///
-    /// The `SsimMap`s are returned only if you've enabled them first.
+    /// Uses the cached moments present on each image, computing any missing
+    /// moments without modifying either image. Cache policy is selected at
+    /// image construction, independently of this context.
+    ///
+    /// Scale weights and map-output settings use this context's current values,
+    /// including changes made after creating the images. The `SsimMap`s are
+    /// returned only if you've enabled them with [`Self::set_save_ssim_maps`].
     ///
     /// `Val` is a fancy wrapper for `f64`
     pub fn compare<M: Borrow<DssimImage<f32>>>(&self, original_image: &DssimImage<f32>, modified_image: M) -> (Val, Vec<SsimMap>) {

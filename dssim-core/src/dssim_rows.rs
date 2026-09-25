@@ -1,4 +1,4 @@
-//! Streaming moments and SSIM, using initialized row buffers only.
+//! Cached-pair comparison and streaming missing moments through initialized rows.
 //! New unsafe calls enter feature-checked single-channel kernels below.
 use super::*;
 
@@ -11,7 +11,9 @@ impl Dssim {
     ///
     /// Ring layout: `hring[slot][c][p]` — slot is `src_row % 5`, `c` the
     /// channel, `p` the product index [mu1, mu2, sq1, sq2, i12].
-    fn ssim_rows(
+    /// NEED1/NEED2 select uncached inputs at compile time; cached moments
+    /// are read directly from their image, outside the pixel arithmetic.
+    fn ssim_rows<const NEED1: bool, const NEED2: bool>(
         original: &DssimChanScale<f32>,
         modified: &DssimChanScale<f32>,
         y0: usize,
@@ -43,7 +45,7 @@ impl Dssim {
                     let r1 = &chan1.img[hnext];
                     let r2 = &chan2.img[hnext];
                     let mut rows = chan_seg.chunks_mut(width);
-                    blur::moments::blur_moments_row(r1, r2, core::array::from_fn(|_| rows.next().unwrap()));
+                    blur::moments::blur_moments_row::<NEED1, NEED2>(r1, r2, core::array::from_fn(|_| rows.next().unwrap()));
                 }
                 slot_src[hnext % 5] = hnext;
                 hnext += 1;
@@ -62,10 +64,16 @@ impl Dssim {
                     })
                 });
                 let mut outs = vrow[c * 5 * width..][..5 * width].chunks_mut(width);
-                blur::moments::blur_moments_v5_row(taps, edge, core::array::from_fn(|_| outs.next().unwrap()));
+                blur::moments::blur_moments_v5_row::<NEED1, NEED2>(taps, edge, core::array::from_fn(|_| outs.next().unwrap()));
             }
 
             let v = |c: usize, p: usize| -> &[f32] {
+                if p < 4 && ![NEED1, NEED2][p % 2] {
+                    let chan = if p % 2 == 0 { &original.chan[c] } else { &modified.chan[c] };
+                    let moments = chan.moments.as_ref().unwrap();
+                    let plane = if p < 2 { &moments.mu } else { &moments.squared };
+                    return &plane[y * width..][..width];
+                }
                 &vrow[(c * 5 + p) * width..][..width]
             };
             let out_row = &mut out[i * width..][..width];
@@ -84,8 +92,47 @@ impl Dssim {
         }
     }
 
-    /// Row-fused moments→SSIM for a whole scale. Splits the map into
-    /// `FUSED_ROWS`-row blocks so the working set stays in cache.
+    /// Preserve #197's full-plane cross blur when both images retain moments.
+    /// It avoids the row-ring overhead for repeated comparisons of cached pairs.
+    fn compare_scale_cached(original: &DssimChanScale<f32>, modified: &DssimChanScale<f32>) -> ImgVec<f32> {
+        let width = original.chan[0].width;
+        let height = original.chan[0].height;
+        let pixels = width * height;
+        let nchan = original.chan.len();
+        let cross: Vec<Vec<f32>> = (0..nchan).into_par_iter().map(|c| {
+            let mut tmp = Vec::<f32>::with_capacity(pixels);
+            blur::blur_mul(original.chan[c].img.as_ref(), modified.chan[c].img.as_ref(),
+                &mut tmp.spare_capacity_mut()[..pixels])
+        }).collect();
+        let moments = |c: usize, p: usize| -> &[f32] {
+            if p == 4 { return &cross[c]; }
+            let chan = if p % 2 == 0 { &original.chan[c] } else { &modified.chan[c] };
+            let cache = chan.moments.as_ref().unwrap();
+            if p < 2 { &cache.mu } else { &cache.squared }
+        };
+        let mut out = vec![0.0; pixels];
+        if nchan == 3 {
+            let inputs = Ssim3Planes {
+                mu1: std::array::from_fn(|c| moments(c, 0)),
+                mu2: std::array::from_fn(|c| moments(c, 1)),
+                sq1: std::array::from_fn(|c| moments(c, 2)),
+                sq2: std::array::from_fn(|c| moments(c, 3)),
+                i12: std::array::from_fn(|c| moments(c, 4)),
+            };
+            out.as_mut_slice().par_chunks_mut(4096).enumerate().for_each(|(i, chunk)| {
+                ssim3_range(&inputs, i * 4096, chunk);
+            });
+        } else {
+            out.as_mut_slice().par_chunks_mut(4096).enumerate().for_each(|(i, chunk)| {
+                let start = i * 4096;
+                ssim1_range(std::array::from_fn(|p| &moments(0, p)[start..][..chunk.len()]), chunk);
+            });
+        }
+        ImgVec::new(out, width, height)
+    }
+
+    /// Reuse the full-plane path for cached pairs; otherwise stream only
+    /// missing moments in `FUSED_ROWS`-row blocks.
     #[inline(never)]
     pub(super) fn compare_scale_fused(
         original: &DssimChanScale<f32>,
@@ -100,6 +147,12 @@ impl Dssim {
         assert!(width > 0 && height > 0);
         assert!(original.chan.iter().chain(&modified.chan)
             .all(|c| c.width == width && c.height == height));
+        let needed = [original.chan[0].moments.is_none(), modified.chan[0].moments.is_none()];
+        debug_assert!(original.chan.iter().all(|c| c.moments.is_none() == needed[0]));
+        debug_assert!(modified.chan.iter().all(|c| c.moments.is_none() == needed[1]));
+        if needed == [false, false] {
+            return Self::compare_scale_cached(original, modified);
+        }
         let mut map_out = vec![0.0; pixels];
 
         /// Rows per parallel task. Each block recomputes four boundary H
@@ -109,7 +162,13 @@ impl Dssim {
         map_out.as_mut_slice().par_chunks_mut(width * FUSED_ROWS).enumerate().for_each(|(bi, block)| {
             let y0 = bi * FUSED_ROWS;
             let y1 = (y0 + block.len() / width).min(height);
-            Self::ssim_rows(original, modified, y0, y1, block);
+            // Select once per block; the pixel loops have no cache-policy branches.
+            match needed {
+                [true, true] => Self::ssim_rows::<true, true>(original, modified, y0, y1, block),
+                [true, false] => Self::ssim_rows::<true, false>(original, modified, y0, y1, block),
+                [false, true] => Self::ssim_rows::<false, true>(original, modified, y0, y1, block),
+                [false, false] => unreachable!("cached pair handled above"),
+            }
         });
 
         ImgVec::new(map_out, width, height)
