@@ -23,6 +23,7 @@ pub trait ParSliceLie<T> {
 }
 
 pub trait ParSliceMutLie<T> {
+    fn par_chunks_mut(&mut self, n: usize) -> std::slice::ChunksMut<'_, T>;
     fn par_chunks_exact_mut(&mut self, n: usize) -> std::slice::ChunksExactMut<'_, T>;
 }
 
@@ -60,6 +61,7 @@ impl<'a, T> ParSliceLie<T> for &'a mut [T] {
 }
 
 impl<'a, T> ParSliceMutLie<T> for &'a mut [T] {
+    fn par_chunks_mut(&mut self, n: usize) -> std::slice::ChunksMut<'_, T> { self.chunks_mut(n) }
     fn par_chunks_exact_mut(&mut self, n: usize) -> std::slice::ChunksExactMut<'_, T> {
         self.chunks_exact_mut(n)
     }

@@ -1,5 +1,9 @@
+//! Safety: new unsafe calls only enter CPU-feature-checked clones.
+//! Downsample uses initialized output slices and checked indexing.
+
 #![allow(dead_code)]
 
+use crate::linear::{GammaComponent, GammaPixel};
 use imgref::*;
 use rgb::*;
 
@@ -127,12 +131,14 @@ pub trait Average4 {
 }
 
 impl Average4 for f32 {
+    #[inline(always)]
     fn average4(a: Self, b: Self, c: Self, d: Self) -> Self {
         (a + b + c + d) * 0.25
     }
 }
 
 impl Average4 for RGBAPLU {
+    #[inline(always)]
     fn average4(a: Self, b: Self, c: Self, d: Self) -> Self {
         RGBAPLU {
             r: Average4::average4(a.r, b.r, c.r, d.r),
@@ -144,6 +150,7 @@ impl Average4 for RGBAPLU {
 }
 
 impl Average4 for RGBLU {
+    #[inline(always)]
     fn average4(a: Self, b: Self, c: Self, d: Self) -> Self {
         RGBLU {
             r: Average4::average4(a.r, b.r, c.r, d.r),
@@ -154,28 +161,53 @@ impl Average4 for RGBLU {
 }
 
 pub(crate) trait ToRGB {
-    fn to_rgb(self, n: usize) -> RGBLU;
+    /// A shared gamma lookup table, or `()` for already-linear pixels.
+    type Context: Sync;
+    fn to_rgb(self, n: usize, context: &Self::Context) -> RGBLU;
+}
+
+impl ToRGB for RGBLU {
+    type Context = ();
+    #[inline(always)]
+    fn to_rgb(self, _n: usize, _: &()) -> RGBLU { self }
 }
 
 impl ToRGB for RGBAPLU {
-    fn to_rgb(self, n: usize) -> RGBLU {
+    type Context = ();
+    #[inline(always)]
+    fn to_rgb(self, n: usize, _: &()) -> RGBLU {
+        // Bit tests only read bits <32; u32 keeps vectorized compares in
+        // 32-bit lanes instead of usize-wide ones.
+        let n = n as u32;
         let mut r = self.r;
         let mut g = self.g;
         let mut b = self.b;
         let a = self.a;
-        if a < 255.0 {
-            if (n & 16) != 0 {
-                r += 1.0 - a;
-            }
-            if (n & 8) != 0 {
-                g += 1.0 - a; // assumes premultiplied alpha
-            }
-            if (n & 32) != 0 {
-                b += 1.0 - a;
-            }
+        let dither = if a < 255.0 { 1.0 - a } else { 0.0 }; // assumes premultiplied alpha
+        if (n & 16) != 0 {
+            r += dither;
+        }
+        if (n & 8) != 0 {
+            g += dither;
+        }
+        if (n & 32) != 0 {
+            b += dither;
         }
 
         RGBLU { r, g, b }
+    }
+}
+
+impl<P> ToRGB for P
+where
+    P: GammaPixel<Output = RGBAPLU>,
+    <P::Component as GammaComponent>::Lut: Sync,
+{
+    type Context = <P::Component as GammaComponent>::Lut;
+
+    #[inline(always)]
+    fn to_rgb(self, n: usize, lut: &Self::Context) -> RGBLU {
+        self.to_linear(lut).to_rgb(n, &())
     }
 }
 
@@ -188,6 +220,48 @@ impl ToRGB for RGBAPLU {
 pub trait Downsample {
     type Output;
     fn downsample(&self) -> Option<Self::Output>;
+}
+
+#[inline(always)]
+fn downsample_row_pair_inline<T: Average4 + Copy>(top: &[T], bot: &[T], out: &mut [T]) {
+    for (i, out) in out.iter_mut().enumerate() {
+        *out = Average4::average4(top[2*i], top[2*i+1], bot[2*i], bot[2*i+1]);
+    }
+}
+
+#[cfg_attr(target_arch = "x86_64", inline(never))]
+#[cfg_attr(not(target_arch = "x86_64"), inline(always))]
+fn downsample_row_pair_base<T: Average4 + Copy>(top: &[T], bot: &[T], out: &mut [T]) {
+    downsample_row_pair_inline(top, bot, out);
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2,fma")]
+fn downsample_row_pair_avx2<T: Average4 + Copy>(top: &[T], bot: &[T], out: &mut [T]) {
+    downsample_row_pair_inline(top, bot, out);
+}
+
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2,fma,avx512f,avx512bw,avx512dq,avx512vl")]
+fn downsample_row_pair_avx512<T: Average4 + Copy>(top: &[T], bot: &[T], out: &mut [T]) {
+    downsample_row_pair_inline(top, bot, out);
+}
+
+#[inline]
+fn downsample_row_pair<T: Average4 + Copy>(top: &[T], bot: &[T], out: &mut [T]) {
+    #[cfg(target_arch = "x86_64")]
+    if crate::caps::has_avx512() {
+        // SAFETY: the gate checks all target features required by this clone.
+        return unsafe { downsample_row_pair_avx512(top, bot, out) };
+    }
+    #[cfg(target_arch = "x86_64")]
+    if crate::caps::has_avx2_fma() {
+        // SAFETY: the gate checks all target features required by this clone.
+        return unsafe { downsample_row_pair_avx2(top, bot, out) };
+    }
+    downsample_row_pair_base(top, bot, out);
 }
 
 impl<T> Downsample for ImgVec<T> where T: Average4 + Copy + Sync + Send {
@@ -213,15 +287,57 @@ impl<T> Downsample for ImgRef<'_, T> where T: Average4 + Copy + Sync + Send {
         let half_height = height / 2;
         let half_width = width / 2;
 
+        // Copy initializes valid storage for any T; the row kernels overwrite it.
+        let mut scaled = vec![self.buf()[0]; half_width * half_height];
+        for (pair, out) in self.buf().chunks(stride * 2).take(half_height)
+            .zip(scaled.chunks_exact_mut(half_width))
+        {
+            let (top, bot) = pair.split_at(stride);
+            downsample_row_pair(&top[..half_width * 2], &bot[..half_width * 2], out);
+        }
+
+        Some(Img::new(scaled, half_width, half_height))
+    }
+}
+
+/// Internal view of gamma-encoded pixels. Keeping the adapter private avoids
+/// adding trait implementations to callers' integer-pixel image types.
+pub(crate) struct GammaImage<'a, P>(pub(crate) ImgRef<'a, P>);
+
+impl<P> Downsample for GammaImage<'_, P>
+where
+    P: GammaPixel<Output = RGBAPLU> + Copy,
+{
+    type Output = ImgVec<RGBAPLU>;
+
+    fn downsample(&self) -> Option<Self::Output> {
+        let img = self.0;
+        let stride = img.stride();
+        let width = img.width();
+        let height = img.height();
+
+        if width < 8 || height < 8 {
+            return None;
+        }
+
+        let half_height = height / 2;
+        let half_width = width / 2;
+        let lut = P::make_lut();
+
+        // Linearize before averaging, just as the materialized input path does.
         let mut scaled = Vec::with_capacity(half_width * half_height);
-        scaled.extend(self.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
+        scaled.extend(img.buf().chunks(stride * 2).take(half_height).flat_map(|pair| {
+            let lut = &lut;
             let (top, bot) = pair.split_at(stride);
             let top = &top[0..half_width * 2];
             let bot = &bot[0..half_width * 2];
 
             top.as_chunks::<2>().0.iter()
                 .zip(bot.chunks_exact(2))
-                .map(|(a, b)| Average4::average4(a[0], a[1], b[0], b[1]))
+                .map(move |(a, b)| Average4::average4(
+                    a[0].to_linear(lut), a[1].to_linear(lut),
+                    b[0].to_linear(lut), b[1].to_linear(lut),
+                ))
         }));
 
         assert_eq!(half_width * half_height, scaled.len());
@@ -303,3 +419,7 @@ pub(crate) fn avg(input: ImgRef<'_, f32>) -> ImgVec<f32> {
     assert_eq!(half_width * half_height, scaled.len());
     Img::new(scaled, half_width, half_height)
 }
+
+#[cfg(test)]
+#[path = "image/dispatch_tests.rs"]
+mod dispatch_tests;

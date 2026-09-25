@@ -1,3 +1,6 @@
+//! Safety: unsafe calls only enter CPU-feature-checked clones. SSIM kernels
+//! write initialized slices; streaming scratch is described in dssim_rows.rs.
+
 #![allow(non_upper_case_globals)]
 #![allow(non_snake_case)]
 /*
@@ -21,7 +24,6 @@
 
 use crate::blur;
 use crate::image::*;
-use crate::linear::ToRGBAPLU;
 pub use crate::tolab::ToLABBitmap;
 pub use crate::val::Dssim as Val;
 use imgref::*;
@@ -31,22 +33,21 @@ use rayon::prelude::*;
 use rgb::{RGB, RGBA};
 use std::borrow::Borrow;
 use std::mem::MaybeUninit;
-use std::ops;
 use std::ops::Deref;
 use std::sync::Arc;
-
-trait Channable<T, I> {
-    fn img1_img2_blur(&self, modified: &Self, tmp: &mut [MaybeUninit<I>]) -> Vec<T>;
-}
 
 #[derive(Clone)]
 struct DssimChan<T> {
     pub width: usize,
     pub height: usize,
-    pub img: Option<ImgVec<T>>,
-    pub mu: Vec<T>,
-    pub img_sq_blur: Vec<T>,
-    pub is_chroma: bool,
+    pub img: ImgVec<T>,
+    moments: Option<CachedMoments<T>>,
+}
+
+#[derive(Clone)]
+struct CachedMoments<T> {
+    mu: Vec<T>,
+    squared: Vec<T>,
 }
 
 /// Configuration for the comparison
@@ -81,6 +82,40 @@ impl<T> DssimImage<T> {
     }
 }
 
+/// Per-image preparation options. By default only image planes are retained.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ImageOptions {
+    cache_moments: bool,
+}
+
+impl ImageOptions {
+    /// Precompute and retain image statistics for repeated comparisons.
+    ///
+    /// Disabled by default. Enabling this approximately triples retained pixel
+    /// storage, but avoids recomputing these statistics during comparisons. Caches
+    /// are built during preparation, reusing its scratch buffers. Cached and
+    /// uncached images can be compared together with identical scores and maps.
+    /// This option affects only the image being constructed.
+    ///
+    /// ```
+    /// use dssim_core::{Dssim, ImageOptions};
+    /// use rgb::RGB;
+    /// let d = Dssim::new();
+    /// let pixels = vec![RGB::new(100, 150, 200); 32 * 32];
+    /// let reference = d.create_image_rgb_with_options(
+    ///     &pixels, 32, 32, ImageOptions::default().cache_for_reuse(true),
+    /// ).unwrap();
+    /// let candidate = d.create_image_rgb(&pixels, 32, 32).unwrap();
+    /// let (score, _) = d.compare(&reference, &candidate);
+    /// assert_eq!(f64::from(score), 0.0);
+    /// ```
+    #[must_use]
+    pub fn cache_for_reuse(mut self, enabled: bool) -> Self {
+        self.cache_moments = enabled;
+        self
+    }
+}
+
 // Weighed scales are inspired by the IW-SSIM, but details of the algorithm and weights are different
 const DEFAULT_WEIGHTS: [f64; 5] = [0.028, 0.197, 0.322, 0.298, 0.155];
 
@@ -100,51 +135,25 @@ pub fn new() -> Dssim {
 }
 
 impl DssimChan<f32> {
-    pub fn new(bitmap: ImgVec<f32>, is_chroma: bool) -> Self {
-        debug_assert!(bitmap.pixels().all(|i| i.is_finite() && i >= 0.0 && i <= 1.0));
-
-        Self {
-            width: bitmap.width(),
-            height: bitmap.height(),
-            mu: Vec::new(),
-            img: Some(bitmap),
-            img_sq_blur: Vec::new(),
-            is_chroma,
-        }
-    }
-}
-
-impl DssimChan<f32> {
-    fn preprocess(&mut self, tmp: &mut [MaybeUninit<f32>]) {
-        let width = self.width;
-        let height = self.height;
+    /// Prepare the image plane; retained moments are an explicit per-image opt-in.
+    pub fn new(mut bitmap: ImgVec<f32>, is_chroma: bool, cache_moments: bool, tmp: &mut [MaybeUninit<f32>]) -> Self {
+        let width = bitmap.width();
+        let height = bitmap.height();
         assert!(width > 0);
         assert!(height > 0);
+        debug_assert_eq!(width * height, bitmap.pixels().count());
+        debug_assert!(bitmap.pixels().all(|i| i.is_finite() && i >= 0.0 && i <= 1.0));
 
-        let img = self.img.as_mut().unwrap();
-        debug_assert_eq!(width * height, img.pixels().count());
-        debug_assert!(img.pixels().all(f32::is_finite));
-
-        if self.is_chroma {
-            blur::blur_in_place(img.as_mut(), tmp);
+        if is_chroma {
+            blur::blur_in_place(bitmap.as_mut(), tmp);
         }
-        let (mu, ..) = blur::blur(img.as_ref(), tmp).into_contiguous_buf();
-        self.mu = mu;
-
-        // Fused squared-image blur: blur_mul(img, img) does a single H5*V5 pass
-        // over img*img, avoiding both the materialized i*i vector and the
-        // separate in-place blur over it.
-        self.img_sq_blur = blur::blur_mul(img.as_ref(), img.as_ref(), tmp);
-        debug_assert_eq!(self.img_sq_blur.len(), width * height);
-    }
-}
-
-impl Channable<f32, f32> for DssimChan<f32> {
-    fn img1_img2_blur(&self, modified: &Self, tmp32: &mut [MaybeUninit<f32>]) -> Vec<f32> {
-        let src = self.img.as_ref().unwrap();
-        let modified_img = modified.img.as_ref().unwrap();
-        // Fused multiply+blur: avoids materializing the product as a Vec.
-        blur::blur_mul(src.as_ref(), modified_img.as_ref(), tmp32)
+        let moments = if cache_moments {
+            Some(CachedMoments {
+                mu: blur::blur(bitmap.as_ref(), tmp).into_contiguous_buf().0,
+                squared: blur::blur_mul(bitmap.as_ref(), bitmap.as_ref(), tmp),
+            })
+        } else { None };
+        Self { width, height, img: bitmap, moments }
     }
 }
 
@@ -168,30 +177,45 @@ impl Dssim {
         self.save_maps_scales = num_scales;
     }
 
-    /// Create image from an array of RGBA pixels (sRGB, non-premultiplied, alpha last).
+    /// Create an uncached image from an array of RGBA pixels (sRGB, non-premultiplied, alpha last).
     ///
     /// If you have a slice of `u8`, then see `rgb` crate's `as_rgba()`.
     #[must_use]
     pub fn create_image_rgba(&self, bitmap: &[RGBA<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+        self.create_image_rgba_with_options(bitmap, width, height, ImageOptions::default())
+    }
+
+    /// Like [`Self::create_image_rgba`], with per-image preparation options.
+    #[must_use]
+    pub fn create_image_rgba_with_options(&self, bitmap: &[RGBA<u8>], width: usize, height: usize, options: ImageOptions) -> Option<DssimImage<f32>> {
         if width * height < bitmap.len() {
             return None;
         }
-        let img = ImgVec::new(bitmap.to_rgbaplu(), width, height);
-        self.create_image(&img)
+        let img = GammaImage(ImgRef::new(bitmap, width, height));
+        self.create_image_with_options(&img, options)
     }
 
-    /// Create image from an array of packed RGB pixels (sRGB).
+    /// Create an uncached image from an array of packed RGB pixels (sRGB).
     ///
     /// If you have a slice of `u8`, then see `rgb` crate's `as_rgb()`.
     #[must_use]
     pub fn create_image_rgb(&self, bitmap: &[RGB<u8>], width: usize, height: usize) -> Option<DssimImage<f32>> {
+        self.create_image_rgb_with_options(bitmap, width, height, ImageOptions::default())
+    }
+
+    /// Like [`Self::create_image_rgb`], with per-image preparation options.
+    #[must_use]
+    pub fn create_image_rgb_with_options(&self, bitmap: &[RGB<u8>], width: usize, height: usize, options: ImageOptions) -> Option<DssimImage<f32>> {
         if width * height < bitmap.len() {
             return None;
         }
-        let img = ImgVec::new(bitmap.to_rgblu(), width, height);
-        self.create_image(&img)
+        let img = GammaImage(ImgRef::new(bitmap, width, height));
+        self.create_image_with_options(&img, options)
     }
 
+    /// Create an uncached image. Use [`Self::create_image_with_options`] to cache
+    /// moments for repeated comparisons.
+    ///
     /// The input image is defined using the `imgref` crate, and the pixel type can be:
     ///
     /// * `ImgVec<RGBAPLU>` — RGBA premultiplied alpha, linear, float scaled to 0..1
@@ -207,16 +231,25 @@ impl Dssim {
         InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
         OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
     {
+        self.create_image_with_options(src_img, ImageOptions::default())
+    }
+
+    /// Like [`Self::create_image`], with per-image preparation options.
+    pub fn create_image_with_options<InBitmap, OutBitmap>(&self, src_img: &InBitmap, options: ImageOptions) -> Option<DssimImage<f32>>
+    where
+        InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
+        OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
+    {
         let num_scales = self.scale_weights.len();
         let mut scale = Vec::with_capacity(num_scales);
-        Self::make_scales_recursive(num_scales, MaybeArc::Borrowed(src_img), &mut scale);
+        Self::make_scales_recursive(num_scales, MaybeArc::Borrowed(src_img), &mut scale, options.cache_moments);
         scale.reverse(); // depth-first made smallest scales first
 
         Some(DssimImage { scale })
     }
 
     #[inline(never)]
-    fn make_scales_recursive<InBitmap, OutBitmap>(scales_left: usize, image: MaybeArc<'_, InBitmap>, scales: &mut Vec<DssimChanScale<f32>>)
+    fn make_scales_recursive<InBitmap, OutBitmap>(scales_left: usize, image: MaybeArc<'_, InBitmap>, scales: &mut Vec<DssimChanScale<f32>>, cache_moments: bool)
     where
         InBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
         OutBitmap: ToLABBitmap + Send + Sync + Downsample<Output = OutBitmap>,
@@ -231,12 +264,9 @@ impl Dssim {
                     chan: lab.into_par_iter().with_max_len(1).enumerate().map(|(n,l)| {
                         let w = l.width();
                         let h = l.height();
-                        let mut ch = DssimChan::new(l, n > 0);
-
                         let pixels = w * h;
                         let mut tmp = Vec::with_capacity(pixels);
-                        ch.preprocess(&mut tmp.spare_capacity_mut()[..pixels]);
-                        ch
+                        DssimChan::new(l, n > 0, cache_moments, &mut tmp.spare_capacity_mut()[..pixels])
                     }).collect(),
                 }
             }
@@ -247,7 +277,7 @@ impl Dssim {
                     let down = image.downsample();
                     drop(image);
                     if let Some(downsampled) = down {
-                        Self::make_scales_recursive(scales_left - 1, MaybeArc::Owned(Arc::new(downsampled)), scales);
+                        Self::make_scales_recursive(scales_left - 1, MaybeArc::Owned(Arc::new(downsampled)), scales, cache_moments);
                     }
                 }
             }
@@ -257,7 +287,13 @@ impl Dssim {
 
     /// Compare original with another image. See `create_image`
     ///
-    /// The `SsimMap`s are returned only if you've enabled them first.
+    /// Uses the cached moments present on each image, computing any missing
+    /// moments without modifying either image. Cache policy is selected at
+    /// image construction, independently of this context.
+    ///
+    /// Scale weights and map-output settings use this context's current values,
+    /// including changes made after creating the images. The `SsimMap`s are
+    /// returned only if you've enabled them with [`Self::set_save_ssim_maps`].
     ///
     /// `Val` is a fancy wrapper for `f64`
     pub fn compare<M: Borrow<DssimImage<f32>>>(&self, original_image: &DssimImage<f32>, modified_image: M) -> (Val, Vec<SsimMap>) {
@@ -270,31 +306,7 @@ impl Dssim {
         let combined_iter = self.scale_weights.iter().copied().zip(scaled_images_iter).enumerate();
 
         let mut res: Vec<_> = combined_iter.par_bridge().map(|(n, (weight, (modified_image_scale, original_image_scale)))| {
-            let scale_width = original_image_scale.chan[0].width;
-            let scale_height = original_image_scale.chan[0].height;
-            let pixels = scale_width * scale_height;
-
-            let ssim_map = match original_image_scale.chan.len() {
-                3 => {
-                    // Compute the per-channel cross-blur (img1·img2 then blur) for L, a, b
-                    // in parallel — three independent blurs over disjoint memory.
-                    // Each channel gets its own tmp buffer.
-                    let img1_img2_blur: Vec<Vec<f32>> = (0..3usize).into_par_iter().map(|c| {
-                        let mut tmp_buf: Vec<f32> = Vec::with_capacity(pixels);
-                        let tmp = &mut tmp_buf.spare_capacity_mut()[..pixels];
-                        original_image_scale.chan[c]
-                            .img1_img2_blur(&modified_image_scale.chan[c], tmp)
-                    }).collect();
-                    Self::compare_scale_3ch(original_image_scale, modified_image_scale, &img1_img2_blur)
-                },
-                1 => {
-                    let mut tmp_buf: Vec<f32> = Vec::with_capacity(pixels);
-                    let tmp = &mut tmp_buf.spare_capacity_mut()[..pixels];
-                    let img1_img2_blur = original_image_scale.chan[0].img1_img2_blur(&modified_image_scale.chan[0], tmp);
-                    Self::compare_scale(&original_image_scale.chan[0], &modified_image_scale.chan[0], &img1_img2_blur)
-                },
-                _ => panic!(),
-            };
+            let ssim_map = Self::compare_scale_fused(original_image_scale, modified_image_scale);
 
             let sum = ssim_map.pixels().fold(0., |sum, i| sum + f64::from(i));
             let len = (ssim_map.width()*ssim_map.height()) as f64;
@@ -329,114 +341,102 @@ impl Dssim {
         (to_dssim(ssim_sum / weight_sum).into(), ssim_maps)
     }
 
-    /// 3-channel SSIM combine, scalar but unrolled across L/a/b. Reads the three
-    /// channels directly from the per-channel `mu` and `img_sq_blur` Vecs and the
-    /// three `img1_img2_blur` Vecs computed earlier in parallel — no LAB struct
-    /// interleaving, no zip-iterator overhead, and per-channel slices stay
-    /// cache-friendly. Algebraically identical to `compare_scale::<LAB>`.
-    #[inline(never)]
-    fn compare_scale_3ch(
-        original: &DssimChanScale<f32>,
-        modified: &DssimChanScale<f32>,
-        img1_img2_blur: &[Vec<f32>],
-    ) -> ImgVec<f32> {
-        let width = original.chan[0].width;
-        let height = original.chan[0].height;
-        let pixels = width * height;
 
-        let (o0, o1, o2) = (&original.chan[0], &original.chan[1], &original.chan[2]);
-        let (m0, m1, m2) = (&modified.chan[0], &modified.chan[1], &modified.chan[2]);
+}
 
-        let o0_mu = &o0.mu[..pixels];
-        let o1_mu = &o1.mu[..pixels];
-        let o2_mu = &o2.mu[..pixels];
-        let m0_mu = &m0.mu[..pixels];
-        let m1_mu = &m1.mu[..pixels];
-        let m2_mu = &m2.mu[..pixels];
-        let o0_sq = &o0.img_sq_blur[..pixels];
-        let o1_sq = &o1.img_sq_blur[..pixels];
-        let o2_sq = &o2.img_sq_blur[..pixels];
-        let m0_sq = &m0.img_sq_blur[..pixels];
-        let m1_sq = &m1.img_sq_blur[..pixels];
-        let m2_sq = &m2.img_sq_blur[..pixels];
-        let i12_0 = &img1_img2_blur[0][..pixels];
-        let i12_1 = &img1_img2_blur[1][..pixels];
-        let i12_2 = &img1_img2_blur[2][..pixels];
+/// Flat per-pixel inputs to the 3-channel SSIM map kernel: blurred means,
+/// blurred squared-image means, and cross-blurred products for each of the
+/// L/a/b channels. Every slice is `pixels` long.
+struct Ssim3Planes<'a> {
+    mu1: [&'a [f32]; 3],
+    mu2: [&'a [f32]; 3],
+    sq1: [&'a [f32]; 3],
+    sq2: [&'a [f32]; 3],
+    i12: [&'a [f32]; 3],
+}
 
-        let c1: f32 = 0.01 * 0.01;
-        let c2: f32 = 0.03 * 0.03;
-        let inv3: f32 = 1.0 / 3.0;
+/// Per-pixel 3-channel SSIM value — the arithmetic previously inlined in
+/// `compare_scale_3ch`'s map closure.
+#[inline(always)]
+fn ssim3_px(s: &Ssim3Planes<'_>, i: usize) -> f32 {
+    let c1: f32 = 0.01 * 0.01;
+    let c2: f32 = 0.03 * 0.03;
+    let inv3: f32 = 1.0 / 3.0;
 
-        let map_out: Vec<f32> = (0..pixels).into_par_iter().with_min_len(1 << 10).map(|i| {
-            let mu1_0 = o0_mu[i]; let mu2_0 = m0_mu[i];
-            let mu1_1 = o1_mu[i]; let mu2_1 = m1_mu[i];
-            let mu1_2 = o2_mu[i]; let mu2_2 = m2_mu[i];
+    let mu1_0 = s.mu1[0][i]; let mu2_0 = s.mu2[0][i];
+    let mu1_1 = s.mu1[1][i]; let mu2_1 = s.mu2[1][i];
+    let mu1_2 = s.mu1[2][i]; let mu2_2 = s.mu2[2][i];
 
-            let mu1mu1_0 = mu1_0 * mu1_0;
-            let mu1mu1_1 = mu1_1 * mu1_1;
-            let mu1mu1_2 = mu1_2 * mu1_2;
-            let mu2mu2_0 = mu2_0 * mu2_0;
-            let mu2mu2_1 = mu2_1 * mu2_1;
-            let mu2mu2_2 = mu2_2 * mu2_2;
-            let mu1mu2_0 = mu1_0 * mu2_0;
-            let mu1mu2_1 = mu1_1 * mu2_1;
-            let mu1mu2_2 = mu1_2 * mu2_2;
+    let mu1mu1_0 = mu1_0 * mu1_0;
+    let mu1mu1_1 = mu1_1 * mu1_1;
+    let mu1mu1_2 = mu1_2 * mu1_2;
+    let mu2mu2_0 = mu2_0 * mu2_0;
+    let mu2mu2_1 = mu2_1 * mu2_1;
+    let mu2mu2_2 = mu2_2 * mu2_2;
+    let mu1mu2_0 = mu1_0 * mu2_0;
+    let mu1mu2_1 = mu1_1 * mu2_1;
+    let mu1mu2_2 = mu1_2 * mu2_2;
 
-            let mu1_sq  = (mu1mu1_0 + mu1mu1_1 + mu1mu1_2) * inv3;
-            let mu2_sq  = (mu2mu2_0 + mu2mu2_1 + mu2mu2_2) * inv3;
-            let mu1_mu2 = (mu1mu2_0 + mu1mu2_1 + mu1mu2_2) * inv3;
+    let mu1_sq  = (mu1mu1_0 + mu1mu1_1 + mu1mu1_2) * inv3;
+    let mu2_sq  = (mu2mu2_0 + mu2mu2_1 + mu2mu2_2) * inv3;
+    let mu1_mu2 = (mu1mu2_0 + mu1mu2_1 + mu1mu2_2) * inv3;
 
-            let sigma1_sq = ((o0_sq[i] - mu1mu1_0) + (o1_sq[i] - mu1mu1_1) + (o2_sq[i] - mu1mu1_2)) * inv3;
-            let sigma2_sq = ((m0_sq[i] - mu2mu2_0) + (m1_sq[i] - mu2mu2_1) + (m2_sq[i] - mu2mu2_2)) * inv3;
-            let sigma12  = ((i12_0[i] - mu1mu2_0) + (i12_1[i] - mu1mu2_1) + (i12_2[i] - mu1mu2_2)) * inv3;
+    let sigma1_sq = ((s.sq1[0][i] - mu1mu1_0) + (s.sq1[1][i] - mu1mu1_1) + (s.sq1[2][i] - mu1mu1_2)) * inv3;
+    let sigma2_sq = ((s.sq2[0][i] - mu2mu2_0) + (s.sq2[1][i] - mu2mu2_1) + (s.sq2[2][i] - mu2mu2_2)) * inv3;
+    let sigma12  = ((s.i12[0][i] - mu1mu2_0) + (s.i12[1][i] - mu1mu2_1) + (s.i12[2][i] - mu1mu2_2)) * inv3;
 
-            2.0f32.mul_add(mu1_mu2, c1) * 2.0f32.mul_add(sigma12, c2)
-                / ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
-        }).collect();
+    2.0f32.mul_add(mu1_mu2, c1) * 2.0f32.mul_add(sigma12, c2)
+        / ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
+}
 
-        ImgVec::new(map_out, width, height)
+/// `ssim3_px` over `out[k] = px(base + k)`. `#[inline(always)]` so the
+/// AVX2+FMA wrapper re-vectorizes this same body under its target features
+/// instead of duplicating the arithmetic.
+#[inline(always)]
+fn ssim3_range_inline(s: &Ssim3Planes<'_>, base: usize, out: &mut [f32]) {
+    for (k, d) in out.iter_mut().enumerate() {
+        *d = ssim3_px(s, base + k);
     }
+}
 
-    #[inline(never)]
-    fn compare_scale<L>(original: &DssimChan<L>, modified: &DssimChan<L>, img1_img2_blur: &[L]) -> ImgVec<f32>
-    where
-        L: Send + Sync + Clone + Copy + ops::Mul<Output = L> + ops::Sub<Output = L> + 'static,
-        f32: From<L>,
-    {
-        assert_eq!(original.width, modified.width);
-        assert_eq!(original.height, modified.height);
+#[inline(never)]
+fn ssim3_range_base(s: &Ssim3Planes<'_>, base: usize, out: &mut [f32]) {
+    ssim3_range_inline(s, base, out);
+}
 
-        let width = original.width;
-        let height = original.height;
+/// AVX2+FMA clone of `ssim3_range_base`; same source, vectorized wider.
+/// SAFETY: call only when `caps::has_avx2_fma()` has confirmed support.
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2,fma")]
+fn ssim3_range_avx2(s: &Ssim3Planes<'_>, base: usize, out: &mut [f32]) {
+    ssim3_range_inline(s, base, out);
+}
 
-        let c1 = 0.01 * 0.01;
-        let c2 = 0.03 * 0.03;
+#[cfg(target_arch = "x86_64")]
+#[inline(never)]
+#[target_feature(enable = "avx2,fma,avx512f,avx512bw,avx512dq,avx512vl")]
+fn ssim3_range_avx512(s: &Ssim3Planes<'_>, base: usize, out: &mut [f32]) {
+    ssim3_range_inline(s, base, out);
+}
 
-        debug_assert_eq!(original.mu.len(), modified.mu.len());
-        debug_assert_eq!(original.img_sq_blur.len(), modified.img_sq_blur.len());
-        debug_assert_eq!(img1_img2_blur.len(), original.mu.len());
-        debug_assert_eq!(img1_img2_blur.len(), original.img_sq_blur.len());
-
-        let mu_iter = original.mu.as_slice().par_iter().with_min_len(1<<10).cloned().zip_eq(modified.mu.as_slice().par_iter().with_min_len(1<<10).cloned());
-        let sq_iter = original.img_sq_blur.as_slice().par_iter().with_min_len(1<<10).cloned().zip_eq(modified.img_sq_blur.as_slice().par_iter().with_min_len(1<<10).cloned());
-        let map_out = img1_img2_blur.par_iter().with_min_len(1<<10).cloned().zip_eq(mu_iter).zip_eq(sq_iter)
-        .map(|((img1_img2_blur, (mu1, mu2)), (img1_sq_blur, img2_sq_blur))| {
-            let mu1mu1 = mu1 * mu1;
-            let mu1mu2 = mu1 * mu2;
-            let mu2mu2 = mu2 * mu2;
-            let mu1_sq: f32 = mu1mu1.into();
-            let mu2_sq: f32 = mu2mu2.into();
-            let mu1_mu2: f32 = mu1mu2.into();
-            let sigma1_sq: f32 = (img1_sq_blur - mu1mu1).into();
-            let sigma2_sq: f32 = (img2_sq_blur - mu2mu2).into();
-            let sigma12: f32 = (img1_img2_blur - mu1mu2).into();
-
-            2.0f32.mul_add(mu1_mu2, c1) * 2.0f32.mul_add(sigma12, c2) /
-                       ((mu1_sq + mu2_sq + c1) * (sigma1_sq + sigma2_sq + c2))
-        }).collect();
-
-        ImgVec::new(map_out, width, height)
+/// Runtime dispatch: AVX-512, then AVX2/FMA, then baseline.
+/// Statically enabled tiers need no runtime capability check.
+#[inline]
+fn ssim3_range(s: &Ssim3Planes<'_>, base: usize, out: &mut [f32]) {
+    #[cfg(target_arch = "x86_64")]
+    if crate::caps::has_avx512() {
+        // SAFETY: has_avx512() confirmed AVX2/FMA and AVX-512 F/BW/DQ/VL support.
+        unsafe { ssim3_range_avx512(s, base, out) };
+        return;
     }
+    #[cfg(target_arch = "x86_64")]
+    if crate::caps::has_avx2_fma() {
+        // SAFETY: has_avx2_fma() confirmed AVX2+FMA support.
+        unsafe { ssim3_range_avx2(s, base, out) };
+        return;
+    }
+    ssim3_range_base(s, base, out);
 }
 
 fn to_dssim(ssim: f64) -> f64 {
@@ -633,3 +633,13 @@ fn ssim_maps_scale_order() {
     assert_eq!(f64::from(score1).to_bits(), f64::from(score2).to_bits());
 }
 
+#[cfg(test)]
+#[path = "dssim_dispatch_tests.rs"]
+mod dispatch_tests;
+
+#[path = "dssim_rows.rs"]
+mod rows;
+
+#[cfg(test)]
+#[path = "dssim_memory_tests.rs"]
+mod memory_tests;
